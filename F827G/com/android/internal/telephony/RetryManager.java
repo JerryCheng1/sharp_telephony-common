@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Random;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class RetryManager {
     public static final boolean DBG = false;
     public static final String LOG_TAG = "RetryManager";
@@ -14,121 +15,102 @@ public class RetryManager {
     private String mConfig;
     private int mCurMaxRetryCount;
     private int mMaxRetryCount;
-    private ArrayList<RetryRec> mRetryArray = new ArrayList();
     private int mRetryCount;
     private boolean mRetryForever;
+    private ArrayList<RetryRec> mRetryArray = new ArrayList<>();
     private Random mRng = new Random();
 
-    private static class RetryRec {
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class RetryRec {
         int mDelayTime;
         int mRandomizationTime;
 
-        RetryRec(int i, int i2) {
-            this.mDelayTime = i;
-            this.mRandomizationTime = i2;
+        RetryRec(int delayTime, int randomizationTime) {
+            this.mDelayTime = delayTime;
+            this.mRandomizationTime = randomizationTime;
         }
     }
 
-    private void log(String str) {
-        Rlog.d(LOG_TAG, "[RM] " + str);
-    }
-
-    private int nextRandomizationTime(int i) {
-        int i2 = ((RetryRec) this.mRetryArray.get(i)).mRandomizationTime;
-        return i2 == 0 ? 0 : this.mRng.nextInt(i2);
-    }
-
-    private Pair<Boolean, Integer> parseNonNegativeInt(String str, String str2) {
-        try {
-            int parseInt = Integer.parseInt(str2);
-            return new Pair(Boolean.valueOf(validateNonNegativeInt(str, parseInt)), Integer.valueOf(parseInt));
-        } catch (NumberFormatException e) {
-            Rlog.e(LOG_TAG, str + " bad value: " + str2, e);
-            return new Pair(Boolean.valueOf(false), Integer.valueOf(0));
+    public String toString() {
+        String ret = "RetryManager: { forever=" + this.mRetryForever + " maxRetry=" + this.mMaxRetryCount + " curMaxRetry=" + this.mCurMaxRetryCount + " retry=" + this.mRetryCount + " config={" + this.mConfig + "} retryArray={";
+        Iterator i$ = this.mRetryArray.iterator();
+        while (i$.hasNext()) {
+            RetryRec r = i$.next();
+            ret = ret + r.mDelayTime + ":" + r.mRandomizationTime + " ";
         }
+        return ret + "}}";
     }
 
-    private boolean validateNonNegativeInt(String str, int i) {
-        if (i >= 0) {
-            return true;
-        }
-        Rlog.e(LOG_TAG, str + " bad value: is < 0");
-        return false;
-    }
-
-    public boolean configure(int i, int i2, int i3) {
-        if (!validateNonNegativeInt("maxRetryCount", i) || !validateNonNegativeInt("retryTime", i2) || !validateNonNegativeInt("randomizationTime", i3)) {
+    public boolean configure(int maxRetryCount, int retryTime, int randomizationTime) {
+        if (!validateNonNegativeInt("maxRetryCount", maxRetryCount) || !validateNonNegativeInt("retryTime", retryTime) || !validateNonNegativeInt("randomizationTime", randomizationTime)) {
             return false;
         }
-        this.mMaxRetryCount = i;
+        this.mMaxRetryCount = maxRetryCount;
         this.mCurMaxRetryCount = this.mMaxRetryCount;
         resetRetryCount();
         this.mRetryArray.clear();
-        this.mRetryArray.add(new RetryRec(i2, i3));
+        this.mRetryArray.add(new RetryRec(retryTime, randomizationTime));
         return true;
     }
 
-    public boolean configure(String str) {
-        if (str.startsWith("\"") && str.endsWith("\"")) {
-            str = str.substring(1, str.length() - 1);
+    public boolean configure(String configStr) {
+        if (configStr.startsWith("\"") && configStr.endsWith("\"")) {
+            configStr = configStr.substring(1, configStr.length() - 1);
         }
-        this.mConfig = str;
-        if (TextUtils.isEmpty(str)) {
+        this.mConfig = configStr;
+        if (TextUtils.isEmpty(configStr)) {
             return false;
         }
+        int defaultRandomization = 0;
         this.mMaxRetryCount = 0;
         resetRetryCount();
         this.mRetryArray.clear();
-        String[] split = str.split(",");
-        int i = 0;
-        int i2 = 0;
-        while (i2 < split.length) {
-            String[] split2 = split[i2].split("=", 2);
-            split2[0] = split2[0].trim();
-            Pair parseNonNegativeInt;
-            if (split2.length > 1) {
-                split2[1] = split2[1].trim();
-                if (TextUtils.equals(split2[0], "default_randomization")) {
-                    Pair parseNonNegativeInt2 = parseNonNegativeInt(split2[0], split2[1]);
-                    if (!((Boolean) parseNonNegativeInt2.first).booleanValue()) {
+        String[] strArray = configStr.split(",");
+        for (int i = 0; i < strArray.length; i++) {
+            String[] splitStr = strArray[i].split("=", 2);
+            splitStr[0] = splitStr[0].trim();
+            if (splitStr.length > 1) {
+                splitStr[1] = splitStr[1].trim();
+                if (TextUtils.equals(splitStr[0], "default_randomization")) {
+                    Pair<Boolean, Integer> value = parseNonNegativeInt(splitStr[0], splitStr[1]);
+                    if (!((Boolean) value.first).booleanValue()) {
                         return false;
                     }
-                    i = ((Integer) parseNonNegativeInt2.second).intValue();
-                } else if (!TextUtils.equals(split2[0], "max_retries")) {
-                    Rlog.e(LOG_TAG, "Unrecognized configuration name value pair: " + split[i2]);
+                    defaultRandomization = ((Integer) value.second).intValue();
+                } else if (!TextUtils.equals(splitStr[0], "max_retries")) {
+                    Rlog.e(LOG_TAG, "Unrecognized configuration name value pair: " + strArray[i]);
                     return false;
-                } else if (TextUtils.equals("infinite", split2[1])) {
+                } else if (TextUtils.equals("infinite", splitStr[1])) {
                     this.mRetryForever = true;
                 } else {
-                    parseNonNegativeInt = parseNonNegativeInt(split2[0], split2[1]);
-                    if (!((Boolean) parseNonNegativeInt.first).booleanValue()) {
+                    Pair<Boolean, Integer> value2 = parseNonNegativeInt(splitStr[0], splitStr[1]);
+                    if (!((Boolean) value2.first).booleanValue()) {
                         return false;
                     }
-                    this.mMaxRetryCount = ((Integer) parseNonNegativeInt.second).intValue();
+                    this.mMaxRetryCount = ((Integer) value2.second).intValue();
                 }
             } else {
-                String[] split3 = split[i2].split(":", 2);
-                split3[0] = split3[0].trim();
-                RetryRec retryRec = new RetryRec(0, 0);
-                Pair parseNonNegativeInt3 = parseNonNegativeInt("delayTime", split3[0]);
-                if (!((Boolean) parseNonNegativeInt3.first).booleanValue()) {
+                String[] splitStr2 = strArray[i].split(":", 2);
+                splitStr2[0] = splitStr2[0].trim();
+                RetryRec rr = new RetryRec(0, 0);
+                Pair<Boolean, Integer> value3 = parseNonNegativeInt("delayTime", splitStr2[0]);
+                if (!((Boolean) value3.first).booleanValue()) {
                     return false;
                 }
-                retryRec.mDelayTime = ((Integer) parseNonNegativeInt3.second).intValue();
-                if (split3.length > 1) {
-                    split3[1] = split3[1].trim();
-                    parseNonNegativeInt = parseNonNegativeInt("randomizationTime", split3[1]);
-                    if (!((Boolean) parseNonNegativeInt.first).booleanValue()) {
+                rr.mDelayTime = ((Integer) value3.second).intValue();
+                if (splitStr2.length > 1) {
+                    splitStr2[1] = splitStr2[1].trim();
+                    Pair<Boolean, Integer> value4 = parseNonNegativeInt("randomizationTime", splitStr2[1]);
+                    if (!((Boolean) value4.first).booleanValue()) {
                         return false;
                     }
-                    retryRec.mRandomizationTime = ((Integer) parseNonNegativeInt.second).intValue();
+                    rr.mRandomizationTime = ((Integer) value4.second).intValue();
                 } else {
-                    retryRec.mRandomizationTime = i;
+                    rr.mRandomizationTime = defaultRandomization;
                 }
-                this.mRetryArray.add(retryRec);
+                this.mRetryArray.add(rr);
             }
-            i2++;
-            i = i;
         }
         if (this.mRetryArray.size() > this.mMaxRetryCount) {
             this.mMaxRetryCount = this.mRetryArray.size();
@@ -137,13 +119,25 @@ public class RetryManager {
         return true;
     }
 
-    public int getRetryCount() {
-        return this.mRetryCount;
+    public boolean isRetryNeeded() {
+        return this.mRetryForever || this.mRetryCount < this.mCurMaxRetryCount;
     }
 
     public int getRetryTimer() {
-        int size = this.mRetryCount < this.mRetryArray.size() ? this.mRetryCount : this.mRetryArray.size() - 1;
-        return (size < 0 || size >= this.mRetryArray.size()) ? 0 : ((RetryRec) this.mRetryArray.get(size)).mDelayTime + nextRandomizationTime(size);
+        int index;
+        if (this.mRetryCount < this.mRetryArray.size()) {
+            index = this.mRetryCount;
+        } else {
+            index = this.mRetryArray.size() - 1;
+        }
+        if (index < 0 || index >= this.mRetryArray.size()) {
+            return 0;
+        }
+        return this.mRetryArray.get(index).mDelayTime + nextRandomizationTime(index);
+    }
+
+    public int getRetryCount() {
+        return this.mRetryCount;
     }
 
     public void increaseRetryCount() {
@@ -153,38 +147,8 @@ public class RetryManager {
         }
     }
 
-    public boolean isRetryForever() {
-        return this.mRetryForever;
-    }
-
-    public boolean isRetryNeeded() {
-        return this.mRetryForever || this.mRetryCount < this.mCurMaxRetryCount;
-    }
-
-    public void resetRetryCount() {
-        this.mRetryCount = 0;
-    }
-
-    public void restoreCurMaxRetryCount() {
-        this.mCurMaxRetryCount = this.mMaxRetryCount;
-        setRetryCount(this.mRetryCount);
-    }
-
-    public void retryForeverUsingLastTimeout() {
-        this.mRetryCount = this.mCurMaxRetryCount;
-        this.mRetryForever = true;
-    }
-
-    public void setCurMaxRetryCount(int i) {
-        this.mCurMaxRetryCount = i;
-        if (this.mCurMaxRetryCount < 0) {
-            this.mCurMaxRetryCount = 0;
-        }
-        setRetryCount(this.mRetryCount);
-    }
-
-    public void setRetryCount(int i) {
-        this.mRetryCount = i;
+    public void setRetryCount(int count) {
+        this.mRetryCount = count;
         if (this.mRetryCount > this.mCurMaxRetryCount) {
             this.mRetryCount = this.mCurMaxRetryCount;
         }
@@ -193,20 +157,63 @@ public class RetryManager {
         }
     }
 
-    public void setRetryForever(boolean z) {
-        this.mRetryForever = z;
+    public void setCurMaxRetryCount(int count) {
+        this.mCurMaxRetryCount = count;
+        if (this.mCurMaxRetryCount < 0) {
+            this.mCurMaxRetryCount = 0;
+        }
+        setRetryCount(this.mRetryCount);
     }
 
-    public String toString() {
-        String str = "RetryManager: { forever=" + this.mRetryForever + " maxRetry=" + this.mMaxRetryCount + " curMaxRetry=" + this.mCurMaxRetryCount + " retry=" + this.mRetryCount + " config={" + this.mConfig + "} retryArray={";
-        Iterator it = this.mRetryArray.iterator();
-        while (true) {
-            String str2 = str;
-            if (!it.hasNext()) {
-                return str2 + "}}";
-            }
-            RetryRec retryRec = (RetryRec) it.next();
-            str = str2 + retryRec.mDelayTime + ":" + retryRec.mRandomizationTime + " ";
+    public void restoreCurMaxRetryCount() {
+        this.mCurMaxRetryCount = this.mMaxRetryCount;
+        setRetryCount(this.mRetryCount);
+    }
+
+    public void setRetryForever(boolean retryForever) {
+        this.mRetryForever = retryForever;
+    }
+
+    public void resetRetryCount() {
+        this.mRetryCount = 0;
+    }
+
+    public void retryForeverUsingLastTimeout() {
+        this.mRetryCount = this.mCurMaxRetryCount;
+        this.mRetryForever = true;
+    }
+
+    public boolean isRetryForever() {
+        return this.mRetryForever;
+    }
+
+    private Pair<Boolean, Integer> parseNonNegativeInt(String name, String stringValue) {
+        try {
+            int value = Integer.parseInt(stringValue);
+            return new Pair<>(Boolean.valueOf(validateNonNegativeInt(name, value)), Integer.valueOf(value));
+        } catch (NumberFormatException e) {
+            Rlog.e(LOG_TAG, name + " bad value: " + stringValue, e);
+            return new Pair<>(false, 0);
         }
+    }
+
+    private boolean validateNonNegativeInt(String name, int value) {
+        if (value >= 0) {
+            return true;
+        }
+        Rlog.e(LOG_TAG, name + " bad value: is < 0");
+        return false;
+    }
+
+    private int nextRandomizationTime(int index) {
+        int randomTime = this.mRetryArray.get(index).mRandomizationTime;
+        if (randomTime == 0) {
+            return 0;
+        }
+        return this.mRng.nextInt(randomTime);
+    }
+
+    private void log(String s) {
+        Rlog.d(LOG_TAG, "[RM] " + s);
     }
 }

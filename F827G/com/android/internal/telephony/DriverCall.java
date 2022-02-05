@@ -4,6 +4,7 @@ import android.os.Build;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.Rlog;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DriverCall implements Comparable<DriverCall> {
     static final String LOG_TAG = "DriverCall";
     public int TOA;
@@ -20,6 +21,7 @@ public class DriverCall implements Comparable<DriverCall> {
     public State state;
     public UUSInfo uusInfo;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum State {
         ACTIVE,
         HOLDING,
@@ -29,53 +31,45 @@ public class DriverCall implements Comparable<DriverCall> {
         WAITING
     }
 
-    static DriverCall fromCLCCLine(String str) {
+    static DriverCall fromCLCCLine(String line) {
         boolean z = true;
-        DriverCall driverCall = new DriverCall();
-        ATResponseParser aTResponseParser = new ATResponseParser(str);
+        DriverCall ret = new DriverCall();
+        ATResponseParser p = new ATResponseParser(line);
         try {
-            driverCall.index = aTResponseParser.nextInt();
-            driverCall.isMT = aTResponseParser.nextBoolean();
-            driverCall.state = stateFromCLCC(aTResponseParser.nextInt());
-            if (aTResponseParser.nextInt() != 0) {
+            ret.index = p.nextInt();
+            ret.isMT = p.nextBoolean();
+            ret.state = stateFromCLCC(p.nextInt());
+            if (p.nextInt() != 0) {
                 z = false;
             }
-            driverCall.isVoice = z;
-            driverCall.isMpty = aTResponseParser.nextBoolean();
-            driverCall.numberPresentation = 1;
-            if (!aTResponseParser.hasMore()) {
-                return driverCall;
+            ret.isVoice = z;
+            ret.isMpty = p.nextBoolean();
+            ret.numberPresentation = 1;
+            if (!p.hasMore()) {
+                return ret;
             }
-            driverCall.number = PhoneNumberUtils.extractNetworkPortionAlt(aTResponseParser.nextString());
-            if (driverCall.number.length() == 0) {
-                driverCall.number = null;
+            ret.number = PhoneNumberUtils.extractNetworkPortionAlt(p.nextString());
+            if (ret.number.length() == 0) {
+                ret.number = null;
             }
-            driverCall.TOA = aTResponseParser.nextInt();
-            driverCall.number = PhoneNumberUtils.stringFromStringAndTOA(driverCall.number, driverCall.TOA);
-            return driverCall;
+            ret.TOA = p.nextInt();
+            ret.number = PhoneNumberUtils.stringFromStringAndTOA(ret.number, ret.TOA);
+            return ret;
         } catch (ATParseEx e) {
-            Rlog.e(LOG_TAG, "Invalid CLCC line: '" + str + "'");
+            Rlog.e(LOG_TAG, "Invalid CLCC line: '" + line + "'");
             return null;
         }
     }
 
-    public static int presentationFromCLIP(int i) throws ATParseEx {
-        switch (i) {
-            case 0:
-                return 1;
-            case 1:
-                return 2;
-            case 2:
-                return 3;
-            case 3:
-                return 4;
-            default:
-                throw new ATParseEx("illegal presentation " + i);
+    public String toString() {
+        if ("eng".equals(Build.TYPE)) {
+            return "id=" + this.index + "," + this.state + ",toa=" + this.TOA + "," + (this.isMpty ? "conf" : "norm") + "," + (this.isMT ? "mt" : "mo") + "," + this.als + "," + (this.isVoice ? "voc" : "nonvoc") + "," + (this.isVoicePrivacy ? "evp" : "noevp") + ",number=" + this.number + ",cli=" + this.numberPresentation + ",name=" + this.name + "," + this.namePresentation;
         }
+        return "id=" + this.index + "," + this.state + ",toa=" + this.TOA + "," + (this.isMpty ? "conf" : "norm") + "," + (this.isMT ? "mt" : "mo") + "," + this.als + "," + (this.isVoice ? "voc" : "nonvoc") + "," + (this.isVoicePrivacy ? "evp" : "noevp") + ",,cli=" + this.numberPresentation + ",," + this.namePresentation;
     }
 
-    public static State stateFromCLCC(int i) throws ATParseEx {
-        switch (i) {
+    public static State stateFromCLCC(int state) throws ATParseEx {
+        switch (state) {
             case 0:
                 return State.ACTIVE;
             case 1:
@@ -89,18 +83,32 @@ public class DriverCall implements Comparable<DriverCall> {
             case 5:
                 return State.WAITING;
             default:
-                throw new ATParseEx("illegal call state " + i);
+                throw new ATParseEx("illegal call state " + state);
         }
     }
 
-    public int compareTo(DriverCall driverCall) {
-        return this.index < driverCall.index ? -1 : this.index == driverCall.index ? 0 : 1;
+    public static int presentationFromCLIP(int cli) throws ATParseEx {
+        switch (cli) {
+            case 0:
+                return 1;
+            case 1:
+                return 2;
+            case 2:
+                return 3;
+            case 3:
+                return 4;
+            default:
+                throw new ATParseEx("illegal presentation " + cli);
+        }
     }
 
-    public String toString() {
-        if ("eng".equals(Build.TYPE)) {
-            return "id=" + this.index + "," + this.state + "," + "toa=" + this.TOA + "," + (this.isMpty ? "conf" : "norm") + "," + (this.isMT ? "mt" : "mo") + "," + this.als + "," + (this.isVoice ? "voc" : "nonvoc") + "," + (this.isVoicePrivacy ? "evp" : "noevp") + "," + "number=" + this.number + ",cli=" + this.numberPresentation + "," + "name=" + this.name + "," + this.namePresentation;
+    public int compareTo(DriverCall dc) {
+        if (this.index < dc.index) {
+            return -1;
         }
-        return "id=" + this.index + "," + this.state + "," + "toa=" + this.TOA + "," + (this.isMpty ? "conf" : "norm") + "," + (this.isMT ? "mt" : "mo") + "," + this.als + "," + (this.isVoice ? "voc" : "nonvoc") + "," + (this.isVoicePrivacy ? "evp" : "noevp") + "," + ",cli=" + this.numberPresentation + "," + "," + this.namePresentation;
+        if (this.index == dc.index) {
+            return 0;
+        }
+        return 1;
     }
 }

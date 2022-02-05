@@ -2,16 +2,17 @@ package com.android.internal.telephony.cat;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.Resources.NotFoundException;
+import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
 import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
 import android.os.SystemProperties;
 import com.android.internal.telephony.CommandsInterface;
-import com.android.internal.telephony.cat.AppInterface.CommandType;
-import com.android.internal.telephony.cat.Duration.TimeUnit;
-import com.android.internal.telephony.uicc.IccCardStatus.CardState;
+import com.android.internal.telephony.cat.AppInterface;
+import com.android.internal.telephony.cat.Duration;
+import com.android.internal.telephony.uicc.IccCardStatus;
 import com.android.internal.telephony.uicc.IccFileHandler;
 import com.android.internal.telephony.uicc.IccRefreshResponse;
 import com.android.internal.telephony.uicc.IccUtils;
@@ -21,6 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.Locale;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class CatService extends Handler implements AppInterface {
     private static final boolean DBG = false;
     private static final int DEV_ID_DISPLAY = 2;
@@ -39,29 +41,31 @@ public class CatService extends Handler implements AppInterface {
     static final int MSG_ID_RIL_MSG_DECODED = 9;
     static final int MSG_ID_SESSION_END = 1;
     static final String STK_DEFAULT = "Default Message";
-    private CardState mCardState = CardState.CARDSTATE_ABSENT;
     private CommandsInterface mCmdIf;
     private Context mContext;
-    private CatCmdMessage mCurrntCmd = null;
     private HandlerThread mHandlerThread;
-    private CatCmdMessage mMenuCmd = null;
-    private RilMessageDecoder mMsgDecoder = null;
+    private RilMessageDecoder mMsgDecoder;
     private int mSlotId;
-    private boolean mStkAppInstalled = false;
+    private boolean mStkAppInstalled;
     private UiccController mUiccController;
+    private CatCmdMessage mCurrntCmd = null;
+    private CatCmdMessage mMenuCmd = null;
+    private IccCardStatus.CardState mCardState = IccCardStatus.CardState.CARDSTATE_ABSENT;
 
-    CatService(CommandsInterface commandsInterface, Context context, IccFileHandler iccFileHandler, int i) {
-        if (commandsInterface == null || context == null || iccFileHandler == null) {
+    public CatService(CommandsInterface ci, Context context, IccFileHandler fh, int slotId) {
+        this.mMsgDecoder = null;
+        this.mStkAppInstalled = false;
+        if (ci == null || context == null || fh == null) {
             throw new NullPointerException("Service: Input parameters must not be null");
         }
-        this.mCmdIf = commandsInterface;
+        this.mCmdIf = ci;
         this.mContext = context;
-        this.mSlotId = i;
-        this.mHandlerThread = new HandlerThread("Cat Telephony service" + i);
+        this.mSlotId = slotId;
+        this.mHandlerThread = new HandlerThread("Cat Telephony service" + slotId);
         this.mHandlerThread.start();
-        this.mMsgDecoder = RilMessageDecoder.getInstance(this, iccFileHandler, i);
+        this.mMsgDecoder = RilMessageDecoder.getInstance(this, fh, slotId);
         if (this.mMsgDecoder == null) {
-            CatLog.d((Object) this, "Null RilMessageDecoder instance");
+            CatLog.d(this, "Null RilMessageDecoder instance");
             return;
         }
         this.mMsgDecoder.start();
@@ -74,687 +78,12 @@ public class CatService extends Handler implements AppInterface {
         this.mUiccController = UiccController.getInstance();
         this.mUiccController.registerForIccChanged(this, 7, null);
         this.mStkAppInstalled = isStkAppInstalled();
-        CatLog.d((Object) this, "Running CAT service on Slotid: " + this.mSlotId + ". STK app installed:" + this.mStkAppInstalled);
-    }
-
-    private void broadcastAlphaMessage(String str) {
-        CatLog.d((Object) this, "Broadcasting CAT Alpha message from card: " + str);
-        Intent intent = new Intent(AppInterface.CAT_ALPHA_NOTIFY_ACTION);
-        intent.addFlags(268435456);
-        intent.putExtra(AppInterface.ALPHA_STRING, str);
-        intent.putExtra("SLOT_ID", this.mSlotId);
-        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
-    }
-
-    private void broadcastCardStateAndIccRefreshResp(CardState cardState, IccRefreshResponse iccRefreshResponse) {
-        Intent intent = new Intent(AppInterface.CAT_ICC_STATUS_CHANGE);
-        intent.addFlags(268435456);
-        boolean z = cardState == CardState.CARDSTATE_PRESENT;
-        if (iccRefreshResponse != null) {
-            intent.putExtra(AppInterface.REFRESH_RESULT, iccRefreshResponse.refreshResult);
-            CatLog.d((Object) this, "Sending IccResult with Result: " + iccRefreshResponse.refreshResult);
-        }
-        intent.putExtra(AppInterface.CARD_STATUS, z);
-        intent.putExtra("SLOT_ID", this.mSlotId);
-        CatLog.d((Object) this, "Sending Card Status: " + cardState + " " + "cardPresent: " + z);
-        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
-    }
-
-    private void broadcastCatCmdIntent(CatCmdMessage catCmdMessage) {
-        Intent intent = new Intent(AppInterface.CAT_CMD_ACTION);
-        intent.addFlags(268435456);
-        intent.putExtra("STK CMD", catCmdMessage);
-        intent.putExtra("SLOT_ID", this.mSlotId);
-        CatLog.d((Object) this, "Sending CmdMsg: " + catCmdMessage + " on slotid:" + this.mSlotId);
-        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
-    }
-
-    private void encodeOptionalTags(CommandDetails commandDetails, ResultCode resultCode, Input input, ByteArrayOutputStream byteArrayOutputStream) {
-        CommandType fromInt = CommandType.fromInt(commandDetails.typeOfCommand);
-        if (fromInt != null) {
-            switch (fromInt) {
-                case PROVIDE_LOCAL_INFORMATION:
-                    if (commandDetails.commandQualifier == 4 && resultCode.value() == ResultCode.OK.value()) {
-                        getPliResponse(byteArrayOutputStream);
-                        return;
-                    }
-                    return;
-                case GET_INKEY:
-                    if (resultCode.value() == ResultCode.NO_RESPONSE_FROM_USER.value() && input != null && input.duration != null) {
-                        getInKeyResponse(byteArrayOutputStream, input);
-                        return;
-                    }
-                    return;
-                default:
-                    CatLog.d((Object) this, "encodeOptionalTags() Unsupported Cmd details=" + commandDetails);
-                    return;
-            }
-        }
-        CatLog.d((Object) this, "encodeOptionalTags() bad Cmd details=" + commandDetails);
-    }
-
-    private void eventDownload(int i, int i2, int i3, byte[] bArr, boolean z) {
-        int i4 = 0;
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        byteArrayOutputStream.write(BerTlv.BER_EVENT_DOWNLOAD_TAG);
-        byteArrayOutputStream.write(0);
-        byteArrayOutputStream.write(ComprehensionTlvTag.EVENT_LIST.value() | 128);
-        byteArrayOutputStream.write(1);
-        byteArrayOutputStream.write(i);
-        byteArrayOutputStream.write(ComprehensionTlvTag.DEVICE_IDENTITIES.value() | 128);
-        byteArrayOutputStream.write(2);
-        byteArrayOutputStream.write(i2);
-        byteArrayOutputStream.write(i3);
-        switch (i) {
-            case 5:
-                CatLog.d((Object) this, " Sending Idle Screen Available event download to ICC");
-                break;
-            case 7:
-                CatLog.d((Object) this, " Sending Language Selection event download to ICC");
-                byteArrayOutputStream.write(ComprehensionTlvTag.LANGUAGE.value() | 128);
-                byteArrayOutputStream.write(2);
-                break;
-            case 19:
-                CatLog.d((Object) this, " Sending HCI Connectivity event download to ICC");
-                break;
-        }
-        if (bArr != null) {
-            int length = bArr.length;
-            while (i4 < length) {
-                byteArrayOutputStream.write(bArr[i4]);
-                i4++;
-            }
-        }
-        byte[] toByteArray = byteArrayOutputStream.toByteArray();
-        toByteArray[1] = (byte) (toByteArray.length - 2);
-        String bytesToHexString = IccUtils.bytesToHexString(toByteArray);
-        CatLog.d((Object) this, "ENVELOPE COMMAND: " + bytesToHexString);
-        this.mCmdIf.sendEnvelope(bytesToHexString, null);
-    }
-
-    private void getInKeyResponse(ByteArrayOutputStream byteArrayOutputStream, Input input) {
-        byteArrayOutputStream.write(ComprehensionTlvTag.DURATION.value());
-        byteArrayOutputStream.write(2);
-        TimeUnit timeUnit = input.duration.timeUnit;
-        byteArrayOutputStream.write(TimeUnit.SECOND.value());
-        byteArrayOutputStream.write(input.duration.timeInterval);
-    }
-
-    private void getPliResponse(ByteArrayOutputStream byteArrayOutputStream) {
-        String str = SystemProperties.get("persist.sys.language");
-        if (str != null) {
-            byteArrayOutputStream.write(ComprehensionTlvTag.LANGUAGE.value());
-            ResponseData.writeLength(byteArrayOutputStream, str.length());
-            byteArrayOutputStream.write(str.getBytes(), 0, str.length());
-        }
-    }
-
-    /* JADX WARNING: Missing block: B:6:0x002d, code skipped:
-            switch(r4) {
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SET_UP_MENU :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x003e;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.DISPLAY_TEXT :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0074;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.REFRESH :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SET_UP_IDLE_MODE_TEXT :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SET_UP_EVENT_LIST :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0092;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.PROVIDE_LOCAL_INFORMATION :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.LAUNCH_BROWSER :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0085;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SELECT_ITEM :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x004c;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.GET_INPUT :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0054;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.GET_INKEY :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0054;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SEND_DTMF :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SEND_SMS :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SEND_SS :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SEND_USSD :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.PLAY_TONE :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0030;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.SET_UP_CALL :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0087;
-                case com.android.internal.telephony.cat.AppInterface.CommandType.OPEN_CHANNEL :com.android.internal.telephony.cat.AppInterface$CommandType: goto L_0x0087;
-                default: goto L_0x0030;
-            };
-     */
-    /* JADX WARNING: Missing block: B:7:0x0030, code skipped:
-            r5 = null;
-     */
-    /* JADX WARNING: Missing block: B:8:0x0031, code skipped:
-            sendTerminalResponse(r1, r9.mResCode, r9.mIncludeAdditionalInfo, r9.mAdditionalInfo, r5);
-            r8.mCurrntCmd = null;
-     */
-    /* JADX WARNING: Missing block: B:10:0x0042, code skipped:
-            if (r9.mResCode != com.android.internal.telephony.cat.ResultCode.HELP_INFO_REQUIRED) goto L_0x004a;
-     */
-    /* JADX WARNING: Missing block: B:11:0x0044, code skipped:
-            sendMenuSelection(r9.mUsersMenuSelection, r2);
-     */
-    /* JADX WARNING: Missing block: B:12:0x004a, code skipped:
-            r2 = false;
-     */
-    /* JADX WARNING: Missing block: B:13:0x004c, code skipped:
-            r5 = new com.android.internal.telephony.cat.SelectItemResponseData(r9.mUsersMenuSelection);
-     */
-    /* JADX WARNING: Missing block: B:14:0x0054, code skipped:
-            r2 = r8.mCurrntCmd.geInput();
-     */
-    /* JADX WARNING: Missing block: B:15:0x005c, code skipped:
-            if (r2.yesNo != false) goto L_0x006c;
-     */
-    /* JADX WARNING: Missing block: B:16:0x005e, code skipped:
-            if (r0 != false) goto L_0x0030;
-     */
-    /* JADX WARNING: Missing block: B:17:0x0060, code skipped:
-            r5 = new com.android.internal.telephony.cat.GetInkeyInputResponseData(r9.mUsersInput, r2.ucs2, r2.packed);
-     */
-    /* JADX WARNING: Missing block: B:18:0x006c, code skipped:
-            r5 = new com.android.internal.telephony.cat.GetInkeyInputResponseData(r9.mUsersYesNoSelection);
-     */
-    /* JADX WARNING: Missing block: B:20:0x0078, code skipped:
-            if (r9.mResCode != com.android.internal.telephony.cat.ResultCode.TERMINAL_CRNTLY_UNABLE_TO_PROCESS) goto L_0x007f;
-     */
-    /* JADX WARNING: Missing block: B:21:0x007a, code skipped:
-            r9.setAdditionalInfo(1);
-            r5 = null;
-     */
-    /* JADX WARNING: Missing block: B:22:0x007f, code skipped:
-            r9.mIncludeAdditionalInfo = false;
-            r9.mAdditionalInfo = 0;
-            r5 = null;
-     */
-    /* JADX WARNING: Missing block: B:23:0x0085, code skipped:
-            r5 = null;
-     */
-    /* JADX WARNING: Missing block: B:24:0x0087, code skipped:
-            r8.mCmdIf.handleCallSetupRequestFromSim(r9.mUsersConfirm, null);
-            r8.mCurrntCmd = null;
-     */
-    /* JADX WARNING: Missing block: B:26:0x0095, code skipped:
-            if (5 != r9.mEventValue) goto L_0x00a2;
-     */
-    /* JADX WARNING: Missing block: B:27:0x0097, code skipped:
-            eventDownload(r9.mEventValue, 2, 129, r9.mAddedInfo, false);
-     */
-    /* JADX WARNING: Missing block: B:28:0x00a2, code skipped:
-            eventDownload(r9.mEventValue, 130, 129, r9.mAddedInfo, false);
-     */
-    /* JADX WARNING: Missing block: B:38:0x00ca, code skipped:
-            r5 = null;
-     */
-    /* JADX WARNING: Missing block: B:41:?, code skipped:
-            return;
-     */
-    /* JADX WARNING: Missing block: B:42:?, code skipped:
-            return;
-     */
-    /* JADX WARNING: Missing block: B:43:?, code skipped:
-            return;
-     */
-    /* JADX WARNING: Missing block: B:44:?, code skipped:
-            return;
-     */
-    /* JADX WARNING: Missing block: B:45:?, code skipped:
-            return;
-     */
-    private void handleCmdResponse(com.android.internal.telephony.cat.CatResponseMessage r9) {
-        /*
-        r8 = this;
-        r3 = 129; // 0x81 float:1.81E-43 double:6.37E-322;
-        r2 = 1;
-        r5 = 0;
-        r6 = 0;
-        r0 = r8.validateResponse(r9);
-        if (r0 != 0) goto L_0x000c;
-    L_0x000b:
-        return;
-    L_0x000c:
-        r1 = r9.getCmdDetails();
-        r0 = r1.typeOfCommand;
-        r4 = com.android.internal.telephony.cat.AppInterface.CommandType.fromInt(r0);
-        r0 = com.android.internal.telephony.cat.CatService.AnonymousClass1.$SwitchMap$com$android$internal$telephony$cat$ResultCode;
-        r7 = r9.mResCode;
-        r7 = r7.ordinal();
-        r0 = r0[r7];
-        switch(r0) {
-            case 1: goto L_0x0024;
-            case 2: goto L_0x00cd;
-            case 3: goto L_0x00cd;
-            case 4: goto L_0x00cd;
-            case 5: goto L_0x00cd;
-            case 6: goto L_0x00cd;
-            case 7: goto L_0x00cd;
-            case 8: goto L_0x00cd;
-            case 9: goto L_0x00cd;
-            case 10: goto L_0x00cd;
-            case 11: goto L_0x00cd;
-            case 12: goto L_0x00cd;
-            case 13: goto L_0x00cd;
-            case 14: goto L_0x00ae;
-            case 15: goto L_0x00ae;
-            case 16: goto L_0x00c2;
-            case 17: goto L_0x00ca;
-            default: goto L_0x0023;
-        };
-    L_0x0023:
-        goto L_0x000b;
-    L_0x0024:
-        r0 = r2;
-    L_0x0025:
-        r7 = com.android.internal.telephony.cat.CatService.AnonymousClass1.$SwitchMap$com$android$internal$telephony$cat$AppInterface$CommandType;
-        r4 = r4.ordinal();
-        r4 = r7[r4];
-        switch(r4) {
-            case 1: goto L_0x003e;
-            case 2: goto L_0x0074;
-            case 3: goto L_0x0030;
-            case 4: goto L_0x0030;
-            case 5: goto L_0x0092;
-            case 6: goto L_0x0030;
-            case 7: goto L_0x0085;
-            case 8: goto L_0x004c;
-            case 9: goto L_0x0054;
-            case 10: goto L_0x0054;
-            case 11: goto L_0x0030;
-            case 12: goto L_0x0030;
-            case 13: goto L_0x0030;
-            case 14: goto L_0x0030;
-            case 15: goto L_0x0030;
-            case 16: goto L_0x0087;
-            case 17: goto L_0x0087;
-            default: goto L_0x0030;
-        };
-    L_0x0030:
-        r5 = r6;
-    L_0x0031:
-        r2 = r9.mResCode;
-        r3 = r9.mIncludeAdditionalInfo;
-        r4 = r9.mAdditionalInfo;
-        r0 = r8;
-        r0.sendTerminalResponse(r1, r2, r3, r4, r5);
-        r8.mCurrntCmd = r6;
-        goto L_0x000b;
-    L_0x003e:
-        r0 = r9.mResCode;
-        r1 = com.android.internal.telephony.cat.ResultCode.HELP_INFO_REQUIRED;
-        if (r0 != r1) goto L_0x004a;
-    L_0x0044:
-        r0 = r9.mUsersMenuSelection;
-        r8.sendMenuSelection(r0, r2);
-        goto L_0x000b;
-    L_0x004a:
-        r2 = r5;
-        goto L_0x0044;
-    L_0x004c:
-        r5 = new com.android.internal.telephony.cat.SelectItemResponseData;
-        r0 = r9.mUsersMenuSelection;
-        r5.<init>(r0);
-        goto L_0x0031;
-    L_0x0054:
-        r2 = r8.mCurrntCmd;
-        r2 = r2.geInput();
-        r3 = r2.yesNo;
-        if (r3 != 0) goto L_0x006c;
-    L_0x005e:
-        if (r0 != 0) goto L_0x0030;
-    L_0x0060:
-        r5 = new com.android.internal.telephony.cat.GetInkeyInputResponseData;
-        r0 = r9.mUsersInput;
-        r3 = r2.ucs2;
-        r2 = r2.packed;
-        r5.<init>(r0, r3, r2);
-        goto L_0x0031;
-    L_0x006c:
-        r5 = new com.android.internal.telephony.cat.GetInkeyInputResponseData;
-        r0 = r9.mUsersYesNoSelection;
-        r5.<init>(r0);
-        goto L_0x0031;
-    L_0x0074:
-        r0 = r9.mResCode;
-        r3 = com.android.internal.telephony.cat.ResultCode.TERMINAL_CRNTLY_UNABLE_TO_PROCESS;
-        if (r0 != r3) goto L_0x007f;
-    L_0x007a:
-        r9.setAdditionalInfo(r2);
-        r5 = r6;
-        goto L_0x0031;
-    L_0x007f:
-        r9.mIncludeAdditionalInfo = r5;
-        r9.mAdditionalInfo = r5;
-        r5 = r6;
-        goto L_0x0031;
-    L_0x0085:
-        r5 = r6;
-        goto L_0x0031;
-    L_0x0087:
-        r0 = r8.mCmdIf;
-        r1 = r9.mUsersConfirm;
-        r0.handleCallSetupRequestFromSim(r1, r6);
-        r8.mCurrntCmd = r6;
-        goto L_0x000b;
-    L_0x0092:
-        r0 = 5;
-        r1 = r9.mEventValue;
-        if (r0 != r1) goto L_0x00a2;
-    L_0x0097:
-        r1 = r9.mEventValue;
-        r2 = 2;
-        r4 = r9.mAddedInfo;
-        r0 = r8;
-        r0.eventDownload(r1, r2, r3, r4, r5);
-        goto L_0x000b;
-    L_0x00a2:
-        r1 = r9.mEventValue;
-        r2 = 130; // 0x82 float:1.82E-43 double:6.4E-322;
-        r4 = r9.mAddedInfo;
-        r0 = r8;
-        r0.eventDownload(r1, r2, r3, r4, r5);
-        goto L_0x000b;
-    L_0x00ae:
-        r0 = com.android.internal.telephony.cat.AppInterface.CommandType.SET_UP_CALL;
-        if (r4 == r0) goto L_0x00b6;
-    L_0x00b2:
-        r0 = com.android.internal.telephony.cat.AppInterface.CommandType.OPEN_CHANNEL;
-        if (r4 != r0) goto L_0x00bf;
-    L_0x00b6:
-        r0 = r8.mCmdIf;
-        r0.handleCallSetupRequestFromSim(r5, r6);
-        r8.mCurrntCmd = r6;
-        goto L_0x000b;
-    L_0x00bf:
-        r5 = r6;
-        goto L_0x0031;
-    L_0x00c2:
-        r0 = com.android.internal.telephony.cat.AppInterface.CommandType.SET_UP_CALL;
-        if (r4 != r0) goto L_0x00ca;
-    L_0x00c6:
-        r8.mCurrntCmd = r6;
-        goto L_0x000b;
-    L_0x00ca:
-        r5 = r6;
-        goto L_0x0031;
-    L_0x00cd:
-        r0 = r5;
-        goto L_0x0025;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.cat.CatService.handleCmdResponse(com.android.internal.telephony.cat.CatResponseMessage):void");
-    }
-
-    private void handleCommand(CommandParams commandParams, boolean z) {
-        CatLog.d((Object) this, commandParams.getCommandType().name());
-        CatCmdMessage catCmdMessage = new CatCmdMessage(commandParams);
-        ResultCode resultCode;
-        switch (commandParams.getCommandType()) {
-            case SET_UP_MENU:
-                if (removeMenu(catCmdMessage.getMenu())) {
-                    this.mMenuCmd = null;
-                } else {
-                    this.mMenuCmd = catCmdMessage;
-                }
-                resultCode = commandParams.mLoadIconFailed ? ResultCode.PRFRMD_ICON_NOT_DISPLAYED : ResultCode.OK;
-                if (z) {
-                    sendTerminalResponse(commandParams.mCmdDet, resultCode, false, 0, null);
-                    break;
-                }
-                break;
-            case DISPLAY_TEXT:
-            case SELECT_ITEM:
-            case GET_INPUT:
-            case GET_INKEY:
-            case PLAY_TONE:
-                break;
-            case REFRESH:
-                CatLog.d((Object) this, "Pass Refresh to Stk app");
-                break;
-            case SET_UP_IDLE_MODE_TEXT:
-                resultCode = commandParams.mLoadIconFailed ? ResultCode.PRFRMD_ICON_NOT_DISPLAYED : ResultCode.OK;
-                if (z) {
-                    sendTerminalResponse(commandParams.mCmdDet, resultCode, false, 0, null);
-                    break;
-                }
-                break;
-            case SET_UP_EVENT_LIST:
-                if (z) {
-                    if (!isSupportedSetupEventCommand(catCmdMessage)) {
-                        sendTerminalResponse(commandParams.mCmdDet, ResultCode.BEYOND_TERMINAL_CAPABILITY, false, 0, null);
-                        break;
-                    } else {
-                        sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, null);
-                        break;
-                    }
-                }
-                break;
-            case PROVIDE_LOCAL_INFORMATION:
-                switch (commandParams.mCmdDet.commandQualifier) {
-                    case 3:
-                        sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, new DTTZResponseData(null));
-                        return;
-                    case 4:
-                        sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, new LanguageResponseData(Locale.getDefault().getLanguage()));
-                        return;
-                    default:
-                        sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, null);
-                        return;
-                }
-            case LAUNCH_BROWSER:
-                if (((LaunchBrowserParams) commandParams).mConfirmMsg.text != null && ((LaunchBrowserParams) commandParams).mConfirmMsg.text.equals(STK_DEFAULT)) {
-                    ((LaunchBrowserParams) commandParams).mConfirmMsg.text = this.mContext.getText(17040964).toString();
-                    break;
-                }
-            case SEND_DTMF:
-            case SEND_SMS:
-            case SEND_SS:
-            case SEND_USSD:
-                if (((DisplayTextParams) commandParams).mTextMsg.text != null && ((DisplayTextParams) commandParams).mTextMsg.text.equals(STK_DEFAULT)) {
-                    ((DisplayTextParams) commandParams).mTextMsg.text = this.mContext.getText(17040963).toString();
-                    break;
-                }
-            case SET_UP_CALL:
-                if (((CallSetupParams) commandParams).mConfirmMsg.text != null && ((CallSetupParams) commandParams).mConfirmMsg.text.equals(STK_DEFAULT)) {
-                    ((CallSetupParams) commandParams).mConfirmMsg.text = this.mContext.getText(17040965).toString();
-                    break;
-                }
-            case OPEN_CHANNEL:
-            case CLOSE_CHANNEL:
-            case RECEIVE_DATA:
-            case SEND_DATA:
-                BIPClientParams bIPClientParams = (BIPClientParams) commandParams;
-                boolean z2;
-                try {
-                    z2 = this.mContext.getResources().getBoolean(17956989);
-                } catch (NotFoundException e) {
-                    z2 = false;
-                }
-                if (bIPClientParams.mTextMsg.text != null || (!bIPClientParams.mHasAlphaId && !z2)) {
-                    if (!this.mStkAppInstalled) {
-                        CatLog.d((Object) this, "No STK application found.");
-                        if (z) {
-                            sendTerminalResponse(commandParams.mCmdDet, ResultCode.BEYOND_TERMINAL_CAPABILITY, false, 0, null);
-                            return;
-                        }
-                    }
-                    if (z && (commandParams.getCommandType() == CommandType.CLOSE_CHANNEL || commandParams.getCommandType() == CommandType.RECEIVE_DATA || commandParams.getCommandType() == CommandType.SEND_DATA)) {
-                        sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, null);
-                        break;
-                    }
-                }
-                CatLog.d((Object) this, "cmd " + commandParams.getCommandType() + " with null alpha id");
-                if (z) {
-                    sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, null);
-                    return;
-                } else if (commandParams.getCommandType() == CommandType.OPEN_CHANNEL) {
-                    this.mCmdIf.handleCallSetupRequestFromSim(true, null);
-                    return;
-                } else {
-                    return;
-                }
-                break;
-            case ACTIVATE:
-                sendTerminalResponse(commandParams.mCmdDet, ResultCode.OK, false, 0, null);
-                break;
-            default:
-                CatLog.d((Object) this, "Unsupported command");
-                return;
-        }
-        this.mCurrntCmd = catCmdMessage;
-        broadcastCatCmdIntent(catCmdMessage);
-    }
-
-    private void handleRilMsg(RilMessage rilMessage) {
-        if (rilMessage != null) {
-            CommandParams commandParams;
-            switch (rilMessage.mId) {
-                case 1:
-                    handleSessionEnd();
-                    return;
-                case 2:
-                    try {
-                        commandParams = (CommandParams) rilMessage.mData;
-                        if (commandParams == null) {
-                            return;
-                        }
-                        if (rilMessage.mResCode == ResultCode.OK) {
-                            handleCommand(commandParams, true);
-                            return;
-                        }
-                        sendTerminalResponse(commandParams.mCmdDet, rilMessage.mResCode, false, 0, null);
-                        return;
-                    } catch (ClassCastException e) {
-                        CatLog.d((Object) this, "Fail to parse proactive command");
-                        if (this.mCurrntCmd != null) {
-                            sendTerminalResponse(this.mCurrntCmd.mCmdDet, ResultCode.CMD_DATA_NOT_UNDERSTOOD, false, 0, null);
-                            return;
-                        }
-                        return;
-                    }
-                case 3:
-                    if (rilMessage.mResCode == ResultCode.OK) {
-                        commandParams = (CommandParams) rilMessage.mData;
-                        if (commandParams != null) {
-                            handleCommand(commandParams, false);
-                            return;
-                        }
-                        return;
-                    }
-                    return;
-                case 5:
-                    commandParams = (CommandParams) rilMessage.mData;
-                    if (commandParams != null) {
-                        handleCommand(commandParams, false);
-                        return;
-                    }
-                    return;
-                default:
-                    return;
-            }
-        }
-    }
-
-    private void handleSessionEnd() {
-        CatLog.d((Object) this, "SESSION END on " + this.mSlotId);
-        this.mCurrntCmd = this.mMenuCmd;
-        Intent intent = new Intent(AppInterface.CAT_SESSION_END_ACTION);
-        intent.putExtra("SLOT_ID", this.mSlotId);
-        intent.addFlags(268435456);
-        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
-    }
-
-    private boolean isStkAppInstalled() {
-        List queryBroadcastReceivers = this.mContext.getPackageManager().queryBroadcastReceivers(new Intent(AppInterface.CAT_CMD_ACTION), 128);
-        return (queryBroadcastReceivers == null ? 0 : queryBroadcastReceivers.size()) > 0;
-    }
-
-    private boolean isSupportedSetupEventCommand(CatCmdMessage catCmdMessage) {
-        boolean z = true;
-        for (int i : catCmdMessage.getSetEventList().eventList) {
-            CatLog.d((Object) this, "Event: " + i);
-            switch (i) {
-                case 5:
-                case 7:
-                case 19:
-                    break;
-                default:
-                    z = false;
-                    break;
-            }
-        }
-        return z;
-    }
-
-    private boolean removeMenu(Menu menu) {
-        try {
-            return menu.items.size() == 1 && menu.items.get(0) == null;
-        } catch (NullPointerException e) {
-            CatLog.d((Object) this, "Unable to get Menu's items size");
-            return true;
-        }
-    }
-
-    private void sendMenuSelection(int i, boolean z) {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        byteArrayOutputStream.write(211);
-        byteArrayOutputStream.write(0);
-        byteArrayOutputStream.write(ComprehensionTlvTag.DEVICE_IDENTITIES.value() | 128);
-        byteArrayOutputStream.write(2);
-        byteArrayOutputStream.write(1);
-        byteArrayOutputStream.write(129);
-        byteArrayOutputStream.write(ComprehensionTlvTag.ITEM_ID.value() | 128);
-        byteArrayOutputStream.write(1);
-        byteArrayOutputStream.write(i);
-        if (z) {
-            byteArrayOutputStream.write(ComprehensionTlvTag.HELP_REQUEST.value());
-            byteArrayOutputStream.write(0);
-        }
-        byte[] toByteArray = byteArrayOutputStream.toByteArray();
-        toByteArray[1] = (byte) (toByteArray.length - 2);
-        this.mCmdIf.sendEnvelope(IccUtils.bytesToHexString(toByteArray), null);
-    }
-
-    private void sendTerminalResponse(CommandDetails commandDetails, ResultCode resultCode, boolean z, int i, ResponseData responseData) {
-        if (commandDetails != null) {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            Input geInput = this.mCurrntCmd != null ? this.mCurrntCmd.geInput() : null;
-            int value = ComprehensionTlvTag.COMMAND_DETAILS.value();
-            if (commandDetails.compRequired) {
-                value |= 128;
-            }
-            byteArrayOutputStream.write(value);
-            byteArrayOutputStream.write(3);
-            byteArrayOutputStream.write(commandDetails.commandNumber);
-            byteArrayOutputStream.write(commandDetails.typeOfCommand);
-            byteArrayOutputStream.write(commandDetails.commandQualifier);
-            byteArrayOutputStream.write(ComprehensionTlvTag.DEVICE_IDENTITIES.value());
-            byteArrayOutputStream.write(2);
-            byteArrayOutputStream.write(130);
-            byteArrayOutputStream.write(129);
-            value = ComprehensionTlvTag.RESULT.value();
-            if (commandDetails.compRequired) {
-                value |= 128;
-            }
-            byteArrayOutputStream.write(value);
-            byteArrayOutputStream.write(z ? 2 : 1);
-            byteArrayOutputStream.write(resultCode.value());
-            if (z) {
-                byteArrayOutputStream.write(i);
-            }
-            if (responseData != null) {
-                responseData.format(byteArrayOutputStream);
-            } else {
-                encodeOptionalTags(commandDetails, resultCode, geInput, byteArrayOutputStream);
-            }
-            this.mCmdIf.sendTerminalResponse(IccUtils.bytesToHexString(byteArrayOutputStream.toByteArray()), null);
-        }
-    }
-
-    private boolean validateResponse(CatResponseMessage catResponseMessage) {
-        if (catResponseMessage.mCmdDet.typeOfCommand == CommandType.SET_UP_EVENT_LIST.value() || catResponseMessage.mCmdDet.typeOfCommand == CommandType.SET_UP_MENU.value()) {
-            CatLog.d((Object) this, "CmdType: " + catResponseMessage.mCmdDet.typeOfCommand);
-            return true;
-        } else if (this.mCurrntCmd == null) {
-            return false;
-        } else {
-            boolean compareTo = catResponseMessage.mCmdDet.compareTo(this.mCurrntCmd.mCmdDet);
-            CatLog.d((Object) this, "isResponse for last valid cmd: " + compareTo);
-            return compareTo;
-        }
+        CatLog.d(this, "Running CAT service on Slotid: " + this.mSlotId + ". STK app installed:" + this.mStkAppInstalled);
     }
 
     public void dispose() {
-        CatLog.d((Object) this, "Disposing CatService object for slot: " + this.mSlotId);
-        broadcastCardStateAndIccRefreshResp(CardState.CARDSTATE_ABSENT, null);
+        CatLog.d(this, "Disposing CatService object for slot: " + this.mSlotId);
+        broadcastCardStateAndIccRefreshResp(IccCardStatus.CardState.CARDSTATE_ABSENT, null);
         this.mCmdIf.unSetOnCatSessionEnd(this);
         this.mCmdIf.unSetOnCatProactiveCmd(this);
         this.mCmdIf.unSetOnCatEvent(this);
@@ -774,103 +103,527 @@ public class CatService extends Handler implements AppInterface {
         removeCallbacksAndMessages(null);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void finalize() {
-        CatLog.d((Object) this, "Service finalized");
+    protected void finalize() {
+        CatLog.d(this, "Service finalized");
     }
 
-    public void handleMessage(Message message) {
-        CatLog.d((Object) this, "handleMessage[" + message.what + "]");
-        AsyncResult asyncResult;
-        switch (message.what) {
+    private void handleRilMsg(RilMessage rilMsg) {
+        CommandParams cmdParams;
+        if (rilMsg != null) {
+            switch (rilMsg.mId) {
+                case 1:
+                    handleSessionEnd();
+                    return;
+                case 2:
+                    try {
+                        CommandParams cmdParams2 = (CommandParams) rilMsg.mData;
+                        if (cmdParams2 == null) {
+                            return;
+                        }
+                        if (rilMsg.mResCode == ResultCode.OK) {
+                            handleCommand(cmdParams2, true);
+                            return;
+                        } else {
+                            sendTerminalResponse(cmdParams2.mCmdDet, rilMsg.mResCode, false, 0, null);
+                            return;
+                        }
+                    } catch (ClassCastException e) {
+                        CatLog.d(this, "Fail to parse proactive command");
+                        if (this.mCurrntCmd != null) {
+                            sendTerminalResponse(this.mCurrntCmd.mCmdDet, ResultCode.CMD_DATA_NOT_UNDERSTOOD, false, 0, null);
+                            return;
+                        }
+                        return;
+                    }
+                case 3:
+                    if (rilMsg.mResCode == ResultCode.OK && (cmdParams = (CommandParams) rilMsg.mData) != null) {
+                        handleCommand(cmdParams, false);
+                        return;
+                    }
+                    return;
+                case 4:
+                default:
+                    return;
+                case 5:
+                    CommandParams cmdParams3 = (CommandParams) rilMsg.mData;
+                    if (cmdParams3 != null) {
+                        handleCommand(cmdParams3, false);
+                        return;
+                    }
+                    return;
+            }
+        }
+    }
+
+    private boolean isSupportedSetupEventCommand(CatCmdMessage cmdMsg) {
+        boolean flag = true;
+        int[] arr$ = cmdMsg.getSetEventList().eventList;
+        for (int eventVal : arr$) {
+            CatLog.d(this, "Event: " + eventVal);
+            switch (eventVal) {
+                case 5:
+                case 7:
+                case 19:
+                    break;
+                default:
+                    flag = false;
+                    break;
+            }
+        }
+        return flag;
+    }
+
+    private void handleCommand(CommandParams cmdParams, boolean isProactiveCmd) {
+        boolean noAlphaUsrCnf;
+        CatLog.d(this, cmdParams.getCommandType().name());
+        CatCmdMessage cmdMsg = new CatCmdMessage(cmdParams);
+        switch (cmdParams.getCommandType()) {
+            case SET_UP_MENU:
+                if (removeMenu(cmdMsg.getMenu())) {
+                    this.mMenuCmd = null;
+                } else {
+                    this.mMenuCmd = cmdMsg;
+                }
+                ResultCode resultCode = cmdParams.mLoadIconFailed ? ResultCode.PRFRMD_ICON_NOT_DISPLAYED : ResultCode.OK;
+                if (isProactiveCmd) {
+                    sendTerminalResponse(cmdParams.mCmdDet, resultCode, false, 0, null);
+                    break;
+                }
+                break;
+            case DISPLAY_TEXT:
+            case SELECT_ITEM:
+            case GET_INPUT:
+            case GET_INKEY:
+            case PLAY_TONE:
+                break;
+            case REFRESH:
+                CatLog.d(this, "Pass Refresh to Stk app");
+                break;
+            case SET_UP_IDLE_MODE_TEXT:
+                ResultCode resultCode2 = cmdParams.mLoadIconFailed ? ResultCode.PRFRMD_ICON_NOT_DISPLAYED : ResultCode.OK;
+                if (isProactiveCmd) {
+                    sendTerminalResponse(cmdParams.mCmdDet, resultCode2, false, 0, null);
+                    break;
+                }
+                break;
+            case SET_UP_EVENT_LIST:
+                if (isProactiveCmd) {
+                    if (!isSupportedSetupEventCommand(cmdMsg)) {
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.BEYOND_TERMINAL_CAPABILITY, false, 0, null);
+                        break;
+                    } else {
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, null);
+                        break;
+                    }
+                }
+                break;
+            case PROVIDE_LOCAL_INFORMATION:
+                switch (cmdParams.mCmdDet.commandQualifier) {
+                    case 3:
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, new DTTZResponseData(null));
+                        return;
+                    case 4:
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, new LanguageResponseData(Locale.getDefault().getLanguage()));
+                        return;
+                    default:
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, null);
+                        return;
+                }
+            case LAUNCH_BROWSER:
+                if (((LaunchBrowserParams) cmdParams).mConfirmMsg.text != null && ((LaunchBrowserParams) cmdParams).mConfirmMsg.text.equals(STK_DEFAULT)) {
+                    ((LaunchBrowserParams) cmdParams).mConfirmMsg.text = this.mContext.getText(17040964).toString();
+                    break;
+                }
+                break;
+            case SEND_DTMF:
+            case SEND_SMS:
+            case SEND_SS:
+            case SEND_USSD:
+                if (((DisplayTextParams) cmdParams).mTextMsg.text != null && ((DisplayTextParams) cmdParams).mTextMsg.text.equals(STK_DEFAULT)) {
+                    ((DisplayTextParams) cmdParams).mTextMsg.text = this.mContext.getText(17040963).toString();
+                    break;
+                }
+                break;
+            case SET_UP_CALL:
+                if (((CallSetupParams) cmdParams).mConfirmMsg.text != null && ((CallSetupParams) cmdParams).mConfirmMsg.text.equals(STK_DEFAULT)) {
+                    ((CallSetupParams) cmdParams).mConfirmMsg.text = this.mContext.getText(17040965).toString();
+                    break;
+                }
+                break;
+            case OPEN_CHANNEL:
+            case CLOSE_CHANNEL:
+            case RECEIVE_DATA:
+            case SEND_DATA:
+                BIPClientParams cmd = (BIPClientParams) cmdParams;
+                try {
+                    noAlphaUsrCnf = this.mContext.getResources().getBoolean(17956989);
+                } catch (Resources.NotFoundException e) {
+                    noAlphaUsrCnf = false;
+                }
+                if (cmd.mTextMsg.text != null || (!cmd.mHasAlphaId && !noAlphaUsrCnf)) {
+                    if (!this.mStkAppInstalled) {
+                        CatLog.d(this, "No STK application found.");
+                        if (isProactiveCmd) {
+                            sendTerminalResponse(cmdParams.mCmdDet, ResultCode.BEYOND_TERMINAL_CAPABILITY, false, 0, null);
+                            return;
+                        }
+                    }
+                    if (isProactiveCmd && (cmdParams.getCommandType() == AppInterface.CommandType.CLOSE_CHANNEL || cmdParams.getCommandType() == AppInterface.CommandType.RECEIVE_DATA || cmdParams.getCommandType() == AppInterface.CommandType.SEND_DATA)) {
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, null);
+                        break;
+                    }
+                } else {
+                    CatLog.d(this, "cmd " + cmdParams.getCommandType() + " with null alpha id");
+                    if (isProactiveCmd) {
+                        sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, null);
+                        return;
+                    } else if (cmdParams.getCommandType() == AppInterface.CommandType.OPEN_CHANNEL) {
+                        this.mCmdIf.handleCallSetupRequestFromSim(true, null);
+                        return;
+                    } else {
+                        return;
+                    }
+                }
+                break;
+            case ACTIVATE:
+                sendTerminalResponse(cmdParams.mCmdDet, ResultCode.OK, false, 0, null);
+                break;
+            default:
+                CatLog.d(this, "Unsupported command");
+                return;
+        }
+        this.mCurrntCmd = cmdMsg;
+        broadcastCatCmdIntent(cmdMsg);
+    }
+
+    private void broadcastCatCmdIntent(CatCmdMessage cmdMsg) {
+        Intent intent = new Intent(AppInterface.CAT_CMD_ACTION);
+        intent.addFlags(268435456);
+        intent.putExtra("STK CMD", cmdMsg);
+        intent.putExtra("SLOT_ID", this.mSlotId);
+        CatLog.d(this, "Sending CmdMsg: " + cmdMsg + " on slotid:" + this.mSlotId);
+        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
+    }
+
+    private void handleSessionEnd() {
+        CatLog.d(this, "SESSION END on " + this.mSlotId);
+        this.mCurrntCmd = this.mMenuCmd;
+        Intent intent = new Intent(AppInterface.CAT_SESSION_END_ACTION);
+        intent.putExtra("SLOT_ID", this.mSlotId);
+        intent.addFlags(268435456);
+        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
+    }
+
+    private void sendTerminalResponse(CommandDetails cmdDet, ResultCode resultCode, boolean includeAdditionalInfo, int additionalInfo, ResponseData resp) {
+        int length = 2;
+        if (cmdDet != null) {
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            Input cmdInput = null;
+            if (this.mCurrntCmd != null) {
+                cmdInput = this.mCurrntCmd.geInput();
+            }
+            int tag = ComprehensionTlvTag.COMMAND_DETAILS.value();
+            if (cmdDet.compRequired) {
+                tag |= 128;
+            }
+            buf.write(tag);
+            buf.write(3);
+            buf.write(cmdDet.commandNumber);
+            buf.write(cmdDet.typeOfCommand);
+            buf.write(cmdDet.commandQualifier);
+            buf.write(ComprehensionTlvTag.DEVICE_IDENTITIES.value());
+            buf.write(2);
+            buf.write(130);
+            buf.write(129);
+            int tag2 = ComprehensionTlvTag.RESULT.value();
+            if (cmdDet.compRequired) {
+                tag2 |= 128;
+            }
+            buf.write(tag2);
+            if (!includeAdditionalInfo) {
+                length = 1;
+            }
+            buf.write(length);
+            buf.write(resultCode.value());
+            if (includeAdditionalInfo) {
+                buf.write(additionalInfo);
+            }
+            if (resp != null) {
+                resp.format(buf);
+            } else {
+                encodeOptionalTags(cmdDet, resultCode, cmdInput, buf);
+            }
+            this.mCmdIf.sendTerminalResponse(IccUtils.bytesToHexString(buf.toByteArray()), null);
+        }
+    }
+
+    private void encodeOptionalTags(CommandDetails cmdDet, ResultCode resultCode, Input cmdInput, ByteArrayOutputStream buf) {
+        AppInterface.CommandType cmdType = AppInterface.CommandType.fromInt(cmdDet.typeOfCommand);
+        if (cmdType != null) {
+            switch (cmdType) {
+                case PROVIDE_LOCAL_INFORMATION:
+                    if (cmdDet.commandQualifier == 4 && resultCode.value() == ResultCode.OK.value()) {
+                        getPliResponse(buf);
+                        return;
+                    }
+                    return;
+                case GET_INKEY:
+                    if (resultCode.value() == ResultCode.NO_RESPONSE_FROM_USER.value() && cmdInput != null && cmdInput.duration != null) {
+                        getInKeyResponse(buf, cmdInput);
+                        return;
+                    }
+                    return;
+                default:
+                    CatLog.d(this, "encodeOptionalTags() Unsupported Cmd details=" + cmdDet);
+                    return;
+            }
+        } else {
+            CatLog.d(this, "encodeOptionalTags() bad Cmd details=" + cmdDet);
+        }
+    }
+
+    private void getInKeyResponse(ByteArrayOutputStream buf, Input cmdInput) {
+        buf.write(ComprehensionTlvTag.DURATION.value());
+        buf.write(2);
+        Duration.TimeUnit timeUnit = cmdInput.duration.timeUnit;
+        buf.write(Duration.TimeUnit.SECOND.value());
+        buf.write(cmdInput.duration.timeInterval);
+    }
+
+    private void getPliResponse(ByteArrayOutputStream buf) {
+        String lang = SystemProperties.get("persist.sys.language");
+        if (lang != null) {
+            buf.write(ComprehensionTlvTag.LANGUAGE.value());
+            ResponseData.writeLength(buf, lang.length());
+            buf.write(lang.getBytes(), 0, lang.length());
+        }
+    }
+
+    private void sendMenuSelection(int menuId, boolean helpRequired) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        buf.write(211);
+        buf.write(0);
+        buf.write(ComprehensionTlvTag.DEVICE_IDENTITIES.value() | 128);
+        buf.write(2);
+        buf.write(1);
+        buf.write(129);
+        buf.write(ComprehensionTlvTag.ITEM_ID.value() | 128);
+        buf.write(1);
+        buf.write(menuId);
+        if (helpRequired) {
+            buf.write(ComprehensionTlvTag.HELP_REQUEST.value());
+            buf.write(0);
+        }
+        byte[] rawData = buf.toByteArray();
+        rawData[1] = (byte) (rawData.length - 2);
+        this.mCmdIf.sendEnvelope(IccUtils.bytesToHexString(rawData), null);
+    }
+
+    private void eventDownload(int event, int sourceId, int destinationId, byte[] additionalInfo, boolean oneShot) {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        buf.write(BerTlv.BER_EVENT_DOWNLOAD_TAG);
+        buf.write(0);
+        buf.write(ComprehensionTlvTag.EVENT_LIST.value() | 128);
+        buf.write(1);
+        buf.write(event);
+        buf.write(ComprehensionTlvTag.DEVICE_IDENTITIES.value() | 128);
+        buf.write(2);
+        buf.write(sourceId);
+        buf.write(destinationId);
+        switch (event) {
+            case 5:
+                CatLog.d(this, " Sending Idle Screen Available event download to ICC");
+                break;
+            case 7:
+                CatLog.d(this, " Sending Language Selection event download to ICC");
+                buf.write(ComprehensionTlvTag.LANGUAGE.value() | 128);
+                buf.write(2);
+                break;
+            case 19:
+                CatLog.d(this, " Sending HCI Connectivity event download to ICC");
+                break;
+        }
+        if (additionalInfo != null) {
+            for (byte b : additionalInfo) {
+                buf.write(b);
+            }
+        }
+        byte[] rawData = buf.toByteArray();
+        rawData[1] = (byte) (rawData.length - 2);
+        String hexString = IccUtils.bytesToHexString(rawData);
+        CatLog.d(this, "ENVELOPE COMMAND: " + hexString);
+        this.mCmdIf.sendEnvelope(hexString, null);
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        AsyncResult ar;
+        CatLog.d(this, "handleMessage[" + msg.what + "]");
+        switch (msg.what) {
             case 1:
             case 2:
             case 3:
             case 5:
-                String str;
-                CatLog.d((Object) this, "ril message arrived,slotid:" + this.mSlotId);
-                if (message.obj != null) {
-                    asyncResult = (AsyncResult) message.obj;
-                    if (!(asyncResult == null || asyncResult.result == null)) {
-                        try {
-                            str = (String) asyncResult.result;
-                            this.mMsgDecoder.sendStartDecodingMessageParams(new RilMessage(message.what, str));
-                            return;
-                        } catch (ClassCastException e) {
-                            return;
-                        }
+                CatLog.d(this, "ril message arrived,slotid:" + this.mSlotId);
+                String data = null;
+                if (!(msg.obj == null || (ar = (AsyncResult) msg.obj) == null || ar.result == null)) {
+                    try {
+                        data = (String) ar.result;
+                    } catch (ClassCastException e) {
+                        return;
                     }
                 }
-                str = null;
-                this.mMsgDecoder.sendStartDecodingMessageParams(new RilMessage(message.what, str));
+                this.mMsgDecoder.sendStartDecodingMessageParams(new RilMessage(msg.what, data));
                 return;
             case 4:
-                this.mMsgDecoder.sendStartDecodingMessageParams(new RilMessage(message.what, null));
+                this.mMsgDecoder.sendStartDecodingMessageParams(new RilMessage(msg.what, null));
                 return;
             case 6:
-                handleCmdResponse((CatResponseMessage) message.obj);
+                handleCmdResponse((CatResponseMessage) msg.obj);
                 return;
             case 7:
-                CatLog.d((Object) this, "MSG_ID_ICC_CHANGED");
+                CatLog.d(this, "MSG_ID_ICC_CHANGED");
                 updateIccAvailability();
                 return;
             case 8:
-                CatLog.d((Object) this, "Received CAT CC Alpha message from card");
-                if (message.obj != null) {
-                    asyncResult = (AsyncResult) message.obj;
-                    if (asyncResult == null || asyncResult.result == null) {
-                        CatLog.d((Object) this, "CAT Alpha message: ar.result is null");
+                CatLog.d(this, "Received CAT CC Alpha message from card");
+                if (msg.obj != null) {
+                    AsyncResult ar2 = (AsyncResult) msg.obj;
+                    if (ar2 == null || ar2.result == null) {
+                        CatLog.d(this, "CAT Alpha message: ar.result is null");
                         return;
                     } else {
-                        broadcastAlphaMessage((String) asyncResult.result);
+                        broadcastAlphaMessage((String) ar2.result);
                         return;
                     }
+                } else {
+                    CatLog.d(this, "CAT Alpha message: msg.obj is null");
+                    return;
                 }
-                CatLog.d((Object) this, "CAT Alpha message: msg.obj is null");
-                return;
             case 9:
-                handleRilMsg((RilMessage) message.obj);
+                handleRilMsg((RilMessage) msg.obj);
                 return;
             case 30:
-                if (message.obj != null) {
-                    asyncResult = (AsyncResult) message.obj;
-                    if (asyncResult == null || asyncResult.result == null) {
-                        CatLog.d((Object) this, "Icc REFRESH with exception: " + asyncResult.exception);
+                if (msg.obj != null) {
+                    AsyncResult ar3 = (AsyncResult) msg.obj;
+                    if (ar3 == null || ar3.result == null) {
+                        CatLog.d(this, "Icc REFRESH with exception: " + ar3.exception);
                         return;
                     } else {
-                        broadcastCardStateAndIccRefreshResp(CardState.CARDSTATE_PRESENT, (IccRefreshResponse) asyncResult.result);
+                        broadcastCardStateAndIccRefreshResp(IccCardStatus.CardState.CARDSTATE_PRESENT, (IccRefreshResponse) ar3.result);
                         return;
                     }
+                } else {
+                    CatLog.d(this, "IccRefresh Message is null");
+                    return;
                 }
-                CatLog.d((Object) this, "IccRefresh Message is null");
-                return;
             default:
-                throw new AssertionError("Unrecognized CAT command: " + message.what);
+                throw new AssertionError("Unrecognized CAT command: " + msg.what);
         }
     }
 
-    public void onCmdResponse(CatResponseMessage catResponseMessage) {
-        synchronized (this) {
-            if (catResponseMessage != null) {
-                obtainMessage(6, catResponseMessage).sendToTarget();
+    private void broadcastCardStateAndIccRefreshResp(IccCardStatus.CardState cardState, IccRefreshResponse iccRefreshState) {
+        Intent intent = new Intent(AppInterface.CAT_ICC_STATUS_CHANGE);
+        intent.addFlags(268435456);
+        boolean cardPresent = cardState == IccCardStatus.CardState.CARDSTATE_PRESENT;
+        if (iccRefreshState != null) {
+            intent.putExtra(AppInterface.REFRESH_RESULT, iccRefreshState.refreshResult);
+            CatLog.d(this, "Sending IccResult with Result: " + iccRefreshState.refreshResult);
+        }
+        intent.putExtra(AppInterface.CARD_STATUS, cardPresent);
+        intent.putExtra("SLOT_ID", this.mSlotId);
+        CatLog.d(this, "Sending Card Status: " + cardState + " cardPresent: " + cardPresent);
+        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
+    }
+
+    private void broadcastAlphaMessage(String alphaString) {
+        CatLog.d(this, "Broadcasting CAT Alpha message from card: " + alphaString);
+        Intent intent = new Intent(AppInterface.CAT_ALPHA_NOTIFY_ACTION);
+        intent.addFlags(268435456);
+        intent.putExtra(AppInterface.ALPHA_STRING, alphaString);
+        intent.putExtra("SLOT_ID", this.mSlotId);
+        this.mContext.sendBroadcast(intent, AppInterface.STK_PERMISSION);
+    }
+
+    @Override // com.android.internal.telephony.cat.AppInterface
+    public synchronized void onCmdResponse(CatResponseMessage resMsg) {
+        if (resMsg != null) {
+            obtainMessage(6, resMsg).sendToTarget();
+        }
+    }
+
+    private boolean validateResponse(CatResponseMessage resMsg) {
+        if (resMsg.mCmdDet.typeOfCommand == AppInterface.CommandType.SET_UP_EVENT_LIST.value() || resMsg.mCmdDet.typeOfCommand == AppInterface.CommandType.SET_UP_MENU.value()) {
+            CatLog.d(this, "CmdType: " + resMsg.mCmdDet.typeOfCommand);
+            return true;
+        } else if (this.mCurrntCmd == null) {
+            return false;
+        } else {
+            boolean validResponse = resMsg.mCmdDet.compareTo(this.mCurrntCmd.mCmdDet);
+            CatLog.d(this, "isResponse for last valid cmd: " + validResponse);
+            return validResponse;
+        }
+    }
+
+    private boolean removeMenu(Menu menu) {
+        try {
+            if (menu.items.size() == 1) {
+                if (menu.items.get(0) == null) {
+                    return true;
+                }
             }
+            return false;
+        } catch (NullPointerException e) {
+            CatLog.d(this, "Unable to get Menu's items size");
+            return true;
         }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void updateIccAvailability() {
+    /* JADX WARN: Can't fix incorrect switch cases order, some code will duplicate */
+    /* JADX WARN: Removed duplicated region for block: B:10:0x0032  */
+    /* JADX WARN: Removed duplicated region for block: B:12:0x0040  */
+    /* JADX WARN: Removed duplicated region for block: B:17:0x004f  */
+    /* JADX WARN: Removed duplicated region for block: B:18:0x0057  */
+    /* JADX WARN: Removed duplicated region for block: B:23:0x0077  */
+    /* JADX WARN: Removed duplicated region for block: B:27:0x0088  */
+    /* JADX WARN: Removed duplicated region for block: B:28:0x008a  */
+    /* JADX WARN: Removed duplicated region for block: B:29:0x0095  */
+    /*
+        Code decompiled incorrectly, please refer to instructions dump.
+        To view partially-correct code enable 'Show inconsistent code' option in preferences
+    */
+    private void handleCmdResponse(com.android.internal.telephony.cat.CatResponseMessage r12) {
+        /*
+            Method dump skipped, instructions count: 284
+            To view this dump change 'Code comments level' option to 'DEBUG'
+        */
+        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.cat.CatService.handleCmdResponse(com.android.internal.telephony.cat.CatResponseMessage):void");
+    }
+
+    private boolean isStkAppInstalled() {
+        int numReceiver;
+        List<ResolveInfo> broadcastReceivers = this.mContext.getPackageManager().queryBroadcastReceivers(new Intent(AppInterface.CAT_CMD_ACTION), 128);
+        if (broadcastReceivers == null) {
+            numReceiver = 0;
+        } else {
+            numReceiver = broadcastReceivers.size();
+        }
+        return numReceiver > 0;
+    }
+
+    void updateIccAvailability() {
         if (this.mUiccController != null) {
-            CardState cardState = CardState.CARDSTATE_ABSENT;
-            UiccCard uiccCard = this.mUiccController.getUiccCard(this.mSlotId);
-            if (uiccCard != null) {
-                cardState = uiccCard.getCardState();
+            IccCardStatus.CardState newState = IccCardStatus.CardState.CARDSTATE_ABSENT;
+            UiccCard newCard = this.mUiccController.getUiccCard(this.mSlotId);
+            if (newCard != null) {
+                newState = newCard.getCardState();
             }
-            CardState cardState2 = this.mCardState;
-            this.mCardState = cardState;
-            CatLog.d((Object) this, "New Card State = " + cardState + " " + "Old Card State = " + cardState2);
-            if (cardState2 == CardState.CARDSTATE_PRESENT && cardState != CardState.CARDSTATE_PRESENT) {
-                broadcastCardStateAndIccRefreshResp(cardState, null);
-            } else if (cardState2 != CardState.CARDSTATE_PRESENT && cardState == CardState.CARDSTATE_PRESENT) {
+            IccCardStatus.CardState oldState = this.mCardState;
+            this.mCardState = newState;
+            CatLog.d(this, "New Card State = " + newState + " Old Card State = " + oldState);
+            if (oldState == IccCardStatus.CardState.CARDSTATE_PRESENT && newState != IccCardStatus.CardState.CARDSTATE_PRESENT) {
+                broadcastCardStateAndIccRefreshResp(newState, null);
+            } else if (oldState != IccCardStatus.CardState.CARDSTATE_PRESENT && newState == IccCardStatus.CardState.CARDSTATE_PRESENT) {
                 this.mCmdIf.reportStkServiceIsRunning(null);
             }
         }

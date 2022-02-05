@@ -5,7 +5,9 @@ import android.os.Handler;
 import android.os.Message;
 import com.android.internal.telephony.CommandsInterface;
 import java.util.ArrayList;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class IccFileHandler extends Handler implements IccConstants {
     protected static final int COMMAND_GET_RESPONSE = 192;
     protected static final int COMMAND_READ_BINARY = 176;
@@ -50,7 +52,14 @@ public abstract class IccFileHandler extends Handler implements IccConstants {
     protected final CommandsInterface mCi;
     protected final UiccCardApplication mParentApp;
 
-    static class LoadLinearFixedContext {
+    protected abstract String getEFPath(int i);
+
+    protected abstract void logd(String str);
+
+    protected abstract void loge(String str);
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class LoadLinearFixedContext {
         int mCount;
         int mCountLoadrecords;
         int mCountRecords;
@@ -64,588 +73,310 @@ public abstract class IccFileHandler extends Handler implements IccConstants {
         int mRecordSize;
         ArrayList<byte[]> results;
 
-        LoadLinearFixedContext(int i, int i2, Message message) {
-            this.mEfid = i;
-            this.mRecordNum = i2;
-            this.mOnLoaded = message;
+        LoadLinearFixedContext(int efid, int recordNum, Message onLoaded) {
+            this.mEfid = efid;
+            this.mRecordNum = recordNum;
+            this.mOnLoaded = onLoaded;
             this.mLoadAll = false;
             this.mLoadPart = false;
             this.mPath = null;
         }
 
-        LoadLinearFixedContext(int i, int i2, String str, Message message) {
-            this.mEfid = i;
-            this.mRecordNum = i2;
-            this.mOnLoaded = message;
+        LoadLinearFixedContext(int efid, int recordNum, String path, Message onLoaded) {
+            this.mEfid = efid;
+            this.mRecordNum = recordNum;
+            this.mOnLoaded = onLoaded;
             this.mLoadAll = false;
             this.mLoadPart = false;
-            this.mPath = str;
+            this.mPath = path;
         }
 
-        LoadLinearFixedContext(int i, Message message) {
-            this.mEfid = i;
+        LoadLinearFixedContext(int efid, String path, Message onLoaded) {
+            this.mEfid = efid;
             this.mRecordNum = 1;
             this.mLoadAll = true;
             this.mLoadPart = false;
-            this.mOnLoaded = message;
+            this.mOnLoaded = onLoaded;
+            this.mPath = path;
+        }
+
+        LoadLinearFixedContext(int efid, Message onLoaded) {
+            this.mEfid = efid;
+            this.mRecordNum = 1;
+            this.mLoadAll = true;
+            this.mLoadPart = false;
+            this.mOnLoaded = onLoaded;
             this.mPath = null;
         }
 
-        LoadLinearFixedContext(int i, String str, Message message) {
-            this.mEfid = i;
-            this.mRecordNum = 1;
-            this.mLoadAll = true;
-            this.mLoadPart = false;
-            this.mOnLoaded = message;
-            this.mPath = str;
-        }
-
-        LoadLinearFixedContext(int i, ArrayList<Integer> arrayList, String str, Message message) {
-            this.mEfid = i;
-            this.mRecordNum = ((Integer) arrayList.get(0)).intValue();
+        LoadLinearFixedContext(int efid, ArrayList<Integer> recordNums, String path, Message onLoaded) {
+            this.mEfid = efid;
+            this.mRecordNum = recordNums.get(0).intValue();
             this.mLoadAll = false;
             this.mLoadPart = true;
-            this.mRecordNums = new ArrayList();
-            this.mRecordNums.addAll(arrayList);
+            this.mRecordNums = new ArrayList<>();
+            this.mRecordNums.addAll(recordNums);
             this.mCount = 0;
-            this.mCountLoadrecords = arrayList.size();
-            this.mOnLoaded = message;
-            this.mPath = str;
+            this.mCountLoadrecords = recordNums.size();
+            this.mOnLoaded = onLoaded;
+            this.mPath = path;
         }
 
-        private void initLCResults(int i) {
-            int i2 = 0;
-            this.results = new ArrayList(i);
-            byte[] bArr = new byte[this.mRecordSize];
-            for (int i3 = 0; i3 < this.mRecordSize; i3++) {
-                bArr[i3] = (byte) -1;
+        public void initLCResults(int size) {
+            this.results = new ArrayList<>(size);
+            byte[] data = new byte[this.mRecordSize];
+            for (int i = 0; i < this.mRecordSize; i++) {
+                data[i] = -1;
             }
-            while (i2 < i) {
-                this.results.add(bArr);
-                i2++;
+            for (int i2 = 0; i2 < size; i2++) {
+                this.results.add(data);
             }
         }
     }
 
-    protected IccFileHandler(UiccCardApplication uiccCardApplication, String str, CommandsInterface commandsInterface) {
-        this.mParentApp = uiccCardApplication;
-        this.mAid = str;
-        this.mCi = commandsInterface;
-    }
-
-    private boolean processException(Message message, AsyncResult asyncResult) {
-        boolean z;
-        IccIoResult iccIoResult = (IccIoResult) asyncResult.result;
-        if (asyncResult.exception != null) {
-            sendResult(message, null, asyncResult.exception);
-            z = true;
-        } else {
-            IccException exception = iccIoResult.getException();
-            if (exception != null) {
-                sendResult(message, null, exception);
-                return true;
-            }
-            z = false;
-        }
-        return z;
-    }
-
-    private void sendResult(Message message, Object obj, Throwable th) {
-        if (message != null) {
-            AsyncResult.forMessage(message, obj, th);
-            message.sendToTarget();
-        }
+    public IccFileHandler(UiccCardApplication app, String aid, CommandsInterface ci) {
+        this.mParentApp = app;
+        this.mAid = aid;
+        this.mCi = ci;
     }
 
     public void dispose() {
     }
 
-    /* Access modifiers changed, original: protected */
-    public String getCommonIccEFPath(int i) {
-        switch (i) {
-            case IccConstants.EF_PL /*12037*/:
-            case IccConstants.EF_ICCID /*12258*/:
+    public void loadEFLinearFixed(int fileid, String path, int recordNum, Message onLoaded) {
+        this.mCi.iccIOForApp(192, fileid, path, 0, 0, 15, null, null, this.mAid, obtainMessage(6, new LoadLinearFixedContext(fileid, recordNum, path, onLoaded)));
+    }
+
+    public void loadEFLinearFixed(int fileid, int recordNum, Message onLoaded) {
+        loadEFLinearFixed(fileid, getEFPath(fileid), recordNum, onLoaded);
+    }
+
+    public void loadEFImgLinearFixed(int recordNum, Message onLoaded) {
+        this.mCi.iccIOForApp(192, 20256, getEFPath(20256), recordNum, 4, 10, null, null, this.mAid, obtainMessage(11, new LoadLinearFixedContext(20256, recordNum, onLoaded)));
+    }
+
+    public void getEFLinearRecordSize(int fileid, String path, Message onLoaded) {
+        this.mCi.iccIOForApp(192, fileid, path, 0, 0, 15, null, null, this.mAid, obtainMessage(8, new LoadLinearFixedContext(fileid, path, onLoaded)));
+    }
+
+    public void getEFLinearRecordSize(int fileid, Message onLoaded) {
+        getEFLinearRecordSize(fileid, getEFPath(fileid), onLoaded);
+    }
+
+    public void loadEFLinearFixedAll(int fileid, Message onLoaded) {
+        loadEFLinearFixedAll(fileid, getEFPath(fileid), onLoaded);
+    }
+
+    public void loadEFLinearFixedAll(int fileid, String path, Message onLoaded) {
+        this.mCi.iccIOForApp(192, fileid, path, 0, 0, 15, null, null, this.mAid, obtainMessage(6, new LoadLinearFixedContext(fileid, path, onLoaded)));
+    }
+
+    public void loadEFLinearFixedPart(int fileid, ArrayList<Integer> recordNums, Message onLoaded) {
+        loadEFLinearFixedPart(fileid, getEFPath(fileid), recordNums, onLoaded);
+    }
+
+    public void loadEFLinearFixedPart(int fileid, String path, ArrayList<Integer> recordNums, Message onLoaded) {
+        this.mCi.iccIOForApp(192, fileid, path, 0, 0, 15, null, null, this.mAid, obtainMessage(6, new LoadLinearFixedContext(fileid, recordNums, path, onLoaded)));
+    }
+
+    public void loadEFTransparent(int fileid, Message onLoaded) {
+        this.mCi.iccIOForApp(192, fileid, getEFPath(fileid), 0, 0, 15, null, null, this.mAid, obtainMessage(4, fileid, 0, onLoaded));
+    }
+
+    public void loadEFTransparent(int fileid, int size, Message onLoaded) {
+        this.mCi.iccIOForApp(176, fileid, getEFPath(fileid), 0, 0, size, null, null, this.mAid, obtainMessage(5, fileid, 0, onLoaded));
+    }
+
+    public void loadEFImgTransparent(int fileid, int highOffset, int lowOffset, int length, Message onLoaded) {
+        Message response = obtainMessage(10, fileid, 0, onLoaded);
+        logd("IccFileHandler: loadEFImgTransparent fileid = " + fileid + " filePath = " + getEFPath(20256) + " highOffset = " + highOffset + " lowOffset = " + lowOffset + " length = " + length);
+        this.mCi.iccIOForApp(176, fileid, getEFPath(20256), highOffset, lowOffset, length, null, null, this.mAid, response);
+    }
+
+    public void updateEFLinearFixed(int fileid, String path, int recordNum, byte[] data, String pin2, Message onComplete) {
+        this.mCi.iccIOForApp(COMMAND_UPDATE_RECORD, fileid, path, recordNum, 4, data.length, IccUtils.bytesToHexString(data), pin2, this.mAid, onComplete);
+    }
+
+    public void updateEFLinearFixed(int fileid, int recordNum, byte[] data, String pin2, Message onComplete) {
+        this.mCi.iccIOForApp(COMMAND_UPDATE_RECORD, fileid, getEFPath(fileid), recordNum, 4, data.length, IccUtils.bytesToHexString(data), pin2, this.mAid, onComplete);
+    }
+
+    public void updateEFTransparent(int fileid, byte[] data, Message onComplete) {
+        this.mCi.iccIOForApp(214, fileid, getEFPath(fileid), 0, 0, data.length, IccUtils.bytesToHexString(data), null, this.mAid, onComplete);
+    }
+
+    private void sendResult(Message response, Object result, Throwable ex) {
+        if (response != null) {
+            AsyncResult.forMessage(response, result, ex);
+            response.sendToTarget();
+        }
+    }
+
+    private boolean processException(Message response, AsyncResult ar) {
+        IccIoResult result = (IccIoResult) ar.result;
+        if (ar.exception != null) {
+            sendResult(response, null, ar.exception);
+            return true;
+        }
+        IccException iccException = result.getException();
+        if (iccException == null) {
+            return false;
+        }
+        sendResult(response, null, iccException);
+        return true;
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        try {
+            switch (msg.what) {
+                case 4:
+                    AsyncResult ar = (AsyncResult) msg.obj;
+                    Message response = (Message) ar.userObj;
+                    IccIoResult result = (IccIoResult) ar.result;
+                    if (!processException(response, (AsyncResult) msg.obj)) {
+                        byte[] data = result.payload;
+                        int fileid = msg.arg1;
+                        if (4 != data[6]) {
+                            throw new IccFileTypeMismatch();
+                        } else if (data[13] != 0) {
+                            throw new IccFileTypeMismatch();
+                        } else {
+                            this.mCi.iccIOForApp(176, fileid, getEFPath(fileid), 0, 0, ((data[2] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) + (data[3] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT), null, null, this.mAid, obtainMessage(5, fileid, 0, response));
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+                case 5:
+                case 10:
+                    AsyncResult ar2 = (AsyncResult) msg.obj;
+                    Message response2 = (Message) ar2.userObj;
+                    IccIoResult result2 = (IccIoResult) ar2.result;
+                    if (!processException(response2, (AsyncResult) msg.obj)) {
+                        sendResult(response2, result2.payload, null);
+                        return;
+                    }
+                    return;
+                case 6:
+                case 11:
+                    AsyncResult ar3 = (AsyncResult) msg.obj;
+                    LoadLinearFixedContext lc = (LoadLinearFixedContext) ar3.userObj;
+                    IccIoResult result3 = (IccIoResult) ar3.result;
+                    if (!processException(lc.mOnLoaded, (AsyncResult) msg.obj)) {
+                        byte[] data2 = result3.payload;
+                        String path = lc.mPath;
+                        if (4 != data2[6]) {
+                            throw new IccFileTypeMismatch();
+                        } else if (1 != data2[13]) {
+                            throw new IccFileTypeMismatch();
+                        } else {
+                            lc.mRecordSize = data2[14] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+                            lc.mCountRecords = (((data2[2] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) + (data2[3] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT)) / lc.mRecordSize;
+                            if (lc.mLoadAll) {
+                                lc.results = new ArrayList<>(lc.mCountRecords);
+                            } else if (lc.mLoadPart) {
+                                lc.initLCResults(lc.mCountRecords);
+                            }
+                            if (path == null) {
+                                path = getEFPath(lc.mEfid);
+                            }
+                            this.mCi.iccIOForApp(178, lc.mEfid, path, lc.mRecordNum, 4, lc.mRecordSize, null, null, this.mAid, obtainMessage(7, lc));
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+                case 7:
+                case 9:
+                    AsyncResult ar4 = (AsyncResult) msg.obj;
+                    LoadLinearFixedContext lc2 = (LoadLinearFixedContext) ar4.userObj;
+                    IccIoResult result4 = (IccIoResult) ar4.result;
+                    Message response3 = lc2.mOnLoaded;
+                    String path2 = lc2.mPath;
+                    if (processException(response3, (AsyncResult) msg.obj)) {
+                        return;
+                    }
+                    if (lc2.mLoadAll) {
+                        lc2.results.add(result4.payload);
+                        lc2.mRecordNum++;
+                        if (lc2.mRecordNum > lc2.mCountRecords) {
+                            sendResult(response3, lc2.results, null);
+                            return;
+                        }
+                        if (path2 == null) {
+                            path2 = getEFPath(lc2.mEfid);
+                        }
+                        this.mCi.iccIOForApp(178, lc2.mEfid, path2, lc2.mRecordNum, 4, lc2.mRecordSize, null, null, this.mAid, obtainMessage(7, lc2));
+                        return;
+                    } else if (lc2.mLoadPart) {
+                        lc2.results.set(lc2.mRecordNum - 1, result4.payload);
+                        lc2.mCount++;
+                        if (lc2.mCount < lc2.mCountLoadrecords) {
+                            lc2.mRecordNum = lc2.mRecordNums.get(lc2.mCount).intValue();
+                            if (lc2.mRecordNum <= lc2.mCountRecords) {
+                                if (path2 == null) {
+                                    path2 = getEFPath(lc2.mEfid);
+                                }
+                                this.mCi.iccIOForApp(178, lc2.mEfid, path2, lc2.mRecordNum, 4, lc2.mRecordSize, null, null, this.mAid, obtainMessage(7, lc2));
+                                return;
+                            }
+                            sendResult(response3, lc2.results, null);
+                            return;
+                        }
+                        sendResult(response3, lc2.results, null);
+                        return;
+                    } else {
+                        sendResult(response3, result4.payload, null);
+                        return;
+                    }
+                case 8:
+                    AsyncResult ar5 = (AsyncResult) msg.obj;
+                    LoadLinearFixedContext lc3 = (LoadLinearFixedContext) ar5.userObj;
+                    IccIoResult result5 = (IccIoResult) ar5.result;
+                    Message response4 = lc3.mOnLoaded;
+                    if (!processException(response4, (AsyncResult) msg.obj)) {
+                        byte[] data3 = result5.payload;
+                        if (4 == data3[6] && 1 == data3[13]) {
+                            int[] recordSize = {data3[14] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT, ((data3[2] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) + (data3[3] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT), recordSize[1] / recordSize[0]};
+                            sendResult(response4, recordSize, null);
+                            return;
+                        }
+                        throw new IccFileTypeMismatch();
+                    }
+                    return;
+                default:
+                    return;
+            }
+        } catch (Exception exc) {
+            if (0 != 0) {
+                sendResult(null, null, exc);
+            } else {
+                loge("uncaught exception" + exc);
+            }
+        }
+    }
+
+    protected String getCommonIccEFPath(int efid) {
+        switch (efid) {
+            case IccConstants.EF_PL /* 12037 */:
+            case IccConstants.EF_ICCID /* 12258 */:
                 return IccConstants.MF_SIM;
             case 20256:
                 return "3F007F105F50";
-            case IccConstants.EF_PBR /*20272*/:
+            case IccConstants.EF_PBR /* 20272 */:
                 return "3F007F105F3A";
             case 28474:
-            case IccConstants.EF_FDN /*28475*/:
-            case IccConstants.EF_MSISDN /*28480*/:
-            case IccConstants.EF_SDN /*28489*/:
-            case IccConstants.EF_EXT1 /*28490*/:
-            case IccConstants.EF_EXT2 /*28491*/:
-            case IccConstants.EF_EXT3 /*28492*/:
-            case IccConstants.EF_PSI /*28645*/:
+            case IccConstants.EF_FDN /* 28475 */:
+            case IccConstants.EF_MSISDN /* 28480 */:
+            case IccConstants.EF_SDN /* 28489 */:
+            case IccConstants.EF_EXT1 /* 28490 */:
+            case IccConstants.EF_EXT2 /* 28491 */:
+            case IccConstants.EF_EXT3 /* 28492 */:
+            case IccConstants.EF_PSI /* 28645 */:
                 return "3F007F10";
             default:
                 return null;
         }
-    }
-
-    public void getEFLinearRecordSize(int i, Message message) {
-        getEFLinearRecordSize(i, getEFPath(i), message);
-    }
-
-    public void getEFLinearRecordSize(int i, String str, Message message) {
-        int i2 = i;
-        String str2 = str;
-        int i3 = 0;
-        String str3 = null;
-        this.mCi.iccIOForApp(192, i2, str2, 0, i3, 15, null, str3, this.mAid, obtainMessage(8, new LoadLinearFixedContext(i, str, message)));
-    }
-
-    public abstract String getEFPath(int i);
-
-    public void handleMessage(android.os.Message r16) {
-        /*
-        r15 = this;
-        r7 = 2;
-        r6 = 1;
-        r4 = 0;
-        r5 = 4;
-        r13 = 0;
-        r0 = r16;
-        r1 = r0.what;	 Catch:{ Exception -> 0x025c }
-        switch(r1) {
-            case 4: goto L_0x00f6;
-            case 5: goto L_0x021e;
-            case 6: goto L_0x006b;
-            case 7: goto L_0x0154;
-            case 8: goto L_0x000d;
-            case 9: goto L_0x0154;
-            case 10: goto L_0x021e;
-            case 11: goto L_0x006b;
-            default: goto L_0x000c;
-        };	 Catch:{ Exception -> 0x025c }
-    L_0x000c:
-        return;
-    L_0x000d:
-        r0 = r16;
-        r1 = r0.obj;	 Catch:{ Exception -> 0x025c }
-        r1 = (android.os.AsyncResult) r1;	 Catch:{ Exception -> 0x025c }
-        r2 = r1.userObj;	 Catch:{ Exception -> 0x025c }
-        r2 = (com.android.internal.telephony.uicc.IccFileHandler.LoadLinearFixedContext) r2;	 Catch:{ Exception -> 0x025c }
-        r1 = r1.result;	 Catch:{ Exception -> 0x025c }
-        r1 = (com.android.internal.telephony.uicc.IccIoResult) r1;	 Catch:{ Exception -> 0x025c }
-        r12 = r2.mOnLoaded;	 Catch:{ Exception -> 0x025c }
-        r0 = r16;
-        r2 = r0.obj;	 Catch:{ Exception -> 0x003c }
-        r2 = (android.os.AsyncResult) r2;	 Catch:{ Exception -> 0x003c }
-        r2 = r15.processException(r12, r2);	 Catch:{ Exception -> 0x003c }
-        if (r2 != 0) goto L_0x000c;
-    L_0x0029:
-        r1 = r1.payload;	 Catch:{ Exception -> 0x003c }
-        r2 = 6;
-        r2 = r1[r2];
-        if (r5 != r2) goto L_0x0036;
-    L_0x0030:
-        r2 = 13;
-        r2 = r1[r2];
-        if (r6 == r2) goto L_0x0043;
-    L_0x0036:
-        r1 = new com.android.internal.telephony.uicc.IccFileTypeMismatch;	 Catch:{ Exception -> 0x003c }
-        r1.<init>();	 Catch:{ Exception -> 0x003c }
-        throw r1;	 Catch:{ Exception -> 0x003c }
-    L_0x003c:
-        r1 = move-exception;
-    L_0x003d:
-        if (r12 == 0) goto L_0x0244;
-    L_0x003f:
-        r15.sendResult(r12, r13, r1);
-        goto L_0x000c;
-    L_0x0043:
-        r2 = 3;
-        r2 = new int[r2];	 Catch:{ Exception -> 0x003c }
-        r3 = 14;
-        r3 = r1[r3];
-        r3 = r3 & 255;
-        r2[r4] = r3;
-        r3 = r1[r7];
-        r3 = r3 & 255;
-        r3 = r3 << 8;
-        r4 = 3;
-        r1 = r1[r4];
-        r1 = r1 & 255;
-        r1 = r1 + r3;
-        r2[r6] = r1;
-        r1 = 2;
-        r3 = 1;
-        r3 = r2[r3];	 Catch:{ Exception -> 0x003c }
-        r4 = 0;
-        r4 = r2[r4];	 Catch:{ Exception -> 0x003c }
-        r3 = r3 / r4;
-        r2[r1] = r3;	 Catch:{ Exception -> 0x003c }
-        r1 = 0;
-        r15.sendResult(r12, r2, r1);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x006b:
-        r0 = r16;
-        r1 = r0.obj;	 Catch:{ Exception -> 0x025c }
-        r1 = (android.os.AsyncResult) r1;	 Catch:{ Exception -> 0x025c }
-        r2 = r1.userObj;	 Catch:{ Exception -> 0x025c }
-        r0 = r2;
-        r0 = (com.android.internal.telephony.uicc.IccFileHandler.LoadLinearFixedContext) r0;	 Catch:{ Exception -> 0x025c }
-        r11 = r0;
-        r1 = r1.result;	 Catch:{ Exception -> 0x025c }
-        r1 = (com.android.internal.telephony.uicc.IccIoResult) r1;	 Catch:{ Exception -> 0x025c }
-        r12 = r11.mOnLoaded;	 Catch:{ Exception -> 0x025c }
-        r0 = r16;
-        r2 = r0.obj;	 Catch:{ Exception -> 0x003c }
-        r2 = (android.os.AsyncResult) r2;	 Catch:{ Exception -> 0x003c }
-        r2 = r15.processException(r12, r2);	 Catch:{ Exception -> 0x003c }
-        if (r2 != 0) goto L_0x000c;
-    L_0x0089:
-        r1 = r1.payload;	 Catch:{ Exception -> 0x003c }
-        r4 = r11.mPath;	 Catch:{ Exception -> 0x003c }
-        r2 = 6;
-        r2 = r1[r2];
-        if (r5 == r2) goto L_0x0098;
-    L_0x0092:
-        r1 = new com.android.internal.telephony.uicc.IccFileTypeMismatch;	 Catch:{ Exception -> 0x003c }
-        r1.<init>();	 Catch:{ Exception -> 0x003c }
-        throw r1;	 Catch:{ Exception -> 0x003c }
-    L_0x0098:
-        r2 = 13;
-        r2 = r1[r2];
-        if (r6 == r2) goto L_0x00a4;
-    L_0x009e:
-        r1 = new com.android.internal.telephony.uicc.IccFileTypeMismatch;	 Catch:{ Exception -> 0x003c }
-        r1.<init>();	 Catch:{ Exception -> 0x003c }
-        throw r1;	 Catch:{ Exception -> 0x003c }
-    L_0x00a4:
-        r2 = 14;
-        r2 = r1[r2];	 Catch:{ Exception -> 0x003c }
-        r2 = r2 & 255;
-        r11.mRecordSize = r2;	 Catch:{ Exception -> 0x003c }
-        r2 = 2;
-        r2 = r1[r2];	 Catch:{ Exception -> 0x003c }
-        r2 = r2 & 255;
-        r2 = r2 << 8;
-        r3 = 3;
-        r1 = r1[r3];	 Catch:{ Exception -> 0x003c }
-        r1 = r1 & 255;
-        r1 = r1 + r2;
-        r2 = r11.mRecordSize;	 Catch:{ Exception -> 0x003c }
-        r1 = r1 / r2;
-        r11.mCountRecords = r1;	 Catch:{ Exception -> 0x003c }
-        r1 = r11.mLoadAll;	 Catch:{ Exception -> 0x003c }
-        if (r1 == 0) goto L_0x00ec;
-    L_0x00c2:
-        r1 = new java.util.ArrayList;	 Catch:{ Exception -> 0x003c }
-        r2 = r11.mCountRecords;	 Catch:{ Exception -> 0x003c }
-        r1.<init>(r2);	 Catch:{ Exception -> 0x003c }
-        r11.results = r1;	 Catch:{ Exception -> 0x003c }
-    L_0x00cb:
-        if (r4 != 0) goto L_0x00d3;
-    L_0x00cd:
-        r1 = r11.mEfid;	 Catch:{ Exception -> 0x003c }
-        r4 = r15.getEFPath(r1);	 Catch:{ Exception -> 0x003c }
-    L_0x00d3:
-        r1 = r15.mCi;	 Catch:{ Exception -> 0x003c }
-        r2 = 178; // 0xb2 float:2.5E-43 double:8.8E-322;
-        r3 = r11.mEfid;	 Catch:{ Exception -> 0x003c }
-        r5 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r6 = 4;
-        r7 = r11.mRecordSize;	 Catch:{ Exception -> 0x003c }
-        r8 = 0;
-        r9 = 0;
-        r10 = r15.mAid;	 Catch:{ Exception -> 0x003c }
-        r14 = 7;
-        r11 = r15.obtainMessage(r14, r11);	 Catch:{ Exception -> 0x003c }
-        r1.iccIOForApp(r2, r3, r4, r5, r6, r7, r8, r9, r10, r11);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x00ec:
-        r1 = r11.mLoadPart;	 Catch:{ Exception -> 0x003c }
-        if (r1 == 0) goto L_0x00cb;
-    L_0x00f0:
-        r1 = r11.mCountRecords;	 Catch:{ Exception -> 0x003c }
-        r11.initLCResults(r1);	 Catch:{ Exception -> 0x003c }
-        goto L_0x00cb;
-    L_0x00f6:
-        r0 = r16;
-        r1 = r0.obj;	 Catch:{ Exception -> 0x025c }
-        r1 = (android.os.AsyncResult) r1;	 Catch:{ Exception -> 0x025c }
-        r2 = r1.userObj;	 Catch:{ Exception -> 0x025c }
-        r0 = r2;
-        r0 = (android.os.Message) r0;	 Catch:{ Exception -> 0x025c }
-        r12 = r0;
-        r1 = r1.result;	 Catch:{ Exception -> 0x003c }
-        r1 = (com.android.internal.telephony.uicc.IccIoResult) r1;	 Catch:{ Exception -> 0x003c }
-        r0 = r16;
-        r2 = r0.obj;	 Catch:{ Exception -> 0x003c }
-        r2 = (android.os.AsyncResult) r2;	 Catch:{ Exception -> 0x003c }
-        r2 = r15.processException(r12, r2);	 Catch:{ Exception -> 0x003c }
-        if (r2 != 0) goto L_0x000c;
-    L_0x0112:
-        r1 = r1.payload;	 Catch:{ Exception -> 0x003c }
-        r0 = r16;
-        r3 = r0.arg1;	 Catch:{ Exception -> 0x003c }
-        r2 = 6;
-        r2 = r1[r2];
-        if (r5 == r2) goto L_0x0123;
-    L_0x011d:
-        r1 = new com.android.internal.telephony.uicc.IccFileTypeMismatch;	 Catch:{ Exception -> 0x003c }
-        r1.<init>();	 Catch:{ Exception -> 0x003c }
-        throw r1;	 Catch:{ Exception -> 0x003c }
-    L_0x0123:
-        r2 = 13;
-        r2 = r1[r2];
-        if (r2 == 0) goto L_0x012f;
-    L_0x0129:
-        r1 = new com.android.internal.telephony.uicc.IccFileTypeMismatch;	 Catch:{ Exception -> 0x003c }
-        r1.<init>();	 Catch:{ Exception -> 0x003c }
-        throw r1;	 Catch:{ Exception -> 0x003c }
-    L_0x012f:
-        r7 = r1[r7];
-        r2 = 3;
-        r8 = r1[r2];
-        r1 = r15.mCi;	 Catch:{ Exception -> 0x003c }
-        r2 = 176; // 0xb0 float:2.47E-43 double:8.7E-322;
-        r4 = r15.getEFPath(r3);	 Catch:{ Exception -> 0x003c }
-        r5 = 0;
-        r6 = 0;
-        r7 = r7 & 255;
-        r7 = r7 << 8;
-        r8 = r8 & 255;
-        r7 = r7 + r8;
-        r8 = 0;
-        r9 = 0;
-        r10 = r15.mAid;	 Catch:{ Exception -> 0x003c }
-        r11 = 5;
-        r14 = 0;
-        r11 = r15.obtainMessage(r11, r3, r14, r12);	 Catch:{ Exception -> 0x003c }
-        r1.iccIOForApp(r2, r3, r4, r5, r6, r7, r8, r9, r10, r11);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x0154:
-        r0 = r16;
-        r1 = r0.obj;	 Catch:{ Exception -> 0x025c }
-        r1 = (android.os.AsyncResult) r1;	 Catch:{ Exception -> 0x025c }
-        r2 = r1.userObj;	 Catch:{ Exception -> 0x025c }
-        r0 = r2;
-        r0 = (com.android.internal.telephony.uicc.IccFileHandler.LoadLinearFixedContext) r0;	 Catch:{ Exception -> 0x025c }
-        r11 = r0;
-        r1 = r1.result;	 Catch:{ Exception -> 0x025c }
-        r1 = (com.android.internal.telephony.uicc.IccIoResult) r1;	 Catch:{ Exception -> 0x025c }
-        r12 = r11.mOnLoaded;	 Catch:{ Exception -> 0x025c }
-        r4 = r11.mPath;	 Catch:{ Exception -> 0x003c }
-        r0 = r16;
-        r2 = r0.obj;	 Catch:{ Exception -> 0x003c }
-        r2 = (android.os.AsyncResult) r2;	 Catch:{ Exception -> 0x003c }
-        r2 = r15.processException(r12, r2);	 Catch:{ Exception -> 0x003c }
-        if (r2 != 0) goto L_0x000c;
-    L_0x0174:
-        r2 = r11.mLoadAll;	 Catch:{ Exception -> 0x003c }
-        if (r2 == 0) goto L_0x01b4;
-    L_0x0178:
-        r2 = r11.results;	 Catch:{ Exception -> 0x003c }
-        r1 = r1.payload;	 Catch:{ Exception -> 0x003c }
-        r2.add(r1);	 Catch:{ Exception -> 0x003c }
-        r1 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r1 = r1 + 1;
-        r11.mRecordNum = r1;	 Catch:{ Exception -> 0x003c }
-        r1 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r2 = r11.mCountRecords;	 Catch:{ Exception -> 0x003c }
-        if (r1 <= r2) goto L_0x0193;
-    L_0x018b:
-        r1 = r11.results;	 Catch:{ Exception -> 0x003c }
-        r2 = 0;
-        r15.sendResult(r12, r1, r2);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x0193:
-        if (r4 != 0) goto L_0x019b;
-    L_0x0195:
-        r1 = r11.mEfid;	 Catch:{ Exception -> 0x003c }
-        r4 = r15.getEFPath(r1);	 Catch:{ Exception -> 0x003c }
-    L_0x019b:
-        r1 = r15.mCi;	 Catch:{ Exception -> 0x003c }
-        r2 = 178; // 0xb2 float:2.5E-43 double:8.8E-322;
-        r3 = r11.mEfid;	 Catch:{ Exception -> 0x003c }
-        r5 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r6 = 4;
-        r7 = r11.mRecordSize;	 Catch:{ Exception -> 0x003c }
-        r8 = 0;
-        r9 = 0;
-        r10 = r15.mAid;	 Catch:{ Exception -> 0x003c }
-        r14 = 7;
-        r11 = r15.obtainMessage(r14, r11);	 Catch:{ Exception -> 0x003c }
-        r1.iccIOForApp(r2, r3, r4, r5, r6, r7, r8, r9, r10, r11);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x01b4:
-        r2 = r11.mLoadPart;	 Catch:{ Exception -> 0x003c }
-        if (r2 == 0) goto L_0x0216;
-    L_0x01b8:
-        r2 = r11.results;	 Catch:{ Exception -> 0x003c }
-        r3 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r3 = r3 + -1;
-        r1 = r1.payload;	 Catch:{ Exception -> 0x003c }
-        r2.set(r3, r1);	 Catch:{ Exception -> 0x003c }
-        r1 = r11.mCount;	 Catch:{ Exception -> 0x003c }
-        r1 = r1 + 1;
-        r11.mCount = r1;	 Catch:{ Exception -> 0x003c }
-        r1 = r11.mCount;	 Catch:{ Exception -> 0x003c }
-        r2 = r11.mCountLoadrecords;	 Catch:{ Exception -> 0x003c }
-        if (r1 >= r2) goto L_0x020e;
-    L_0x01cf:
-        r1 = r11.mRecordNums;	 Catch:{ Exception -> 0x003c }
-        r2 = r11.mCount;	 Catch:{ Exception -> 0x003c }
-        r1 = r1.get(r2);	 Catch:{ Exception -> 0x003c }
-        r1 = (java.lang.Integer) r1;	 Catch:{ Exception -> 0x003c }
-        r1 = r1.intValue();	 Catch:{ Exception -> 0x003c }
-        r11.mRecordNum = r1;	 Catch:{ Exception -> 0x003c }
-        r1 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r2 = r11.mCountRecords;	 Catch:{ Exception -> 0x003c }
-        if (r1 > r2) goto L_0x0206;
-    L_0x01e5:
-        if (r4 != 0) goto L_0x01ed;
-    L_0x01e7:
-        r1 = r11.mEfid;	 Catch:{ Exception -> 0x003c }
-        r4 = r15.getEFPath(r1);	 Catch:{ Exception -> 0x003c }
-    L_0x01ed:
-        r1 = r15.mCi;	 Catch:{ Exception -> 0x003c }
-        r2 = 178; // 0xb2 float:2.5E-43 double:8.8E-322;
-        r3 = r11.mEfid;	 Catch:{ Exception -> 0x003c }
-        r5 = r11.mRecordNum;	 Catch:{ Exception -> 0x003c }
-        r6 = 4;
-        r7 = r11.mRecordSize;	 Catch:{ Exception -> 0x003c }
-        r8 = 0;
-        r9 = 0;
-        r10 = r15.mAid;	 Catch:{ Exception -> 0x003c }
-        r14 = 7;
-        r11 = r15.obtainMessage(r14, r11);	 Catch:{ Exception -> 0x003c }
-        r1.iccIOForApp(r2, r3, r4, r5, r6, r7, r8, r9, r10, r11);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x0206:
-        r1 = r11.results;	 Catch:{ Exception -> 0x003c }
-        r2 = 0;
-        r15.sendResult(r12, r1, r2);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x020e:
-        r1 = r11.results;	 Catch:{ Exception -> 0x003c }
-        r2 = 0;
-        r15.sendResult(r12, r1, r2);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x0216:
-        r1 = r1.payload;	 Catch:{ Exception -> 0x003c }
-        r2 = 0;
-        r15.sendResult(r12, r1, r2);	 Catch:{ Exception -> 0x003c }
-        goto L_0x000c;
-    L_0x021e:
-        r0 = r16;
-        r1 = r0.obj;	 Catch:{ Exception -> 0x025c }
-        r1 = (android.os.AsyncResult) r1;	 Catch:{ Exception -> 0x025c }
-        r2 = r1.userObj;	 Catch:{ Exception -> 0x025c }
-        r2 = (android.os.Message) r2;	 Catch:{ Exception -> 0x025c }
-        r1 = r1.result;	 Catch:{ Exception -> 0x0240 }
-        r1 = (com.android.internal.telephony.uicc.IccIoResult) r1;	 Catch:{ Exception -> 0x0240 }
-        r0 = r16;
-        r3 = r0.obj;	 Catch:{ Exception -> 0x0240 }
-        r3 = (android.os.AsyncResult) r3;	 Catch:{ Exception -> 0x0240 }
-        r3 = r15.processException(r2, r3);	 Catch:{ Exception -> 0x0240 }
-        if (r3 != 0) goto L_0x000c;
-    L_0x0238:
-        r1 = r1.payload;	 Catch:{ Exception -> 0x0240 }
-        r3 = 0;
-        r15.sendResult(r2, r1, r3);	 Catch:{ Exception -> 0x0240 }
-        goto L_0x000c;
-    L_0x0240:
-        r1 = move-exception;
-        r12 = r2;
-        goto L_0x003d;
-    L_0x0244:
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r3 = "uncaught exception";
-        r2 = r2.append(r3);
-        r1 = r2.append(r1);
-        r1 = r1.toString();
-        r15.loge(r1);
-        goto L_0x000c;
-    L_0x025c:
-        r1 = move-exception;
-        r12 = r13;
-        goto L_0x003d;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccFileHandler.handleMessage(android.os.Message):void");
-    }
-
-    public void loadEFImgLinearFixed(int i, Message message) {
-        int i2 = i;
-        String str = null;
-        this.mCi.iccIOForApp(192, 20256, getEFPath(20256), i2, 4, 10, null, str, this.mAid, obtainMessage(11, new LoadLinearFixedContext(20256, i, message)));
-    }
-
-    public void loadEFImgTransparent(int i, int i2, int i3, int i4, Message message) {
-        Message obtainMessage = obtainMessage(10, i, 0, message);
-        logd("IccFileHandler: loadEFImgTransparent fileid = " + i + " filePath = " + getEFPath(20256) + " highOffset = " + i2 + " lowOffset = " + i3 + " length = " + i4);
-        this.mCi.iccIOForApp(176, i, getEFPath(20256), i2, i3, i4, null, null, this.mAid, obtainMessage);
-    }
-
-    public void loadEFLinearFixed(int i, int i2, Message message) {
-        loadEFLinearFixed(i, getEFPath(i), i2, message);
-    }
-
-    public void loadEFLinearFixed(int i, String str, int i2, Message message) {
-        int i3 = i;
-        String str2 = str;
-        int i4 = 0;
-        String str3 = null;
-        this.mCi.iccIOForApp(192, i3, str2, 0, i4, 15, null, str3, this.mAid, obtainMessage(6, new LoadLinearFixedContext(i, i2, str, message)));
-    }
-
-    public void loadEFLinearFixedAll(int i, Message message) {
-        loadEFLinearFixedAll(i, getEFPath(i), message);
-    }
-
-    public void loadEFLinearFixedAll(int i, String str, Message message) {
-        int i2 = i;
-        String str2 = str;
-        int i3 = 0;
-        String str3 = null;
-        this.mCi.iccIOForApp(192, i2, str2, 0, i3, 15, null, str3, this.mAid, obtainMessage(6, new LoadLinearFixedContext(i, str, message)));
-    }
-
-    public void loadEFLinearFixedPart(int i, String str, ArrayList<Integer> arrayList, Message message) {
-        int i2 = i;
-        String str2 = str;
-        int i3 = 0;
-        String str3 = null;
-        this.mCi.iccIOForApp(192, i2, str2, 0, i3, 15, null, str3, this.mAid, obtainMessage(6, new LoadLinearFixedContext(i, (ArrayList) arrayList, str, message)));
-    }
-
-    public void loadEFLinearFixedPart(int i, ArrayList<Integer> arrayList, Message message) {
-        loadEFLinearFixedPart(i, getEFPath(i), arrayList, message);
-    }
-
-    public void loadEFTransparent(int i, int i2, Message message) {
-        int i3 = i;
-        int i4 = 0;
-        int i5 = i2;
-        String str = null;
-        this.mCi.iccIOForApp(176, i3, getEFPath(i), 0, i4, i5, null, str, this.mAid, obtainMessage(5, i, 0, message));
-    }
-
-    public void loadEFTransparent(int i, Message message) {
-        int i2 = i;
-        int i3 = 0;
-        String str = null;
-        this.mCi.iccIOForApp(192, i2, getEFPath(i), 0, i3, 15, null, str, this.mAid, obtainMessage(4, i, 0, message));
-    }
-
-    public abstract void logd(String str);
-
-    public abstract void loge(String str);
-
-    public void updateEFLinearFixed(int i, int i2, byte[] bArr, String str, Message message) {
-        this.mCi.iccIOForApp(COMMAND_UPDATE_RECORD, i, getEFPath(i), i2, 4, bArr.length, IccUtils.bytesToHexString(bArr), str, this.mAid, message);
-    }
-
-    public void updateEFLinearFixed(int i, String str, int i2, byte[] bArr, String str2, Message message) {
-        this.mCi.iccIOForApp(COMMAND_UPDATE_RECORD, i, str, i2, 4, bArr.length, IccUtils.bytesToHexString(bArr), str2, this.mAid, message);
-    }
-
-    public void updateEFTransparent(int i, byte[] bArr, Message message) {
-        this.mCi.iccIOForApp(214, i, getEFPath(i), 0, 0, bArr.length, IccUtils.bytesToHexString(bArr), null, this.mAid, message);
     }
 }

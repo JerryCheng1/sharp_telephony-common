@@ -4,6 +4,7 @@ import android.util.Log;
 import com.google.android.mms.ContentType;
 import com.google.android.mms.InvalidHeaderValueException;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SendReq extends MultimediaMessagePdu {
     private static final String TAG = "SendReq";
 
@@ -20,107 +21,108 @@ public class SendReq extends MultimediaMessagePdu {
         }
     }
 
-    SendReq(PduHeaders pduHeaders) {
-        super(pduHeaders);
-    }
-
-    SendReq(PduHeaders pduHeaders, PduBody pduBody) {
-        super(pduHeaders, pduBody);
-    }
-
-    public SendReq(byte[] bArr, EncodedStringValue encodedStringValue, int i, byte[] bArr2) throws InvalidHeaderValueException {
-        setMessageType(128);
-        setContentType(bArr);
-        setFrom(encodedStringValue);
-        setMmsVersion(i);
-        setTransactionId(bArr2);
-    }
-
     private byte[] generateTransactionId() {
         return ("T" + Long.toHexString(System.currentTimeMillis())).getBytes();
     }
 
-    public void addBcc(EncodedStringValue encodedStringValue) {
-        this.mPduHeaders.appendEncodedStringValue(encodedStringValue, 129);
+    public SendReq(byte[] contentType, EncodedStringValue from, int mmsVersion, byte[] transactionId) throws InvalidHeaderValueException {
+        setMessageType(128);
+        setContentType(contentType);
+        setFrom(from);
+        setMmsVersion(mmsVersion);
+        setTransactionId(transactionId);
     }
 
-    public void addCc(EncodedStringValue encodedStringValue) {
-        this.mPduHeaders.appendEncodedStringValue(encodedStringValue, 130);
+    SendReq(PduHeaders headers) {
+        super(headers);
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SendReq(PduHeaders headers, PduBody body) {
+        super(headers, body);
     }
 
     public EncodedStringValue[] getBcc() {
         return this.mPduHeaders.getEncodedStringValues(129);
     }
 
+    public void addBcc(EncodedStringValue value) {
+        this.mPduHeaders.appendEncodedStringValue(value, 129);
+    }
+
+    public void setBcc(EncodedStringValue[] value) {
+        this.mPduHeaders.setEncodedStringValues(value, 129);
+    }
+
     public EncodedStringValue[] getCc() {
         return this.mPduHeaders.getEncodedStringValues(130);
+    }
+
+    public void addCc(EncodedStringValue value) {
+        this.mPduHeaders.appendEncodedStringValue(value, 130);
+    }
+
+    public void setCc(EncodedStringValue[] value) {
+        this.mPduHeaders.setEncodedStringValues(value, 130);
     }
 
     public byte[] getContentType() {
         return this.mPduHeaders.getTextString(132);
     }
 
+    public void setContentType(byte[] value) {
+        this.mPduHeaders.setTextString(value, 132);
+    }
+
     public int getDeliveryReport() {
         return this.mPduHeaders.getOctet(134);
+    }
+
+    public void setDeliveryReport(int value) throws InvalidHeaderValueException {
+        this.mPduHeaders.setOctet(value, 134);
     }
 
     public long getExpiry() {
         return this.mPduHeaders.getLongInteger(136);
     }
 
-    public byte[] getMessageClass() {
-        return this.mPduHeaders.getTextString(138);
+    public void setExpiry(long value) {
+        this.mPduHeaders.setLongInteger(value, 136);
     }
 
     public long getMessageSize() {
         return this.mPduHeaders.getLongInteger(142);
     }
 
+    public void setMessageSize(long value) {
+        this.mPduHeaders.setLongInteger(value, 142);
+    }
+
+    public byte[] getMessageClass() {
+        return this.mPduHeaders.getTextString(138);
+    }
+
+    public void setMessageClass(byte[] value) {
+        this.mPduHeaders.setTextString(value, 138);
+    }
+
     public int getReadReport() {
         return this.mPduHeaders.getOctet(144);
+    }
+
+    public void setReadReport(int value) throws InvalidHeaderValueException {
+        this.mPduHeaders.setOctet(value, 144);
+    }
+
+    public void setTo(EncodedStringValue[] value) {
+        this.mPduHeaders.setEncodedStringValues(value, 151);
     }
 
     public byte[] getTransactionId() {
         return this.mPduHeaders.getTextString(152);
     }
 
-    public void setBcc(EncodedStringValue[] encodedStringValueArr) {
-        this.mPduHeaders.setEncodedStringValues(encodedStringValueArr, 129);
-    }
-
-    public void setCc(EncodedStringValue[] encodedStringValueArr) {
-        this.mPduHeaders.setEncodedStringValues(encodedStringValueArr, 130);
-    }
-
-    public void setContentType(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 132);
-    }
-
-    public void setDeliveryReport(int i) throws InvalidHeaderValueException {
-        this.mPduHeaders.setOctet(i, 134);
-    }
-
-    public void setExpiry(long j) {
-        this.mPduHeaders.setLongInteger(j, 136);
-    }
-
-    public void setMessageClass(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 138);
-    }
-
-    public void setMessageSize(long j) {
-        this.mPduHeaders.setLongInteger(j, 142);
-    }
-
-    public void setReadReport(int i) throws InvalidHeaderValueException {
-        this.mPduHeaders.setOctet(i, 144);
-    }
-
-    public void setTo(EncodedStringValue[] encodedStringValueArr) {
-        this.mPduHeaders.setEncodedStringValues(encodedStringValueArr, 151);
-    }
-
-    public void setTransactionId(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 152);
+    public void setTransactionId(byte[] value) {
+        this.mPduHeaders.setTextString(value, 152);
     }
 }

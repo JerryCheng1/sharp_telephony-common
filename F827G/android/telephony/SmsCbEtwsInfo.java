@@ -2,19 +2,23 @@ package android.telephony;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 import android.text.format.Time;
 import com.android.internal.telephony.uicc.IccUtils;
 import java.util.Arrays;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsCbEtwsInfo implements Parcelable {
-    public static final Creator<SmsCbEtwsInfo> CREATOR = new Creator<SmsCbEtwsInfo>() {
-        public SmsCbEtwsInfo createFromParcel(Parcel parcel) {
-            return new SmsCbEtwsInfo(parcel);
+    public static final Parcelable.Creator<SmsCbEtwsInfo> CREATOR = new Parcelable.Creator<SmsCbEtwsInfo>() { // from class: android.telephony.SmsCbEtwsInfo.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbEtwsInfo createFromParcel(Parcel in) {
+            return new SmsCbEtwsInfo(in);
         }
 
-        public SmsCbEtwsInfo[] newArray(int i) {
-            return new SmsCbEtwsInfo[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbEtwsInfo[] newArray(int size) {
+            return new SmsCbEtwsInfo[size];
         }
     };
     public static final int ETWS_WARNING_TYPE_EARTHQUAKE = 0;
@@ -28,55 +32,32 @@ public class SmsCbEtwsInfo implements Parcelable {
     private final byte[] mWarningSecurityInformation;
     private final int mWarningType;
 
-    public SmsCbEtwsInfo(int i, boolean z, boolean z2, byte[] bArr) {
-        this.mWarningType = i;
-        this.mEmergencyUserAlert = z;
-        this.mActivatePopup = z2;
-        this.mWarningSecurityInformation = bArr;
+    public SmsCbEtwsInfo(int warningType, boolean emergencyUserAlert, boolean activatePopup, byte[] warningSecurityInformation) {
+        this.mWarningType = warningType;
+        this.mEmergencyUserAlert = emergencyUserAlert;
+        this.mActivatePopup = activatePopup;
+        this.mWarningSecurityInformation = warningSecurityInformation;
     }
 
-    SmsCbEtwsInfo(Parcel parcel) {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SmsCbEtwsInfo(Parcel in) {
         boolean z = true;
-        this.mWarningType = parcel.readInt();
-        this.mEmergencyUserAlert = parcel.readInt() != 0;
-        if (parcel.readInt() == 0) {
-            z = false;
-        }
-        this.mActivatePopup = z;
-        this.mWarningSecurityInformation = parcel.createByteArray();
+        this.mWarningType = in.readInt();
+        this.mEmergencyUserAlert = in.readInt() != 0;
+        this.mActivatePopup = in.readInt() == 0 ? false : z;
+        this.mWarningSecurityInformation = in.createByteArray();
     }
 
-    public int describeContents() {
-        return 0;
-    }
-
-    public byte[] getPrimaryNotificationSignature() {
-        return (this.mWarningSecurityInformation == null || this.mWarningSecurityInformation.length < 50) ? null : Arrays.copyOfRange(this.mWarningSecurityInformation, 7, 50);
-    }
-
-    public long getPrimaryNotificationTimestamp() {
-        if (this.mWarningSecurityInformation == null || this.mWarningSecurityInformation.length < 7) {
-            return 0;
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        int i = 1;
+        dest.writeInt(this.mWarningType);
+        dest.writeInt(this.mEmergencyUserAlert ? 1 : 0);
+        if (!this.mActivatePopup) {
+            i = 0;
         }
-        int gsmBcdByteToInt = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[0]);
-        int gsmBcdByteToInt2 = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[1]);
-        int gsmBcdByteToInt3 = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[2]);
-        int gsmBcdByteToInt4 = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[3]);
-        int gsmBcdByteToInt5 = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[4]);
-        int gsmBcdByteToInt6 = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[5]);
-        byte b = this.mWarningSecurityInformation[6];
-        int gsmBcdByteToInt7 = IccUtils.gsmBcdByteToInt((byte) (b & -9));
-        if ((b & 8) != 0) {
-            gsmBcdByteToInt7 = -gsmBcdByteToInt7;
-        }
-        Time time = new Time("UTC");
-        time.year = gsmBcdByteToInt + 2000;
-        time.month = gsmBcdByteToInt2 - 1;
-        time.monthDay = gsmBcdByteToInt3;
-        time.hour = gsmBcdByteToInt4;
-        time.minute = gsmBcdByteToInt5;
-        time.second = gsmBcdByteToInt6;
-        return time.toMillis(true) - ((long) (((gsmBcdByteToInt7 * 15) * 60) * 1000));
+        dest.writeInt(i);
+        dest.writeByteArray(this.mWarningSecurityInformation);
     }
 
     public int getWarningType() {
@@ -91,18 +72,44 @@ public class SmsCbEtwsInfo implements Parcelable {
         return this.mActivatePopup;
     }
 
+    public long getPrimaryNotificationTimestamp() {
+        if (this.mWarningSecurityInformation == null || this.mWarningSecurityInformation.length < 7) {
+            return 0L;
+        }
+        int year = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[0]);
+        int month = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[1]);
+        int day = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[2]);
+        int hour = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[3]);
+        int minute = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[4]);
+        int second = IccUtils.gsmBcdByteToInt(this.mWarningSecurityInformation[5]);
+        byte tzByte = this.mWarningSecurityInformation[6];
+        int timezoneOffset = IccUtils.gsmBcdByteToInt((byte) (tzByte & (-9)));
+        if ((tzByte & 8) != 0) {
+            timezoneOffset = -timezoneOffset;
+        }
+        Time time = new Time("UTC");
+        time.year = year + 2000;
+        time.month = month - 1;
+        time.monthDay = day;
+        time.hour = hour;
+        time.minute = minute;
+        time.second = second;
+        return time.toMillis(true) - (((timezoneOffset * 15) * 60) * 1000);
+    }
+
+    public byte[] getPrimaryNotificationSignature() {
+        if (this.mWarningSecurityInformation == null || this.mWarningSecurityInformation.length < 50) {
+            return null;
+        }
+        return Arrays.copyOfRange(this.mWarningSecurityInformation, 7, 50);
+    }
+
     public String toString() {
         return "SmsCbEtwsInfo{warningType=" + this.mWarningType + ", emergencyUserAlert=" + this.mEmergencyUserAlert + ", activatePopup=" + this.mActivatePopup + '}';
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        int i2 = 1;
-        parcel.writeInt(this.mWarningType);
-        parcel.writeInt(this.mEmergencyUserAlert ? 1 : 0);
-        if (!this.mActivatePopup) {
-            i2 = 0;
-        }
-        parcel.writeInt(i2);
-        parcel.writeByteArray(this.mWarningSecurityInformation);
+    @Override // android.os.Parcelable
+    public int describeContents() {
+        return 0;
     }
 }

@@ -3,49 +3,55 @@ package com.android.internal.telephony.cat;
 import android.graphics.Bitmap;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class Item implements Parcelable {
-    public static final Creator<Item> CREATOR = new Creator<Item>() {
-        public Item createFromParcel(Parcel parcel) {
-            return new Item(parcel);
+    public static final Parcelable.Creator<Item> CREATOR = new Parcelable.Creator<Item>() { // from class: com.android.internal.telephony.cat.Item.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public Item createFromParcel(Parcel in) {
+            return new Item(in);
         }
 
-        public Item[] newArray(int i) {
-            return new Item[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public Item[] newArray(int size) {
+            return new Item[size];
         }
     };
     public Bitmap icon;
     public int id;
     public String text;
 
-    public Item(int i, String str) {
-        this(i, str, null);
+    public Item(int id, String text) {
+        this(id, text, null);
     }
 
-    public Item(int i, String str, Bitmap bitmap) {
-        this.id = i;
-        this.text = str;
-        this.icon = bitmap;
+    public Item(int id, String text, Bitmap icon) {
+        this.id = id;
+        this.text = text;
+        this.icon = icon;
     }
 
-    public Item(Parcel parcel) {
-        this.id = parcel.readInt();
-        this.text = parcel.readString();
-        this.icon = (Bitmap) parcel.readParcelable(null);
+    public Item(Parcel in) {
+        this.id = in.readInt();
+        this.text = in.readString();
+        this.icon = (Bitmap) in.readParcelable(null);
     }
 
+    @Override // android.os.Parcelable
     public int describeContents() {
         return 0;
     }
 
-    public String toString() {
-        return this.text;
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.id);
+        dest.writeString(this.text);
+        dest.writeParcelable(this.icon, flags);
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeInt(this.id);
-        parcel.writeString(this.text);
-        parcel.writeParcelable(this.icon, i);
+    public String toString() {
+        return this.text;
     }
 }

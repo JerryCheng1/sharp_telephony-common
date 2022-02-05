@@ -9,83 +9,73 @@ import com.android.internal.telephony.TelBrand;
 import com.google.android.mms.pdu.CharacterSets;
 import java.io.UnsupportedEncodingException;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class GsmSmsCbMessage {
     private static final char CARRIAGE_RETURN = '\r';
-    private static final String[] LANGUAGE_CODES_GROUP_0 = new String[]{"de", "en", "it", "fr", "es", "nl", "sv", "da", "pt", "fi", "no", "el", "tr", "hu", "pl", null};
-    private static final String[] LANGUAGE_CODES_GROUP_2 = new String[]{"cs", "he", "ar", "ru", "is", null, null, null, null, null, null, null, null, null, null, null};
+    private static final String[] LANGUAGE_CODES_GROUP_0 = {"de", "en", "it", "fr", "es", "nl", "sv", "da", "pt", "fi", "no", "el", "tr", "hu", "pl", null};
+    private static final String[] LANGUAGE_CODES_GROUP_2 = {"cs", "he", "ar", "ru", "is", null, null, null, null, null, null, null, null, null, null, null};
     private static final String LOG_TAG = "GsmSmsCbMessage";
     private static final int PDU_BODY_PAGE_LENGTH = 82;
 
     private GsmSmsCbMessage() {
     }
 
-    public static SmsCbMessage createSmsCbMessage(SmsCbLocation smsCbLocation, byte[][] bArr) throws IllegalArgumentException {
-        return createSmsCbMessage(new SmsCbHeader(bArr[0]), smsCbLocation, bArr);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public static SmsCbMessage createSmsCbMessage(SmsCbHeader header, SmsCbLocation location, byte[][] pdus) throws IllegalArgumentException {
+        if (header.isEtwsPrimaryNotification()) {
+            return new SmsCbMessage(1, header.getGeographicalScope(), header.getSerialNumber(), location, header.getServiceCategory(), null, "ETWS", 3, header.getEtwsInfo(), header.getCmasInfo());
+        }
+        String language = null;
+        StringBuilder sb = new StringBuilder();
+        for (byte[] pdu : pdus) {
+            Pair<String, String> p = parseBody(header, pdu);
+            language = (String) p.first;
+            sb.append((String) p.second);
+        }
+        return new SmsCbMessage(1, header.getGeographicalScope(), header.getSerialNumber(), location, header.getServiceCategory(), language, sb.toString(), header.isEmergencyMessage() ? 3 : 0, header.getEtwsInfo(), header.getCmasInfo());
     }
 
-    static SmsCbMessage createSmsCbMessage(SmsCbHeader smsCbHeader, SmsCbLocation smsCbLocation, byte[][] bArr) throws IllegalArgumentException {
-        String str = null;
-        int i = 3;
-        if (smsCbHeader.isEtwsPrimaryNotification()) {
-            return new SmsCbMessage(1, smsCbHeader.getGeographicalScope(), smsCbHeader.getSerialNumber(), smsCbLocation, smsCbHeader.getServiceCategory(), null, "ETWS", 3, smsCbHeader.getEtwsInfo(), smsCbHeader.getCmasInfo());
-        }
-        StringBuilder stringBuilder = new StringBuilder();
-        int length = bArr.length;
-        int i2 = 0;
-        while (i2 < length) {
-            Pair parseBody = parseBody(smsCbHeader, bArr[i2]);
-            String str2 = (String) parseBody.first;
-            stringBuilder.append((String) parseBody.second);
-            i2++;
-            str = str2;
-        }
-        if (!smsCbHeader.isEmergencyMessage()) {
-            i = 0;
-        }
-        return new SmsCbMessage(1, smsCbHeader.getGeographicalScope(), smsCbHeader.getSerialNumber(), smsCbLocation, smsCbHeader.getServiceCategory(), str, stringBuilder.toString(), i, smsCbHeader.getEtwsInfo(), smsCbHeader.getCmasInfo());
+    public static SmsCbMessage createSmsCbMessage(SmsCbLocation location, byte[][] pdus) throws IllegalArgumentException {
+        return createSmsCbMessage(new SmsCbHeader(pdus[0]), location, pdus);
     }
 
-    private static Pair<String, String> parseBody(SmsCbHeader smsCbHeader, byte[] bArr) {
-        boolean z;
-        int i = 3;
-        String str = null;
-        int dataCodingScheme = smsCbHeader.getDataCodingScheme();
+    private static Pair<String, String> parseBody(SmsCbHeader header, byte[] pdu) {
+        int encoding;
+        String language = null;
+        boolean hasLanguageIndicator = false;
+        int dataCodingScheme = header.getDataCodingScheme();
         switch ((dataCodingScheme & 240) >> 4) {
             case 0:
-                str = LANGUAGE_CODES_GROUP_0[dataCodingScheme & 15];
-                z = false;
-                i = 1;
+                encoding = 1;
+                language = LANGUAGE_CODES_GROUP_0[dataCodingScheme & 15];
                 break;
             case 1:
-                if ((dataCodingScheme & 15) != 1) {
-                    z = true;
-                    i = 1;
+                hasLanguageIndicator = true;
+                if ((dataCodingScheme & 15) == 1) {
+                    encoding = 3;
+                    break;
+                } else {
+                    encoding = 1;
                     break;
                 }
-                z = true;
-                break;
             case 2:
-                str = LANGUAGE_CODES_GROUP_2[dataCodingScheme & 15];
-                z = false;
-                i = 1;
+                encoding = 1;
+                language = LANGUAGE_CODES_GROUP_2[dataCodingScheme & 15];
                 break;
             case 3:
-                z = false;
-                i = 1;
+                encoding = 1;
                 break;
             case 4:
             case 5:
                 switch ((dataCodingScheme & 12) >> 2) {
                     case 1:
-                        z = false;
-                        i = 2;
+                        encoding = 2;
                         break;
                     case 2:
-                        z = false;
+                        encoding = 3;
                         break;
                     default:
-                        z = false;
-                        i = 1;
+                        encoding = 1;
                         break;
                 }
             case 6:
@@ -93,95 +83,91 @@ public class GsmSmsCbMessage {
             case 9:
             case 14:
                 throw new IllegalArgumentException("Unsupported GSM dataCodingScheme " + dataCodingScheme);
+            case 8:
+            case 10:
+            case 11:
+            case 12:
+            case 13:
+            default:
+                encoding = 1;
+                break;
             case 15:
-                if (((dataCodingScheme & 4) >> 2) != 1) {
-                    z = false;
-                    i = 1;
+                if (((dataCodingScheme & 4) >> 2) == 1) {
+                    encoding = 2;
+                    break;
+                } else {
+                    encoding = 1;
                     break;
                 }
-                z = false;
-                i = 2;
-                break;
-            default:
-                z = false;
-                i = 1;
-                break;
         }
-        if (smsCbHeader.isUmtsFormat()) {
-            byte b = bArr[6];
-            if (bArr.length < (b * 83) + 7) {
-                throw new IllegalArgumentException("Pdu length " + bArr.length + " does not match " + b + " pages");
-            }
-            StringBuilder stringBuilder = new StringBuilder();
-            byte b2 = (byte) 0;
-            while (b2 < b) {
-                int i2 = (b2 * 83) + 7;
-                byte b3 = bArr[i2 + 82];
-                if (b3 > (byte) 82) {
-                    throw new IllegalArgumentException("Page length " + b3 + " exceeds maximum value " + 82);
-                }
-                Pair unpackBody = unpackBody(bArr, i, i2, b3, z, str);
-                String str2 = (String) unpackBody.first;
-                stringBuilder.append((String) unpackBody.second);
-                b2++;
-                str = str2;
-            }
-            return new Pair(str, stringBuilder.toString());
+        if (!header.isUmtsFormat()) {
+            return unpackBody(pdu, encoding, 6, pdu.length - 6, hasLanguageIndicator, language);
         }
-        return unpackBody(bArr, i, 6, bArr.length - 6, z, str);
+        byte b = pdu[6];
+        if (pdu.length < (b * 83) + 7) {
+            throw new IllegalArgumentException("Pdu length " + pdu.length + " does not match " + ((int) b) + " pages");
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < b; i++) {
+            int offset = (i * 83) + 7;
+            byte b2 = pdu[offset + 82];
+            if (b2 > 82) {
+                throw new IllegalArgumentException("Page length " + ((int) b2) + " exceeds maximum value 82");
+            }
+            Pair<String, String> p = unpackBody(pdu, encoding, offset, b2, hasLanguageIndicator, language);
+            language = (String) p.first;
+            sb.append((String) p.second);
+        }
+        return new Pair<>(language, sb.toString());
     }
 
-    private static Pair<String, String> unpackBody(byte[] bArr, int i, int i2, int i3, boolean z, String str) {
-        Object str2;
-        int length;
-        Object obj = null;
-        switch (i) {
+    private static Pair<String, String> unpackBody(byte[] pdu, int encoding, int offset, int length, boolean hasLanguageIndicator, String language) {
+        String body = null;
+        switch (encoding) {
             case 1:
-                obj = GsmAlphabet.gsm7BitPackedToString(bArr, i2, (i3 * 8) / 7);
-                if (z && obj != null && obj.length() > 2) {
-                    str2 = obj.substring(0, 2);
-                    obj = obj.substring(3);
+                body = GsmAlphabet.gsm7BitPackedToString(pdu, offset, (length * 8) / 7);
+                if (hasLanguageIndicator && body != null && body.length() > 2) {
+                    language = body.substring(0, 2);
+                    body = body.substring(3);
                     break;
                 }
+                break;
             case 3:
-                int i4;
                 if (TelBrand.IS_DCM) {
-                    length = bArr.length - 1;
-                    int i5 = 0;
-                    while (length > i2 && ((bArr[length] == (byte) 0 && bArr[length - 1] == (byte) 0) || (bArr[length] == (byte) 13 && bArr[length - 1] == (byte) 13))) {
-                        length -= 2;
-                        i5 += 2;
+                    int paddingByte = 0;
+                    for (int i = pdu.length - 1; i > offset && ((pdu[i] == 0 && pdu[i - 1] == 0) || (pdu[i] == 13 && pdu[i - 1] == 13)); i -= 2) {
+                        paddingByte += 2;
                     }
-                    Log.d(LOG_TAG, "16bit-encode. length: " + i3 + ", padding byte: " + i5 + ".");
-                    i4 = i3 - i5;
-                } else {
-                    i4 = i3;
+                    Log.d(LOG_TAG, "16bit-encode. length: " + length + ", padding byte: " + paddingByte + ".");
+                    length -= paddingByte;
                 }
-                if (z && bArr.length >= i2 + 2) {
-                    str2 = GsmAlphabet.gsm7BitPackedToString(bArr, i2, 2);
-                    i2 += 2;
-                    i4 -= 2;
+                if (hasLanguageIndicator && pdu.length >= offset + 2) {
+                    language = GsmAlphabet.gsm7BitPackedToString(pdu, offset, 2);
+                    offset += 2;
+                    length -= 2;
                 }
                 try {
-                    String obj2 = new String(bArr, i2, i4 & 65534, CharacterSets.MIMENAME_UTF_16);
+                    body = new String(pdu, offset, 65534 & length, CharacterSets.MIMENAME_UTF_16);
                     break;
                 } catch (UnsupportedEncodingException e) {
                     throw new IllegalArgumentException("Error decoding UTF-16 message", e);
                 }
                 break;
         }
-        if (obj2 != null) {
-            length = obj2.length() - 1;
-            while (length >= 0) {
-                if (obj2.charAt(length) != CARRIAGE_RETURN) {
-                    obj2 = obj2.substring(0, length + 1);
-                } else {
-                    length--;
+        if (body != null) {
+            int i2 = body.length() - 1;
+            while (true) {
+                if (i2 >= 0) {
+                    if (body.charAt(i2) != '\r') {
+                        body = body.substring(0, i2 + 1);
+                    } else {
+                        i2--;
+                    }
                 }
             }
         } else {
-            obj2 = "";
+            body = "";
         }
-        return new Pair(str2, obj2);
+        return new Pair<>(language, body);
     }
 }

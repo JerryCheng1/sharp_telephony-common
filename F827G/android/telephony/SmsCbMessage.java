@@ -2,16 +2,20 @@ package android.telephony;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsCbMessage implements Parcelable {
-    public static final Creator<SmsCbMessage> CREATOR = new Creator<SmsCbMessage>() {
-        public SmsCbMessage createFromParcel(Parcel parcel) {
-            return new SmsCbMessage(parcel);
+    public static final Parcelable.Creator<SmsCbMessage> CREATOR = new Parcelable.Creator<SmsCbMessage>() { // from class: android.telephony.SmsCbMessage.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbMessage createFromParcel(Parcel in) {
+            return new SmsCbMessage(in);
         }
 
-        public SmsCbMessage[] newArray(int i) {
-            return new SmsCbMessage[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbMessage[] newArray(int size) {
+            return new SmsCbMessage[size];
         }
     };
     public static final int GEOGRAPHICAL_SCOPE_CELL_WIDE = 3;
@@ -36,66 +40,84 @@ public class SmsCbMessage implements Parcelable {
     private final int mSerialNumber;
     private final int mServiceCategory;
 
-    public SmsCbMessage(int i, int i2, int i3, SmsCbLocation smsCbLocation, int i4, String str, String str2, int i5, SmsCbEtwsInfo smsCbEtwsInfo, SmsCbCmasInfo smsCbCmasInfo) {
-        this.mMessageFormat = i;
-        this.mGeographicalScope = i2;
-        this.mSerialNumber = i3;
-        this.mLocation = smsCbLocation;
-        this.mServiceCategory = i4;
-        this.mLanguage = str;
-        this.mBody = str2;
-        this.mPriority = i5;
-        this.mEtwsWarningInfo = smsCbEtwsInfo;
-        this.mCmasWarningInfo = smsCbCmasInfo;
+    public SmsCbMessage(int messageFormat, int geographicalScope, int serialNumber, SmsCbLocation location, int serviceCategory, String language, String body, int priority, SmsCbEtwsInfo etwsWarningInfo, SmsCbCmasInfo cmasWarningInfo) {
+        this.mMessageFormat = messageFormat;
+        this.mGeographicalScope = geographicalScope;
+        this.mSerialNumber = serialNumber;
+        this.mLocation = location;
+        this.mServiceCategory = serviceCategory;
+        this.mLanguage = language;
+        this.mBody = body;
+        this.mPriority = priority;
+        this.mEtwsWarningInfo = etwsWarningInfo;
+        this.mCmasWarningInfo = cmasWarningInfo;
     }
 
-    public SmsCbMessage(Parcel parcel) {
-        this.mMessageFormat = parcel.readInt();
-        this.mGeographicalScope = parcel.readInt();
-        this.mSerialNumber = parcel.readInt();
-        this.mLocation = new SmsCbLocation(parcel);
-        this.mServiceCategory = parcel.readInt();
-        this.mLanguage = parcel.readString();
-        this.mBody = parcel.readString();
-        this.mPriority = parcel.readInt();
-        switch (parcel.readInt()) {
+    public SmsCbMessage(Parcel in) {
+        this.mMessageFormat = in.readInt();
+        this.mGeographicalScope = in.readInt();
+        this.mSerialNumber = in.readInt();
+        this.mLocation = new SmsCbLocation(in);
+        this.mServiceCategory = in.readInt();
+        this.mLanguage = in.readString();
+        this.mBody = in.readString();
+        this.mPriority = in.readInt();
+        switch (in.readInt()) {
             case 67:
                 this.mEtwsWarningInfo = null;
-                this.mCmasWarningInfo = new SmsCbCmasInfo(parcel);
+                this.mCmasWarningInfo = new SmsCbCmasInfo(in);
                 return;
-            case 69:
-                this.mEtwsWarningInfo = new SmsCbEtwsInfo(parcel);
-                this.mCmasWarningInfo = null;
-                return;
+            case 68:
             default:
                 this.mEtwsWarningInfo = null;
+                this.mCmasWarningInfo = null;
+                return;
+            case 69:
+                this.mEtwsWarningInfo = new SmsCbEtwsInfo(in);
                 this.mCmasWarningInfo = null;
                 return;
         }
     }
 
-    public int describeContents() {
-        return 0;
-    }
-
-    public SmsCbCmasInfo getCmasWarningInfo() {
-        return this.mCmasWarningInfo;
-    }
-
-    public SmsCbEtwsInfo getEtwsWarningInfo() {
-        return this.mEtwsWarningInfo;
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.mMessageFormat);
+        dest.writeInt(this.mGeographicalScope);
+        dest.writeInt(this.mSerialNumber);
+        this.mLocation.writeToParcel(dest, flags);
+        dest.writeInt(this.mServiceCategory);
+        dest.writeString(this.mLanguage);
+        dest.writeString(this.mBody);
+        dest.writeInt(this.mPriority);
+        if (this.mEtwsWarningInfo != null) {
+            dest.writeInt(69);
+            this.mEtwsWarningInfo.writeToParcel(dest, flags);
+        } else if (this.mCmasWarningInfo != null) {
+            dest.writeInt(67);
+            this.mCmasWarningInfo.writeToParcel(dest, flags);
+        } else {
+            dest.writeInt(48);
+        }
     }
 
     public int getGeographicalScope() {
         return this.mGeographicalScope;
     }
 
-    public String getLanguageCode() {
-        return this.mLanguage;
+    public int getSerialNumber() {
+        return this.mSerialNumber;
     }
 
     public SmsCbLocation getLocation() {
         return this.mLocation;
+    }
+
+    public int getServiceCategory() {
+        return this.mServiceCategory;
+    }
+
+    public String getLanguageCode() {
+        return this.mLanguage;
     }
 
     public String getMessageBody() {
@@ -110,16 +132,12 @@ public class SmsCbMessage implements Parcelable {
         return this.mPriority;
     }
 
-    public int getSerialNumber() {
-        return this.mSerialNumber;
+    public SmsCbEtwsInfo getEtwsWarningInfo() {
+        return this.mEtwsWarningInfo;
     }
 
-    public int getServiceCategory() {
-        return this.mServiceCategory;
-    }
-
-    public boolean isCmasMessage() {
-        return this.mCmasWarningInfo != null;
+    public SmsCbCmasInfo getCmasWarningInfo() {
+        return this.mCmasWarningInfo;
     }
 
     public boolean isEmergencyMessage() {
@@ -130,27 +148,16 @@ public class SmsCbMessage implements Parcelable {
         return this.mEtwsWarningInfo != null;
     }
 
+    public boolean isCmasMessage() {
+        return this.mCmasWarningInfo != null;
+    }
+
     public String toString() {
         return "SmsCbMessage{geographicalScope=" + this.mGeographicalScope + ", serialNumber=" + this.mSerialNumber + ", location=" + this.mLocation + ", serviceCategory=" + this.mServiceCategory + ", language=" + this.mLanguage + ", body=" + this.mBody + ", priority=" + this.mPriority + (this.mEtwsWarningInfo != null ? ", " + this.mEtwsWarningInfo.toString() : "") + (this.mCmasWarningInfo != null ? ", " + this.mCmasWarningInfo.toString() : "") + '}';
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeInt(this.mMessageFormat);
-        parcel.writeInt(this.mGeographicalScope);
-        parcel.writeInt(this.mSerialNumber);
-        this.mLocation.writeToParcel(parcel, i);
-        parcel.writeInt(this.mServiceCategory);
-        parcel.writeString(this.mLanguage);
-        parcel.writeString(this.mBody);
-        parcel.writeInt(this.mPriority);
-        if (this.mEtwsWarningInfo != null) {
-            parcel.writeInt(69);
-            this.mEtwsWarningInfo.writeToParcel(parcel, i);
-        } else if (this.mCmasWarningInfo != null) {
-            parcel.writeInt(67);
-            this.mCmasWarningInfo.writeToParcel(parcel, i);
-        } else {
-            parcel.writeInt(48);
-        }
+    @Override // android.os.Parcelable
+    public int describeContents() {
+        return 0;
     }
 }

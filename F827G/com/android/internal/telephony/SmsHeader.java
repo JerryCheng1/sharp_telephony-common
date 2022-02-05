@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsHeader {
     public static final int ELT_ID_APPLICATION_PORT_ADDRESSING_16_BIT = 5;
     public static final int ELT_ID_APPLICATION_PORT_ADDRESSING_8_BIT = 4;
@@ -43,10 +44,11 @@ public class SmsHeader {
     public ConcatRef concatRef;
     public int languageShiftTable;
     public int languageTable;
-    public ArrayList<MiscElt> miscEltList = new ArrayList();
     public PortAddrs portAddrs;
-    public ArrayList<SpecialSmsMsg> specialSmsMsgList = new ArrayList();
+    public ArrayList<SpecialSmsMsg> specialSmsMsgList = new ArrayList<>();
+    public ArrayList<MiscElt> miscEltList = new ArrayList<>();
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class ConcatRef {
         public boolean isEightBits;
         public int msgCount;
@@ -54,82 +56,85 @@ public class SmsHeader {
         public int seqNumber;
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class MiscElt {
         public byte[] data;
         public int id;
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class PortAddrs {
         public boolean areEightBits;
         public int destPort;
         public int origPort;
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class SpecialSmsMsg {
         public int msgCount;
         public int msgIndType;
     }
 
-    public static SmsHeader fromByteArray(byte[] bArr) {
-        ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bArr);
+    public static SmsHeader fromByteArray(byte[] data) {
+        ByteArrayInputStream inStream = new ByteArrayInputStream(data);
         SmsHeader smsHeader = new SmsHeader();
-        while (byteArrayInputStream.available() > 0) {
-            int read = byteArrayInputStream.read();
-            int read2 = byteArrayInputStream.read();
-            ConcatRef concatRef;
-            PortAddrs portAddrs;
-            switch (read) {
+        while (inStream.available() > 0) {
+            int id = inStream.read();
+            int length = inStream.read();
+            switch (id) {
                 case 0:
-                    concatRef = new ConcatRef();
-                    concatRef.refNumber = byteArrayInputStream.read();
-                    concatRef.msgCount = byteArrayInputStream.read();
-                    concatRef.seqNumber = byteArrayInputStream.read();
+                    ConcatRef concatRef = new ConcatRef();
+                    concatRef.refNumber = inStream.read();
+                    concatRef.msgCount = inStream.read();
+                    concatRef.seqNumber = inStream.read();
                     concatRef.isEightBits = true;
                     if (!(concatRef.msgCount == 0 || concatRef.seqNumber == 0 || concatRef.seqNumber > concatRef.msgCount)) {
                         smsHeader.concatRef = concatRef;
                         break;
                     }
+                    break;
                 case 1:
                     SpecialSmsMsg specialSmsMsg = new SpecialSmsMsg();
-                    specialSmsMsg.msgIndType = byteArrayInputStream.read();
-                    specialSmsMsg.msgCount = byteArrayInputStream.read();
+                    specialSmsMsg.msgIndType = inStream.read();
+                    specialSmsMsg.msgCount = inStream.read();
                     smsHeader.specialSmsMsgList.add(specialSmsMsg);
                     break;
                 case 4:
-                    portAddrs = new PortAddrs();
-                    portAddrs.destPort = byteArrayInputStream.read();
-                    portAddrs.origPort = byteArrayInputStream.read();
+                    PortAddrs portAddrs = new PortAddrs();
+                    portAddrs.destPort = inStream.read();
+                    portAddrs.origPort = inStream.read();
                     portAddrs.areEightBits = true;
                     smsHeader.portAddrs = portAddrs;
                     break;
                 case 5:
-                    portAddrs = new PortAddrs();
-                    portAddrs.destPort = (byteArrayInputStream.read() << 8) | byteArrayInputStream.read();
-                    portAddrs.origPort = (byteArrayInputStream.read() << 8) | byteArrayInputStream.read();
-                    portAddrs.areEightBits = false;
-                    smsHeader.portAddrs = portAddrs;
+                    PortAddrs portAddrs2 = new PortAddrs();
+                    portAddrs2.destPort = (inStream.read() << 8) | inStream.read();
+                    portAddrs2.origPort = (inStream.read() << 8) | inStream.read();
+                    portAddrs2.areEightBits = false;
+                    smsHeader.portAddrs = portAddrs2;
                     break;
                 case 8:
-                    concatRef = new ConcatRef();
-                    concatRef.refNumber = (byteArrayInputStream.read() << 8) | byteArrayInputStream.read();
-                    concatRef.msgCount = byteArrayInputStream.read();
-                    concatRef.seqNumber = byteArrayInputStream.read();
-                    concatRef.isEightBits = false;
-                    if (!(concatRef.msgCount == 0 || concatRef.seqNumber == 0 || concatRef.seqNumber > concatRef.msgCount)) {
-                        smsHeader.concatRef = concatRef;
+                    ConcatRef concatRef2 = new ConcatRef();
+                    concatRef2.refNumber = (inStream.read() << 8) | inStream.read();
+                    concatRef2.msgCount = inStream.read();
+                    concatRef2.seqNumber = inStream.read();
+                    concatRef2.isEightBits = false;
+                    if (!(concatRef2.msgCount == 0 || concatRef2.seqNumber == 0 || concatRef2.seqNumber > concatRef2.msgCount)) {
+                        smsHeader.concatRef = concatRef2;
                         break;
                     }
+                    break;
                 case 36:
-                    smsHeader.languageShiftTable = byteArrayInputStream.read();
+                    smsHeader.languageShiftTable = inStream.read();
                     break;
                 case 37:
-                    smsHeader.languageTable = byteArrayInputStream.read();
+                    smsHeader.languageTable = inStream.read();
                     break;
                 default:
                     MiscElt miscElt = new MiscElt();
-                    miscElt.id = read;
-                    miscElt.data = new byte[read2];
-                    byteArrayInputStream.read(miscElt.data, 0, read2);
+                    miscElt.id = id;
+                    miscElt.data = new byte[length];
+                    inStream.read(miscElt.data, 0, length);
                     smsHeader.miscEltList.add(miscElt);
                     break;
             }
@@ -141,112 +146,112 @@ public class SmsHeader {
         if (smsHeader.portAddrs == null && smsHeader.concatRef == null && smsHeader.specialSmsMsgList.isEmpty() && smsHeader.miscEltList.isEmpty() && smsHeader.languageShiftTable == 0 && smsHeader.languageTable == 0) {
             return null;
         }
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(140);
+        ByteArrayOutputStream outStream = new ByteArrayOutputStream(140);
         ConcatRef concatRef = smsHeader.concatRef;
         if (concatRef != null) {
             if (concatRef.isEightBits) {
-                byteArrayOutputStream.write(0);
-                byteArrayOutputStream.write(3);
-                byteArrayOutputStream.write(concatRef.refNumber);
+                outStream.write(0);
+                outStream.write(3);
+                outStream.write(concatRef.refNumber);
             } else {
-                byteArrayOutputStream.write(8);
-                byteArrayOutputStream.write(4);
-                byteArrayOutputStream.write(concatRef.refNumber >>> 8);
-                byteArrayOutputStream.write(concatRef.refNumber & 255);
+                outStream.write(8);
+                outStream.write(4);
+                outStream.write(concatRef.refNumber >>> 8);
+                outStream.write(concatRef.refNumber & 255);
             }
-            byteArrayOutputStream.write(concatRef.msgCount);
-            byteArrayOutputStream.write(concatRef.seqNumber);
+            outStream.write(concatRef.msgCount);
+            outStream.write(concatRef.seqNumber);
         }
         PortAddrs portAddrs = smsHeader.portAddrs;
         if (portAddrs != null) {
             if (portAddrs.areEightBits) {
-                byteArrayOutputStream.write(4);
-                byteArrayOutputStream.write(2);
-                byteArrayOutputStream.write(portAddrs.destPort);
-                byteArrayOutputStream.write(portAddrs.origPort);
+                outStream.write(4);
+                outStream.write(2);
+                outStream.write(portAddrs.destPort);
+                outStream.write(portAddrs.origPort);
             } else {
-                byteArrayOutputStream.write(5);
-                byteArrayOutputStream.write(4);
-                byteArrayOutputStream.write(portAddrs.destPort >>> 8);
-                byteArrayOutputStream.write(portAddrs.destPort & 255);
-                byteArrayOutputStream.write(portAddrs.origPort >>> 8);
-                byteArrayOutputStream.write(portAddrs.origPort & 255);
+                outStream.write(5);
+                outStream.write(4);
+                outStream.write(portAddrs.destPort >>> 8);
+                outStream.write(portAddrs.destPort & 255);
+                outStream.write(portAddrs.origPort >>> 8);
+                outStream.write(portAddrs.origPort & 255);
             }
         }
         if (smsHeader.languageShiftTable != 0) {
-            byteArrayOutputStream.write(36);
-            byteArrayOutputStream.write(1);
-            byteArrayOutputStream.write(smsHeader.languageShiftTable);
+            outStream.write(36);
+            outStream.write(1);
+            outStream.write(smsHeader.languageShiftTable);
         }
         if (smsHeader.languageTable != 0) {
-            byteArrayOutputStream.write(37);
-            byteArrayOutputStream.write(1);
-            byteArrayOutputStream.write(smsHeader.languageTable);
+            outStream.write(37);
+            outStream.write(1);
+            outStream.write(smsHeader.languageTable);
         }
-        Iterator it = smsHeader.specialSmsMsgList.iterator();
-        while (it.hasNext()) {
-            SpecialSmsMsg specialSmsMsg = (SpecialSmsMsg) it.next();
-            byteArrayOutputStream.write(1);
-            byteArrayOutputStream.write(2);
-            byteArrayOutputStream.write(specialSmsMsg.msgIndType & 255);
-            byteArrayOutputStream.write(specialSmsMsg.msgCount & 255);
+        Iterator i$ = smsHeader.specialSmsMsgList.iterator();
+        while (i$.hasNext()) {
+            SpecialSmsMsg specialSmsMsg = i$.next();
+            outStream.write(1);
+            outStream.write(2);
+            outStream.write(specialSmsMsg.msgIndType & 255);
+            outStream.write(specialSmsMsg.msgCount & 255);
         }
-        it = smsHeader.miscEltList.iterator();
-        while (it.hasNext()) {
-            MiscElt miscElt = (MiscElt) it.next();
-            byteArrayOutputStream.write(miscElt.id);
-            byteArrayOutputStream.write(miscElt.data.length);
-            byteArrayOutputStream.write(miscElt.data, 0, miscElt.data.length);
+        Iterator i$2 = smsHeader.miscEltList.iterator();
+        while (i$2.hasNext()) {
+            MiscElt miscElt = i$2.next();
+            outStream.write(miscElt.id);
+            outStream.write(miscElt.data.length);
+            outStream.write(miscElt.data, 0, miscElt.data.length);
         }
-        return byteArrayOutputStream.toByteArray();
+        return outStream.toByteArray();
     }
 
     public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("UserDataHeader ");
-        stringBuilder.append("{ ConcatRef ");
+        StringBuilder builder = new StringBuilder();
+        builder.append("UserDataHeader ");
+        builder.append("{ ConcatRef ");
         if (this.concatRef == null) {
-            stringBuilder.append("unset");
+            builder.append("unset");
         } else {
-            stringBuilder.append("{ refNumber=" + this.concatRef.refNumber);
-            stringBuilder.append(", msgCount=" + this.concatRef.msgCount);
-            stringBuilder.append(", seqNumber=" + this.concatRef.seqNumber);
-            stringBuilder.append(", isEightBits=" + this.concatRef.isEightBits);
-            stringBuilder.append(" }");
+            builder.append("{ refNumber=" + this.concatRef.refNumber);
+            builder.append(", msgCount=" + this.concatRef.msgCount);
+            builder.append(", seqNumber=" + this.concatRef.seqNumber);
+            builder.append(", isEightBits=" + this.concatRef.isEightBits);
+            builder.append(" }");
         }
-        stringBuilder.append(", PortAddrs ");
+        builder.append(", PortAddrs ");
         if (this.portAddrs == null) {
-            stringBuilder.append("unset");
+            builder.append("unset");
         } else {
-            stringBuilder.append("{ destPort=" + this.portAddrs.destPort);
-            stringBuilder.append(", origPort=" + this.portAddrs.origPort);
-            stringBuilder.append(", areEightBits=" + this.portAddrs.areEightBits);
-            stringBuilder.append(" }");
+            builder.append("{ destPort=" + this.portAddrs.destPort);
+            builder.append(", origPort=" + this.portAddrs.origPort);
+            builder.append(", areEightBits=" + this.portAddrs.areEightBits);
+            builder.append(" }");
         }
         if (this.languageShiftTable != 0) {
-            stringBuilder.append(", languageShiftTable=" + this.languageShiftTable);
+            builder.append(", languageShiftTable=" + this.languageShiftTable);
         }
         if (this.languageTable != 0) {
-            stringBuilder.append(", languageTable=" + this.languageTable);
+            builder.append(", languageTable=" + this.languageTable);
         }
-        Iterator it = this.specialSmsMsgList.iterator();
-        while (it.hasNext()) {
-            SpecialSmsMsg specialSmsMsg = (SpecialSmsMsg) it.next();
-            stringBuilder.append(", SpecialSmsMsg ");
-            stringBuilder.append("{ msgIndType=" + specialSmsMsg.msgIndType);
-            stringBuilder.append(", msgCount=" + specialSmsMsg.msgCount);
-            stringBuilder.append(" }");
+        Iterator i$ = this.specialSmsMsgList.iterator();
+        while (i$.hasNext()) {
+            SpecialSmsMsg specialSmsMsg = i$.next();
+            builder.append(", SpecialSmsMsg ");
+            builder.append("{ msgIndType=" + specialSmsMsg.msgIndType);
+            builder.append(", msgCount=" + specialSmsMsg.msgCount);
+            builder.append(" }");
         }
-        it = this.miscEltList.iterator();
-        while (it.hasNext()) {
-            MiscElt miscElt = (MiscElt) it.next();
-            stringBuilder.append(", MiscElt ");
-            stringBuilder.append("{ id=" + miscElt.id);
-            stringBuilder.append(", length=" + miscElt.data.length);
-            stringBuilder.append(", data=" + HexDump.toHexString(miscElt.data));
-            stringBuilder.append(" }");
+        Iterator i$2 = this.miscEltList.iterator();
+        while (i$2.hasNext()) {
+            MiscElt miscElt = i$2.next();
+            builder.append(", MiscElt ");
+            builder.append("{ id=" + miscElt.id);
+            builder.append(", length=" + miscElt.data.length);
+            builder.append(", data=" + HexDump.toHexString(miscElt.data));
+            builder.append(" }");
         }
-        stringBuilder.append(" }");
-        return stringBuilder.toString();
+        builder.append(" }");
+        return builder.toString();
     }
 }

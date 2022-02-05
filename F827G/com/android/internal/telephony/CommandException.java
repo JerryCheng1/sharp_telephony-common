@@ -1,11 +1,14 @@
 package com.android.internal.telephony;
 
 import android.telephony.Rlog;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OEM_RIL_RDE_Data;
+import com.android.internal.telephony.uicc.IccRecords;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class CommandException extends RuntimeException {
     private Error mError;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum Error {
         INVALID_RESPONSE,
         RADIO_NOT_AVAILABLE,
@@ -40,18 +43,18 @@ public class CommandException extends RuntimeException {
         SS_ERROR_STATUS
     }
 
-    public CommandException(Error error) {
-        super(error.toString());
-        this.mError = error;
+    public CommandException(Error e) {
+        super(e.toString());
+        this.mError = e;
     }
 
-    public CommandException(Error error, String str) {
-        super(str);
-        this.mError = error;
+    public CommandException(Error e, String errString) {
+        super(errString);
+        this.mError = e;
     }
 
-    public static CommandException fromRilErrno(int i) {
-        switch (i) {
+    public static CommandException fromRilErrno(int ril_errno) {
+        switch (ril_errno) {
             case -1:
                 return new CommandException(Error.INVALID_RESPONSE);
             case 0:
@@ -68,6 +71,11 @@ public class CommandException extends RuntimeException {
                 return new CommandException(Error.SIM_PUK2);
             case 6:
                 return new CommandException(Error.REQUEST_NOT_SUPPORTED);
+            case 7:
+            case IccRecords.EVENT_REFRESH_OEM /* 29 */:
+            default:
+                Rlog.e("GSM", "Unrecognized RIL errno " + ril_errno);
+                return new CommandException(Error.INVALID_RESPONSE);
             case 8:
                 return new CommandException(Error.OP_NOT_ALLOWED_DURING_VOICE_CALL);
             case 9:
@@ -100,25 +108,28 @@ public class CommandException extends RuntimeException {
                 return new CommandException(Error.USSD_MODIFIED_TO_SS);
             case 23:
                 return new CommandException(Error.USSD_MODIFIED_TO_USSD);
-            case SmsHeader.ELT_ID_STANDARD_WVG_OBJECT /*24*/:
+            case SmsHeader.ELT_ID_STANDARD_WVG_OBJECT /* 24 */:
                 return new CommandException(Error.SS_MODIFIED_TO_DIAL);
             case 25:
                 return new CommandException(Error.SS_MODIFIED_TO_USSD);
             case 26:
                 return new CommandException(Error.SUBSCRIPTION_NOT_SUPPORTED);
-            case OEM_RIL_RDE_Data.RDE_NV_OTKSL_I /*27*/:
+            case OemCdmaTelephonyManager.OEM_RIL_RDE_Data.RDE_NV_OTKSL_I /* 27 */:
                 return new CommandException(Error.SS_MODIFIED_TO_SS);
             case 28:
                 return new CommandException(Error.INVALID_PARAMETER);
             case 30:
-                return TelBrand.IS_DCM ? new CommandException(Error.CBS_REQUEST_FAIL_RETRY) : new CommandException(Error.INVALID_RESPONSE);
+                if (TelBrand.IS_DCM) {
+                    return new CommandException(Error.CBS_REQUEST_FAIL_RETRY);
+                }
+                return new CommandException(Error.INVALID_RESPONSE);
             case 31:
-                return TelBrand.IS_DCM ? new CommandException(Error.SS_ERROR_STATUS) : new CommandException(Error.INVALID_RESPONSE);
+                if (TelBrand.IS_DCM) {
+                    return new CommandException(Error.SS_ERROR_STATUS);
+                }
+                return new CommandException(Error.INVALID_RESPONSE);
             case 32:
                 return new CommandException(Error.RETURN_NULL);
-            default:
-                Rlog.e("GSM", "Unrecognized RIL errno " + i);
-                return new CommandException(Error.INVALID_RESPONSE);
         }
     }
 

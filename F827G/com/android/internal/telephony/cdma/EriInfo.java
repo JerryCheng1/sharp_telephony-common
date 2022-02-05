@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cdma;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class EriInfo {
     public static final int ROAMING_ICON_MODE_FLASH = 1;
     public static final int ROAMING_ICON_MODE_NORMAL = 0;
@@ -13,12 +14,12 @@ public final class EriInfo {
     public int iconMode;
     public int roamingIndicator;
 
-    public EriInfo(int i, int i2, int i3, String str, int i4, int i5) {
-        this.roamingIndicator = i;
-        this.iconIndex = i2;
-        this.iconMode = i3;
-        this.eriText = str;
-        this.callPromptId = i4;
-        this.alertId = i5;
+    public EriInfo(int roamingIndicator, int iconIndex, int iconMode, String eriText, int callPromptId, int alertId) {
+        this.roamingIndicator = roamingIndicator;
+        this.iconIndex = iconIndex;
+        this.iconMode = iconMode;
+        this.eriText = eriText;
+        this.callPromptId = callPromptId;
+        this.alertId = alertId;
     }
 }

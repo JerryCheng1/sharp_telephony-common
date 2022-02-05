@@ -9,107 +9,124 @@ import android.text.TextUtils;
 import android.util.Log;
 import com.android.internal.telephony.cdma.CDMAPhone;
 import com.android.internal.telephony.cdma.CdmaSubscriptionSourceManager;
+import com.android.internal.telephony.dataconnection.ApnProfileOmh;
 import com.google.android.mms.pdu.CharacterSets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class CdmaApnProfileTracker extends Handler {
     private static final int EVENT_GET_DATA_CALL_PROFILE_DONE = 1;
     private static final int EVENT_LOAD_PROFILES = 2;
     private static final int EVENT_READ_MODEM_PROFILES = 0;
-    private static final String[] mDefaultApnTypes = new String[]{"default", "mms", "supl", "hipri", "fota", "ims", "cbs"};
-    private static final String[] mSupportedApnTypes = new String[]{"default", "mms", "supl", "dun", "hipri", "fota", "ims", "cbs"};
-    protected final String LOG_TAG = "CDMA";
     protected ApnSetting mActiveApn;
-    private ArrayList<ApnSetting> mApnProfilesList = new ArrayList();
     private CdmaSubscriptionSourceManager mCdmaSsm;
-    private RegistrantList mModemApnProfileRegistrants = new RegistrantList();
+    private CDMAPhone mPhone;
+    private static final String[] mSupportedApnTypes = {"default", "mms", "supl", "dun", "hipri", "fota", "ims", "cbs"};
+    private static final String[] mDefaultApnTypes = {"default", "mms", "supl", "hipri", "fota", "ims", "cbs"};
+    protected final String LOG_TAG = "CDMA";
+    private ArrayList<ApnSetting> mApnProfilesList = new ArrayList<>();
     private int mOmhReadProfileContext = 0;
     private int mOmhReadProfileCount = 0;
-    HashMap<String, Integer> mOmhServicePriorityMap;
-    private CDMAPhone mPhone;
-    ArrayList<ApnSetting> mTempOmhApnProfilesList = new ArrayList();
+    ArrayList<ApnSetting> mTempOmhApnProfilesList = new ArrayList<>();
+    private RegistrantList mModemApnProfileRegistrants = new RegistrantList();
+    HashMap<String, Integer> mOmhServicePriorityMap = new HashMap<>();
 
-    CdmaApnProfileTracker(CDMAPhone cDMAPhone) {
-        this.mPhone = cDMAPhone;
-        this.mCdmaSsm = CdmaSubscriptionSourceManager.getInstance(cDMAPhone.getContext(), cDMAPhone.mCi, this, 2, null);
-        this.mOmhServicePriorityMap = new HashMap();
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public CdmaApnProfileTracker(CDMAPhone phone) {
+        this.mPhone = phone;
+        this.mCdmaSsm = CdmaSubscriptionSourceManager.getInstance(phone.getContext(), phone.mCi, this, 2, null);
         sendMessage(obtainMessage(2));
     }
 
-    private void addServiceTypeToUnSpecified() {
-        for (Object obj : mSupportedApnTypes) {
-            if (!this.mOmhServicePriorityMap.containsKey(obj)) {
-                Iterator it = this.mTempOmhApnProfilesList.iterator();
-                while (it.hasNext()) {
-                    ApnSetting apnSetting = (ApnSetting) it.next();
-                    if (((ApnProfileOmh) apnSetting).getApnProfileTypeModem() == ApnProfileTypeModem.PROFILE_TYPE_UNSPECIFIED) {
-                        ((ApnProfileOmh) apnSetting).addServiceType(ApnProfileTypeModem.getApnProfileTypeModem(obj));
-                        log("OMH: Service Type added to UNSPECIFIED is : " + ApnProfileTypeModem.getApnProfileTypeModem(obj));
-                        break;
-                    }
-                }
-            }
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public void loadProfiles() {
+        log("loadProfiles...");
+        this.mApnProfilesList.clear();
+        readApnProfilesFromModem();
+    }
+
+    private String[] parseTypes(String types) {
+        return (types == null || types.equals("")) ? new String[]{CharacterSets.MIMENAME_ANY_CHARSET} : types.split(",");
+    }
+
+    protected void finalize() {
+        Log.d("CDMA", "CdmaApnProfileTracker finalized");
+    }
+
+    public void registerForModemProfileReady(Handler h, int what, Object obj) {
+        this.mModemApnProfileRegistrants.add(new Registrant(h, what, obj));
+    }
+
+    public void unregisterForModemProfileReady(Handler h) {
+        this.mModemApnProfileRegistrants.remove(h);
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        if (!this.mPhone.mIsTheCurrentActivePhone) {
+            Log.d("CDMA", "Ignore CDMA msgs since CDMA phone is inactive");
+            return;
+        }
+        switch (msg.what) {
+            case 0:
+                onReadApnProfilesFromModem();
+                return;
+            case 1:
+                onGetDataCallProfileDone((AsyncResult) msg.obj, msg.arg1);
+                return;
+            case 2:
+                loadProfiles();
+                return;
+            default:
+                return;
         }
     }
 
-    private ApnProfileOmh getDuplicateProfile(ApnSetting apnSetting) {
-        Iterator it = this.mTempOmhApnProfilesList.iterator();
-        while (it.hasNext()) {
-            ApnSetting apnSetting2 = (ApnSetting) it.next();
-            if (((ApnProfileOmh) apnSetting).getProfileId() == ((ApnProfileOmh) apnSetting2).getProfileId()) {
-                return (ApnProfileOmh) apnSetting2;
-            }
-        }
-        return null;
+    private void readApnProfilesFromModem() {
+        sendMessage(obtainMessage(0));
     }
 
-    private int omhListGetArbitratedPriority(ArrayList<ApnSetting> arrayList, String str) {
-        ApnSetting apnSetting = null;
-        Iterator it = arrayList.iterator();
-        while (it.hasNext()) {
-            ApnSetting apnSetting2 = (ApnSetting) it.next();
-            if (!((ApnProfileOmh) apnSetting2).isValidPriority()) {
-                log("[OMH] Invalid priority... skipping");
-            } else if (apnSetting == null) {
-                apnSetting = apnSetting2;
-            } else if (str == "supl") {
-                if (((ApnProfileOmh) apnSetting2).isPriorityLower(((ApnProfileOmh) apnSetting).getPriority())) {
-                    apnSetting = apnSetting2;
-                }
-            } else if (((ApnProfileOmh) apnSetting2).isPriorityHigher(((ApnProfileOmh) apnSetting).getPriority())) {
-                apnSetting = apnSetting2;
-            }
+    private void onReadApnProfilesFromModem() {
+        log("OMH: onReadApnProfilesFromModem()");
+        this.mOmhReadProfileContext++;
+        this.mOmhReadProfileCount = 0;
+        this.mTempOmhApnProfilesList.clear();
+        this.mOmhServicePriorityMap.clear();
+        ApnProfileOmh.ApnProfileTypeModem[] arr$ = ApnProfileOmh.ApnProfileTypeModem.values();
+        for (ApnProfileOmh.ApnProfileTypeModem p : arr$) {
+            log("OMH: Reading profiles for:" + p.getid());
+            this.mOmhReadProfileCount++;
+            this.mPhone.mCi.getDataCallProfile(p.getid(), obtainMessage(1, this.mOmhReadProfileContext, 0, p));
         }
-        return ((ApnProfileOmh) apnSetting).getPriority();
     }
 
-    private void onGetDataCallProfileDone(AsyncResult asyncResult, int i) {
-        if (i == this.mOmhReadProfileContext) {
-            if (asyncResult.exception != null) {
-                log("OMH: Exception in onGetDataCallProfileDone:" + asyncResult.exception);
+    private void onGetDataCallProfileDone(AsyncResult ar, int context) {
+        if (context == this.mOmhReadProfileContext) {
+            if (ar.exception != null) {
+                log("OMH: Exception in onGetDataCallProfileDone:" + ar.exception);
                 this.mOmhReadProfileCount--;
                 return;
             }
-            ArrayList arrayList = (ArrayList) asyncResult.result;
-            ApnProfileTypeModem apnProfileTypeModem = (ApnProfileTypeModem) asyncResult.userObj;
+            ArrayList<ApnSetting> dataProfileListModem = (ArrayList) ar.result;
+            ApnProfileOmh.ApnProfileTypeModem modemProfile = (ApnProfileOmh.ApnProfileTypeModem) ar.userObj;
             this.mOmhReadProfileCount--;
-            if (arrayList != null && arrayList.size() > 0) {
-                String dataServiceType = apnProfileTypeModem.getDataServiceType();
-                log("OMH: # profiles returned from modem:" + arrayList.size() + " for " + dataServiceType);
-                this.mOmhServicePriorityMap.put(dataServiceType, Integer.valueOf(omhListGetArbitratedPriority(arrayList, dataServiceType)));
-                Iterator it = arrayList.iterator();
-                while (it.hasNext()) {
-                    ApnSetting apnSetting = (ApnSetting) it.next();
-                    ((ApnProfileOmh) apnSetting).setApnProfileTypeModem(apnProfileTypeModem);
-                    ApnProfileOmh duplicateProfile = getDuplicateProfile(apnSetting);
-                    if (duplicateProfile == null) {
-                        this.mTempOmhApnProfilesList.add(apnSetting);
-                        ((ApnProfileOmh) apnSetting).addServiceType(ApnProfileTypeModem.getApnProfileTypeModem(dataServiceType));
+            if (dataProfileListModem != null && dataProfileListModem.size() > 0) {
+                String serviceType = modemProfile.getDataServiceType();
+                log("OMH: # profiles returned from modem:" + dataProfileListModem.size() + " for " + serviceType);
+                this.mOmhServicePriorityMap.put(serviceType, Integer.valueOf(omhListGetArbitratedPriority(dataProfileListModem, serviceType)));
+                Iterator i$ = dataProfileListModem.iterator();
+                while (i$.hasNext()) {
+                    ApnSetting apn = i$.next();
+                    ((ApnProfileOmh) apn).setApnProfileTypeModem(modemProfile);
+                    ApnProfileOmh omhDuplicateDp = getDuplicateProfile(apn);
+                    if (omhDuplicateDp == null) {
+                        this.mTempOmhApnProfilesList.add(apn);
+                        ((ApnProfileOmh) apn).addServiceType(ApnProfileOmh.ApnProfileTypeModem.getApnProfileTypeModem(serviceType));
                     } else {
-                        log("OMH: Duplicate Profile " + duplicateProfile);
-                        duplicateProfile.addServiceType(ApnProfileTypeModem.getApnProfileTypeModem(dataServiceType));
+                        log("OMH: Duplicate Profile " + omhDuplicateDp);
+                        omhDuplicateDp.addServiceType(ApnProfileOmh.ApnProfileTypeModem.getApnProfileTypeModem(serviceType));
                     }
                 }
             }
@@ -122,52 +139,33 @@ public final class CdmaApnProfileTracker extends Handler {
         }
     }
 
-    private void onReadApnProfilesFromModem() {
-        log("OMH: onReadApnProfilesFromModem()");
-        this.mOmhReadProfileContext++;
-        this.mOmhReadProfileCount = 0;
-        this.mTempOmhApnProfilesList.clear();
-        this.mOmhServicePriorityMap.clear();
-        for (ApnProfileTypeModem apnProfileTypeModem : ApnProfileTypeModem.values()) {
-            log("OMH: Reading profiles for:" + apnProfileTypeModem.getid());
-            this.mOmhReadProfileCount++;
-            this.mPhone.mCi.getDataCallProfile(apnProfileTypeModem.getid(), obtainMessage(1, this.mOmhReadProfileContext, 0, apnProfileTypeModem));
+    private ApnProfileOmh getDuplicateProfile(ApnSetting apn) {
+        Iterator i$ = this.mTempOmhApnProfilesList.iterator();
+        while (i$.hasNext()) {
+            ApnSetting dataProfile = i$.next();
+            if (((ApnProfileOmh) apn).getProfileId() == ((ApnProfileOmh) dataProfile).getProfileId()) {
+                return (ApnProfileOmh) dataProfile;
+            }
         }
+        return null;
     }
 
-    private String[] parseTypes(String str) {
-        if (str != null && !str.equals("")) {
-            return str.split(",");
-        }
-        return new String[]{CharacterSets.MIMENAME_ANY_CHARSET};
-    }
-
-    private void readApnProfilesFromModem() {
-        sendMessage(obtainMessage(0));
-    }
-
-    public void clearActiveApnProfile() {
-        this.mActiveApn = null;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void finalize() {
-        Log.d("CDMA", "CdmaApnProfileTracker finalized");
-    }
-
-    public ApnSetting getApnProfile(String str) {
-        Object obj;
-        log("getApnProfile: serviceType=" + str);
-        Iterator it = this.mApnProfilesList.iterator();
-        while (it.hasNext()) {
-            obj = (ApnSetting) it.next();
-            if (obj.canHandleType(str)) {
+    public ApnSetting getApnProfile(String serviceType) {
+        log("getApnProfile: serviceType=" + serviceType);
+        ApnSetting profile = null;
+        Iterator i$ = this.mApnProfilesList.iterator();
+        while (true) {
+            if (!i$.hasNext()) {
+                break;
+            }
+            ApnSetting apn = i$.next();
+            if (apn.canHandleType(serviceType)) {
+                profile = apn;
                 break;
             }
         }
-        obj = null;
-        log("getApnProfile: return profile=" + obj);
-        return obj;
+        log("getApnProfile: return profile=" + profile);
+        return profile;
     }
 
     public ArrayList<ApnSetting> getOmhApnProfilesList() {
@@ -175,61 +173,68 @@ public final class CdmaApnProfileTracker extends Handler {
         return this.mApnProfilesList;
     }
 
-    public void handleMessage(Message message) {
-        if (this.mPhone.mIsTheCurrentActivePhone) {
-            switch (message.what) {
-                case 0:
-                    onReadApnProfilesFromModem();
-                    return;
-                case 1:
-                    onGetDataCallProfileDone((AsyncResult) message.obj, message.arg1);
-                    return;
-                case 2:
-                    loadProfiles();
-                    return;
-                default:
-                    return;
+    /* JADX INFO: Multiple debug info for r3v1 int: [D('i$' java.util.Iterator), D('i$' int)] */
+    private void addServiceTypeToUnSpecified() {
+        String[] arr$ = mSupportedApnTypes;
+        for (String apntype : arr$) {
+            if (!this.mOmhServicePriorityMap.containsKey(apntype)) {
+                Iterator i$ = this.mTempOmhApnProfilesList.iterator();
+                while (true) {
+                    if (i$.hasNext()) {
+                        ApnSetting apn = i$.next();
+                        if (((ApnProfileOmh) apn).getApnProfileTypeModem() == ApnProfileOmh.ApnProfileTypeModem.PROFILE_TYPE_UNSPECIFIED) {
+                            ((ApnProfileOmh) apn).addServiceType(ApnProfileOmh.ApnProfileTypeModem.getApnProfileTypeModem(apntype));
+                            log("OMH: Service Type added to UNSPECIFIED is : " + ApnProfileOmh.ApnProfileTypeModem.getApnProfileTypeModem(apntype));
+                            break;
+                        }
+                    }
+                }
             }
         }
-        Log.d("CDMA", "Ignore CDMA msgs since CDMA phone is inactive");
     }
 
-    public boolean isApnTypeActive(String str) {
-        return this.mActiveApn != null && this.mActiveApn.canHandleType(str);
+    private int omhListGetArbitratedPriority(ArrayList<ApnSetting> dataProfileListModem, String serviceType) {
+        ApnSetting profile = null;
+        Iterator i$ = dataProfileListModem.iterator();
+        while (i$.hasNext()) {
+            ApnSetting apn = i$.next();
+            if (!((ApnProfileOmh) apn).isValidPriority()) {
+                log("[OMH] Invalid priority... skipping");
+            } else if (profile == null) {
+                profile = apn;
+            } else if (serviceType == "supl") {
+                if (((ApnProfileOmh) apn).isPriorityLower(((ApnProfileOmh) profile).getPriority())) {
+                    profile = apn;
+                }
+            } else if (((ApnProfileOmh) apn).isPriorityHigher(((ApnProfileOmh) profile).getPriority())) {
+                profile = apn;
+            }
+        }
+        return ((ApnProfileOmh) profile).getPriority();
     }
 
-    /* Access modifiers changed, original: protected */
-    public boolean isApnTypeAvailable(String str) {
-        for (CharSequence equals : mSupportedApnTypes) {
-            if (TextUtils.equals(str, equals)) {
+    public void clearActiveApnProfile() {
+        this.mActiveApn = null;
+    }
+
+    public boolean isApnTypeActive(String type) {
+        return this.mActiveApn != null && this.mActiveApn.canHandleType(type);
+    }
+
+    protected boolean isApnTypeAvailable(String type) {
+        for (String s : mSupportedApnTypes) {
+            if (TextUtils.equals(type, s)) {
                 return true;
             }
         }
         return false;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void loadProfiles() {
-        log("loadProfiles...");
-        this.mApnProfilesList.clear();
-        readApnProfilesFromModem();
+    protected void log(String s) {
+        Log.d("CDMA", "[CdmaApnProfileTracker] " + s);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void log(String str) {
-        Log.d("CDMA", "[CdmaApnProfileTracker] " + str);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void loge(String str) {
-        Log.e("CDMA", "[CdmaApnProfileTracker] " + str);
-    }
-
-    public void registerForModemProfileReady(Handler handler, int i, Object obj) {
-        this.mModemApnProfileRegistrants.add(new Registrant(handler, i, obj));
-    }
-
-    public void unregisterForModemProfileReady(Handler handler) {
-        this.mModemApnProfileRegistrants.remove(handler);
+    protected void loge(String s) {
+        Log.e("CDMA", "[CdmaApnProfileTracker] " + s);
     }
 }

@@ -19,10 +19,8 @@ import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.UserHandle;
 import android.preference.PreferenceManager;
-import android.provider.Settings.Global;
-import android.provider.Settings.SettingNotFoundException;
-import android.provider.Telephony.Carriers;
-import android.provider.Telephony.CellBroadcasts;
+import android.provider.Settings;
+import android.provider.Telephony;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -30,8 +28,9 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.text.format.Time;
 import android.util.Log;
-import com.android.internal.telephony.ISub.Stub;
-import com.android.internal.telephony.IccCardConstants.State;
+import com.android.internal.telephony.ISub;
+import com.android.internal.telephony.ITelephonyRegistry;
+import com.android.internal.telephony.IccCardConstants;
 import com.android.internal.telephony.dataconnection.DctController;
 import com.android.internal.telephony.dataconnection.DdsScheduler;
 import com.android.internal.telephony.dataconnection.DdsSchedulerAc;
@@ -44,197 +43,117 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.ListIterator;
-import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 
-public class SubscriptionController extends Stub {
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class SubscriptionController extends ISub.Stub {
     static final boolean DBG = true;
-    private static final int DUMMY_SUB_ID_BASE = 2147483643;
     private static final int EVENT_SET_DEFAULT_DATA_DONE = 1;
     static final String LOG_TAG = "SubscriptionController";
     static final int MAX_LOCAL_LOG_LINES = 500;
     static final boolean VDBG = false;
-    private static int mDefaultFallbackSubId = DUMMY_SUB_ID_BASE;
-    private static int mDefaultPhoneId = 0;
-    private static HashMap<Integer, Integer> mSlotIdxToSubId = new HashMap();
-    private static SubscriptionController sInstance = null;
     protected static PhoneProxy[] sProxyPhones;
     private int[] colorArr;
-    protected CallManager mCM;
     protected Context mContext;
     private DataConnectionHandler mDataConnectionHandler;
     private DctController mDctController;
+    private DdsScheduler mScheduler;
+    private DdsSchedulerAc mSchedulerAc;
+    protected TelephonyManager mTelephonyManager;
+    private static SubscriptionController sInstance = null;
+    private static HashMap<Integer, Integer> mSlotIdxToSubId = new HashMap<>();
+    private static final int DUMMY_SUB_ID_BASE = 2147483643;
+    private static int mDefaultFallbackSubId = DUMMY_SUB_ID_BASE;
+    private static int mDefaultPhoneId = 0;
     private ScLocalLog mLocalLog = new ScLocalLog(MAX_LOCAL_LOG_LINES);
     protected final Object mLock = new Object();
-    private HashMap<Integer, OnDemandDdsLockNotifier> mOnDemandDdsLockNotificationRegistrants = new HashMap();
-    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+    private HashMap<Integer, OnDemandDdsLockNotifier> mOnDemandDdsLockNotificationRegistrants = new HashMap<>();
+    private final BroadcastReceiver mReceiver = new BroadcastReceiver() { // from class: com.android.internal.telephony.SubscriptionController.1
+        @Override // android.content.BroadcastReceiver
         public void onReceive(Context context, Intent intent) {
             SubscriptionController.this.logd("onReceive " + intent);
-            int intExtra = intent.getIntExtra("subscription", -1);
+            int subId = intent.getIntExtra("subscription", -1);
             if (!intent.getAction().equals("android.provider.Telephony.SPN_STRINGS_UPDATED")) {
                 return;
             }
             if (intent.getBooleanExtra("showPlmn", false)) {
-                String stringExtra = intent.getStringExtra(CellBroadcasts.PLMN);
+                String carrierText = intent.getStringExtra(Telephony.CellBroadcasts.PLMN);
                 if (intent.getBooleanExtra("showSpn", false)) {
-                    stringExtra = stringExtra + SubscriptionController.this.mContext.getString(17041030).toString() + intent.getStringExtra("spn");
+                    carrierText = carrierText + SubscriptionController.this.mContext.getString(17041030).toString() + intent.getStringExtra("spn");
                 }
-                SubscriptionController.this.setCarrierText(stringExtra, intExtra);
+                SubscriptionController.this.setCarrierText(carrierText, subId);
             } else if (intent.getBooleanExtra("showSpn", false)) {
-                SubscriptionController.this.setCarrierText(intent.getStringExtra(CellBroadcasts.PLMN), intExtra);
+                SubscriptionController.this.setCarrierText(intent.getStringExtra(Telephony.CellBroadcasts.PLMN), subId);
             }
         }
     };
-    private DdsScheduler mScheduler;
-    private DdsSchedulerAc mSchedulerAc;
-    protected TelephonyManager mTelephonyManager;
+    protected CallManager mCM = CallManager.getInstance();
 
-    private class DataConnectionHandler extends Handler {
-        private DataConnectionHandler() {
-        }
-
-        /* synthetic */ DataConnectionHandler(SubscriptionController subscriptionController, AnonymousClass1 anonymousClass1) {
-            this();
-        }
-
-        public void handleMessage(Message message) {
-            switch (message.what) {
-                case 1:
-                    AsyncResult asyncResult = (AsyncResult) message.obj;
-                    SubscriptionController.this.logd("EVENT_SET_DEFAULT_DATA_DONE subId:" + ((Integer) asyncResult.result));
-                    SubscriptionController.this.updateDataSubId(asyncResult);
-                    return;
-                default:
-                    return;
-            }
-        }
-    }
-
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public interface OnDemandDdsLockNotifier {
         void notifyOnDemandDdsLockGranted(NetworkRequest networkRequest);
     }
 
-    static class ScLocalLog {
-        private LinkedList<String> mLog = new LinkedList();
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class ScLocalLog {
         private int mMaxLines;
-        private Time mNow;
+        private LinkedList<String> mLog = new LinkedList<>();
+        private Time mNow = new Time();
 
-        public ScLocalLog(int i) {
-            this.mMaxLines = i;
-            this.mNow = new Time();
+        public ScLocalLog(int maxLines) {
+            this.mMaxLines = maxLines;
         }
 
-        public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
+        public synchronized void log(String msg) {
+            if (this.mMaxLines > 0) {
+                int pid = Process.myPid();
+                int tid = Process.myTid();
+                this.mNow.setToNow();
+                this.mLog.add(this.mNow.format("%m-%d %H:%M:%S") + " pid=" + pid + " tid=" + tid + " " + msg);
+                while (this.mLog.size() > this.mMaxLines) {
+                    this.mLog.remove();
+                }
+            }
+        }
+
+        public synchronized void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+            Iterator<String> itr = this.mLog.listIterator(0);
             int i = 0;
-            synchronized (this) {
-                ListIterator listIterator = this.mLog.listIterator(0);
-                while (listIterator.hasNext()) {
-                    int i2 = i + 1;
-                    printWriter.println(Integer.toString(i) + ": " + ((String) listIterator.next()));
-                    if (i2 % 10 == 0) {
-                        printWriter.flush();
-                        i = i2;
-                    } else {
-                        i = i2;
-                    }
-                }
-            }
-        }
-
-        public void log(String str) {
-            synchronized (this) {
-                if (this.mMaxLines > 0) {
-                    int myPid = Process.myPid();
-                    int myTid = Process.myTid();
-                    this.mNow.setToNow();
-                    this.mLog.add(this.mNow.format("%m-%d %H:%M:%S") + " pid=" + myPid + " tid=" + myTid + " " + str);
-                    while (this.mLog.size() > this.mMaxLines) {
-                        this.mLog.remove();
-                    }
+            while (itr.hasNext()) {
+                i++;
+                pw.println(Integer.toString(i) + ": " + itr.next());
+                if (i % 10 == 0) {
+                    pw.flush();
                 }
             }
         }
     }
 
-    private SubscriptionController(Context context) {
-        logd("SubscriptionController init by Context");
-        this.mContext = context;
-        this.mCM = CallManager.getInstance();
-        this.mTelephonyManager = TelephonyManager.from(this.mContext);
-        if (ServiceManager.getService("isub") == null) {
-            ServiceManager.addService("isub", this);
+    public static SubscriptionController init(Phone phone) {
+        SubscriptionController subscriptionController;
+        synchronized (SubscriptionController.class) {
+            if (sInstance == null) {
+                sInstance = new SubscriptionController(phone);
+            } else {
+                Log.wtf(LOG_TAG, "init() called multiple times!  sInstance = " + sInstance);
+            }
+            subscriptionController = sInstance;
         }
-        registerReceiverIfNeeded();
-        logdl("[SubscriptionController] init by Context");
-        this.mDataConnectionHandler = new DataConnectionHandler(this, null);
-        this.mScheduler = DdsScheduler.getInstance();
-        this.mSchedulerAc = new DdsSchedulerAc();
-        this.mSchedulerAc.connect(this.mContext, this.mDataConnectionHandler, this.mScheduler.getHandler());
+        return subscriptionController;
     }
 
-    private SubscriptionController(Phone phone) {
-        this.mContext = phone.getContext();
-        this.mCM = CallManager.getInstance();
-        if (ServiceManager.getService("isub") == null) {
-            ServiceManager.addService("isub", this);
+    public static SubscriptionController init(Context c, CommandsInterface[] ci) {
+        SubscriptionController subscriptionController;
+        synchronized (SubscriptionController.class) {
+            if (sInstance == null) {
+                sInstance = new SubscriptionController(c);
+            } else {
+                Log.wtf(LOG_TAG, "init() called multiple times!  sInstance = " + sInstance);
+            }
+            subscriptionController = sInstance;
         }
-        registerReceiverIfNeeded();
-        logdl("[SubscriptionController] init by Phone");
-    }
-
-    private void broadcastDefaultDataSubIdChanged(int i) {
-        logdl("[broadcastDefaultDataSubIdChanged] subId=" + i);
-        Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED");
-        intent.addFlags(536870912);
-        intent.putExtra("subscription", getDefaultDataSubId());
-        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
-    }
-
-    private void broadcastDefaultSmsSubIdChanged(int i) {
-        logdl("[broadcastDefaultSmsSubIdChanged] subId=" + i);
-        Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_SMS_SUBSCRIPTION_CHANGED");
-        intent.addFlags(536870912);
-        intent.putExtra("subscription", i);
-        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
-    }
-
-    private void broadcastDefaultVoiceSubIdChanged(int i) {
-        logdl("[broadcastDefaultVoiceSubIdChanged] subId=" + i);
-        Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_VOICE_SUBSCRIPTION_CHANGED");
-        intent.addFlags(536870912);
-        intent.putExtra("subscription", i);
-        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
-    }
-
-    private void broadcastSimInfoContentChanged() {
-        this.mContext.sendBroadcast(new Intent("android.intent.action.ACTION_SUBINFO_CONTENT_CHANGE"));
-        this.mContext.sendBroadcast(new Intent("android.intent.action.ACTION_SUBINFO_RECORD_UPDATED"));
-    }
-
-    private boolean checkNotifyPermission(String str) {
-        if (this.mContext.checkCallingOrSelfPermission("android.permission.MODIFY_PHONE_STATE") == 0) {
-            return true;
-        }
-        logd("checkNotifyPermission Permission Denial: " + str + " from pid=" + Binder.getCallingPid() + ", uid=" + Binder.getCallingUid());
-        return false;
-    }
-
-    private void enforceSubscriptionPermission() {
-        this.mContext.enforceCallingOrSelfPermission("android.permission.READ_PHONE_STATE", "Requires READ_PHONE_STATE");
-    }
-
-    private int[] getDummySubIds(int i) {
-        int activeSubInfoCountMax = getActiveSubInfoCountMax();
-        if (activeSubInfoCountMax <= 0) {
-            return null;
-        }
-        int[] iArr = new int[activeSubInfoCountMax];
-        for (int i2 = 0; i2 < activeSubInfoCountMax; i2++) {
-            iArr[i2] = DUMMY_SUB_ID_BASE + i;
-        }
-        logd("getDummySubIds: slotIdx=" + i + " return " + activeSubInfoCountMax + " DummySubIds with each subId=" + iArr[0]);
-        return iArr;
+        return subscriptionController;
     }
 
     public static SubscriptionController getInstance() {
@@ -244,220 +163,56 @@ public class SubscriptionController extends Stub {
         return sInstance;
     }
 
-    /* JADX WARNING: Removed duplicated region for block: B:18:0x0058  */
-    private java.util.List<android.telephony.SubscriptionInfo> getSubInfo(java.lang.String r7, java.lang.Object r8) {
-        /*
-        r6 = this;
-        r2 = 0;
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "selection:";
-        r0 = r0.append(r1);
-        r0 = r0.append(r7);
-        r1 = " ";
-        r0 = r0.append(r1);
-        r0 = r0.append(r8);
-        r0 = r0.toString();
-        r6.logd(r0);
-        if (r8 == 0) goto L_0x006a;
-    L_0x0023:
-        r0 = 1;
-        r4 = new java.lang.String[r0];
-        r0 = 0;
-        r1 = r8.toString();
-        r4[r0] = r1;
-    L_0x002d:
-        r0 = r6.mContext;
-        r0 = r0.getContentResolver();
-        r1 = android.telephony.SubscriptionManager.CONTENT_URI;
-        r3 = r7;
-        r5 = r2;
-        r1 = r0.query(r1, r2, r3, r4, r5);
-        if (r1 == 0) goto L_0x005c;
-    L_0x003d:
-        r0 = r2;
-    L_0x003e:
-        r2 = r1.moveToNext();	 Catch:{ all -> 0x0068 }
-        if (r2 == 0) goto L_0x0062;
-    L_0x0044:
-        r2 = r6.getSubInfoRecord(r1);	 Catch:{ all -> 0x0068 }
-        if (r2 == 0) goto L_0x003e;
-    L_0x004a:
-        if (r0 != 0) goto L_0x0051;
-    L_0x004c:
-        r0 = new java.util.ArrayList;	 Catch:{ all -> 0x0068 }
-        r0.<init>();	 Catch:{ all -> 0x0068 }
-    L_0x0051:
-        r0.add(r2);	 Catch:{ all -> 0x0055 }
-        goto L_0x003e;
-    L_0x0055:
-        r0 = move-exception;
-    L_0x0056:
-        if (r1 == 0) goto L_0x005b;
-    L_0x0058:
-        r1.close();
-    L_0x005b:
-        throw r0;
-    L_0x005c:
-        r0 = "Query fail";
-        r6.logd(r0);	 Catch:{ all -> 0x0055 }
-        r0 = r2;
-    L_0x0062:
-        if (r1 == 0) goto L_0x0067;
-    L_0x0064:
-        r1.close();
-    L_0x0067:
-        return r0;
-    L_0x0068:
-        r0 = move-exception;
-        goto L_0x0056;
-    L_0x006a:
-        r4 = r2;
-        goto L_0x002d;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.SubscriptionController.getSubInfo(java.lang.String, java.lang.Object):java.util.List");
-    }
-
-    private SubscriptionInfo getSubInfoRecord(Cursor cursor) {
-        int i = cursor.getInt(cursor.getColumnIndexOrThrow("_id"));
-        String string = cursor.getString(cursor.getColumnIndexOrThrow("icc_id"));
-        int i2 = cursor.getInt(cursor.getColumnIndexOrThrow("sim_id"));
-        String string2 = cursor.getString(cursor.getColumnIndexOrThrow("display_name"));
-        String string3 = cursor.getString(cursor.getColumnIndexOrThrow("carrier_name"));
-        int i3 = cursor.getInt(cursor.getColumnIndexOrThrow("name_source"));
-        int i4 = cursor.getInt(cursor.getColumnIndexOrThrow("color"));
-        String string4 = cursor.getString(cursor.getColumnIndexOrThrow(IccProvider.STR_NUMBER));
-        int i5 = cursor.getInt(cursor.getColumnIndexOrThrow("data_roaming"));
-        Bitmap decodeResource = BitmapFactory.decodeResource(this.mContext.getResources(), 17302605);
-        int i6 = cursor.getInt(cursor.getColumnIndexOrThrow(Carriers.MCC));
-        int i7 = cursor.getInt(cursor.getColumnIndexOrThrow(Carriers.MNC));
-        String subscriptionCountryIso = getSubscriptionCountryIso(i);
-        int i8 = cursor.getInt(cursor.getColumnIndexOrThrow("sub_state"));
-        int i9 = cursor.getInt(cursor.getColumnIndexOrThrow("network_mode"));
-        logd("[getSubInfoRecord] id:" + i + " iccid:" + string + " simSlotIndex:" + i2 + " displayName:" + string2 + " nameSource:" + i3 + " iconTint:" + i4 + " dataRoaming:" + i5 + " mcc:" + i6 + " mnc:" + i7 + " countIso:" + subscriptionCountryIso + " status:" + i8 + " nwMode:" + i9);
-        String line1NumberForSubscriber = this.mTelephonyManager.getLine1NumberForSubscriber(i);
-        if (TextUtils.isEmpty(line1NumberForSubscriber) || line1NumberForSubscriber.equals(string4)) {
-            line1NumberForSubscriber = string4;
-        } else {
-            logd("Line1Number is different: " + line1NumberForSubscriber);
+    /* JADX WARN: Multi-variable type inference failed */
+    private SubscriptionController(Context c) {
+        logd("SubscriptionController init by Context");
+        this.mContext = c;
+        this.mTelephonyManager = TelephonyManager.from(this.mContext);
+        if (ServiceManager.getService("isub") == null) {
+            ServiceManager.addService("isub", this);
         }
-        return new SubscriptionInfo(i, string, i2, string2, string3, i3, i4, line1NumberForSubscriber, i5, decodeResource, i6, i7, subscriptionCountryIso, i8, i9);
+        registerReceiverIfNeeded();
+        logdl("[SubscriptionController] init by Context");
+        this.mDataConnectionHandler = new DataConnectionHandler();
+        this.mScheduler = DdsScheduler.getInstance();
+        this.mSchedulerAc = new DdsSchedulerAc();
+        this.mSchedulerAc.connect(this.mContext, this.mDataConnectionHandler, this.mScheduler.getHandler());
     }
 
-    private String getSubscriptionCountryIso(int i) {
-        int phoneId = getPhoneId(i);
-        return phoneId < 0 ? "" : TelephonyManager.getTelephonyProperty(phoneId, "gsm.sim.operator.iso-country", "");
-    }
-
-    private int getUnusedColor() {
-        int i = 0;
-        List activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-        this.colorArr = this.mContext.getResources().getIntArray(17235978);
-        if (activeSubscriptionInfoList != null) {
-            int i2 = 0;
-            while (i2 < this.colorArr.length) {
-                int i3 = 0;
-                while (i3 < activeSubscriptionInfoList.size() && this.colorArr[i2] != ((SubscriptionInfo) activeSubscriptionInfoList.get(i3)).getIconTint()) {
-                    i3++;
-                }
-                if (i3 == activeSubscriptionInfoList.size()) {
-                    return this.colorArr[i2];
-                }
-                i2++;
-            }
-            i = activeSubscriptionInfoList.size() % this.colorArr.length;
+    public int getSubIdFromNetworkRequest(NetworkRequest n) {
+        if (n == null) {
+            return getDefaultDataSubId();
         }
-        return this.colorArr[i];
+        try {
+            return Integer.parseInt(n.networkCapabilities.getNetworkSpecifier());
+        } catch (NumberFormatException e) {
+            loge("Exception e = " + e);
+            return getDefaultDataSubId();
+        }
     }
 
-    public static SubscriptionController init(Context context, CommandsInterface[] commandsInterfaceArr) {
-        SubscriptionController subscriptionController;
-        synchronized (SubscriptionController.class) {
-            try {
-                if (sInstance == null) {
-                    sInstance = new SubscriptionController(context);
-                } else {
-                    Log.wtf(LOG_TAG, "init() called multiple times!  sInstance = " + sInstance);
-                }
-                subscriptionController = sInstance;
-            } catch (Throwable th) {
-                Class cls = SubscriptionController.class;
-            }
-        }
-        return subscriptionController;
+    public void startOnDemandDataSubscriptionRequest(NetworkRequest n) {
+        logd("startOnDemandDataSubscriptionRequest = " + n);
+        this.mSchedulerAc.allocateDds(n);
     }
 
-    public static SubscriptionController init(Phone phone) {
-        SubscriptionController subscriptionController;
-        synchronized (SubscriptionController.class) {
-            try {
-                if (sInstance == null) {
-                    sInstance = new SubscriptionController(phone);
-                } else {
-                    Log.wtf(LOG_TAG, "init() called multiple times!  sInstance = " + sInstance);
-                }
-                subscriptionController = sInstance;
-            } catch (Throwable th) {
-                Class cls = SubscriptionController.class;
-            }
-        }
-        return subscriptionController;
-    }
-
-    private boolean isActiveSubId(int i) {
-        if (SubscriptionManager.isValidSubscriptionId(i)) {
-            for (Entry value : mSlotIdxToSubId.entrySet()) {
-                if (i == ((Integer) value.getValue()).intValue()) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    public void stopOnDemandDataSubscriptionRequest(NetworkRequest n) {
+        logd("stopOnDemandDataSubscriptionRequest = " + n);
+        this.mSchedulerAc.freeDds(n);
     }
 
     private boolean isSubInfoReady() {
         return mSlotIdxToSubId.size() > 0;
     }
 
-    private void logd(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    private void logdl(String str) {
-        logd(str);
-        this.mLocalLog.log(str);
-    }
-
-    private void loge(String str) {
-        Rlog.e(LOG_TAG, str);
-    }
-
-    private void logel(String str) {
-        loge(str);
-        this.mLocalLog.log(str);
-    }
-
-    private void logv(String str) {
-        Rlog.v(LOG_TAG, str);
-    }
-
-    private void logvl(String str) {
-        logv(str);
-        this.mLocalLog.log(str);
-    }
-
-    private static void printStackTrace(String str) {
-        RuntimeException runtimeException = new RuntimeException();
-        slogd("StackTrace - " + str);
-        StackTraceElement[] stackTrace = runtimeException.getStackTrace();
-        Object obj = 1;
-        for (StackTraceElement stackTraceElement : stackTrace) {
-            if (obj != null) {
-                obj = null;
-            } else {
-                slogd(stackTraceElement.toString());
-            }
+    /* JADX WARN: Multi-variable type inference failed */
+    private SubscriptionController(Phone phone) {
+        this.mContext = phone.getContext();
+        if (ServiceManager.getService("isub") == null) {
+            ServiceManager.addService("isub", this);
         }
+        registerReceiverIfNeeded();
+        logdl("[SubscriptionController] init by Phone");
     }
 
     private void registerReceiverIfNeeded() {
@@ -467,409 +222,491 @@ public class SubscriptionController extends Stub {
         }
     }
 
-    private int setCarrierText(String str, int i) {
-        logd("[setCarrierText]+ text:" + str + " subId:" + i);
-        enforceSubscriptionPermission();
-        ContentValues contentValues = new ContentValues(1);
-        contentValues.put("carrier_name", str);
-        int update = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
-        notifySubscriptionInfoChanged();
-        return update;
+    private void enforceSubscriptionPermission() {
+        this.mContext.enforceCallingOrSelfPermission("android.permission.READ_PHONE_STATE", "Requires READ_PHONE_STATE");
     }
 
-    private void setDefaultFallbackSubId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            throw new RuntimeException("setDefaultSubId called with DEFAULT_SUB_ID");
-        }
-        logdl("[setDefaultFallbackSubId] subId=" + i);
-        if (SubscriptionManager.isValidSubscriptionId(i)) {
-            int phoneId = getPhoneId(i);
-            if (phoneId < 0 || (phoneId >= TelephonyManager.getDefault().getPhoneCount() && TelephonyManager.getDefault().getSimCount() != 1)) {
-                logdl("[setDefaultFallbackSubId] not set invalid phoneId=" + phoneId + " subId=" + i);
-                return;
-            }
-            logdl("[setDefaultFallbackSubId] set mDefaultFallbackSubId=" + i);
-            mDefaultFallbackSubId = i;
-            MccTable.updateMccMncConfiguration(this.mContext, TelephonyManager.getDefault().getSimOperator(phoneId), false);
-            Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_SUBSCRIPTION_CHANGED");
-            intent.addFlags(536870912);
-            SubscriptionManager.putPhoneIdAndSubIdExtra(intent, phoneId, i);
-            logdl("[setDefaultFallbackSubId] broadcast default subId changed phoneId=" + phoneId + " subId=" + i);
-            this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
-        }
+    private void broadcastSimInfoContentChanged() {
+        this.mContext.sendBroadcast(new Intent("android.intent.action.ACTION_SUBINFO_CONTENT_CHANGE"));
+        this.mContext.sendBroadcast(new Intent("android.intent.action.ACTION_SUBINFO_RECORD_UPDATED"));
     }
 
-    private boolean shouldDefaultBeCleared(List<SubscriptionInfo> list, int i) {
-        logdl("[shouldDefaultBeCleared: subId] " + i);
-        if (list == null) {
-            logdl("[shouldDefaultBeCleared] return true no records subId=" + i);
+    private boolean checkNotifyPermission(String method) {
+        if (this.mContext.checkCallingOrSelfPermission("android.permission.MODIFY_PHONE_STATE") == 0) {
             return true;
-        } else if (SubscriptionManager.isValidSubscriptionId(i)) {
-            for (SubscriptionInfo subscriptionId : list) {
-                int subscriptionId2 = subscriptionId.getSubscriptionId();
-                logdl("[shouldDefaultBeCleared] Record.id: " + subscriptionId2);
-                if (subscriptionId2 == i) {
-                    logdl("[shouldDefaultBeCleared] return false subId is active, subId=" + i);
-                    return false;
+        }
+        logd("checkNotifyPermission Permission Denial: " + method + " from pid=" + Binder.getCallingPid() + ", uid=" + Binder.getCallingUid());
+        return false;
+    }
+
+    public void notifySubscriptionInfoChanged() {
+        if (checkNotifyPermission("notifySubscriptionInfoChanged")) {
+            ITelephonyRegistry tr = ITelephonyRegistry.Stub.asInterface(ServiceManager.getService("telephony.registry"));
+            try {
+                logd("notifySubscriptionInfoChanged:");
+                tr.notifySubscriptionInfoChanged();
+            } catch (RemoteException e) {
+            }
+            broadcastSimInfoContentChanged();
+        }
+    }
+
+    private SubscriptionInfo getSubInfoRecord(Cursor cursor) {
+        int id = cursor.getInt(cursor.getColumnIndexOrThrow("_id"));
+        String iccId = cursor.getString(cursor.getColumnIndexOrThrow("icc_id"));
+        int simSlotIndex = cursor.getInt(cursor.getColumnIndexOrThrow("sim_id"));
+        String displayName = cursor.getString(cursor.getColumnIndexOrThrow("display_name"));
+        String carrierName = cursor.getString(cursor.getColumnIndexOrThrow("carrier_name"));
+        int nameSource = cursor.getInt(cursor.getColumnIndexOrThrow("name_source"));
+        int iconTint = cursor.getInt(cursor.getColumnIndexOrThrow("color"));
+        String number = cursor.getString(cursor.getColumnIndexOrThrow(IccProvider.STR_NUMBER));
+        int dataRoaming = cursor.getInt(cursor.getColumnIndexOrThrow("data_roaming"));
+        Bitmap iconBitmap = BitmapFactory.decodeResource(this.mContext.getResources(), 17302605);
+        int mcc = cursor.getInt(cursor.getColumnIndexOrThrow(Telephony.Carriers.MCC));
+        int mnc = cursor.getInt(cursor.getColumnIndexOrThrow(Telephony.Carriers.MNC));
+        String countryIso = getSubscriptionCountryIso(id);
+        int status = cursor.getInt(cursor.getColumnIndexOrThrow("sub_state"));
+        int nwMode = cursor.getInt(cursor.getColumnIndexOrThrow("network_mode"));
+        logd("[getSubInfoRecord] id:" + id + " iccid:" + iccId + " simSlotIndex:" + simSlotIndex + " displayName:" + displayName + " nameSource:" + nameSource + " iconTint:" + iconTint + " dataRoaming:" + dataRoaming + " mcc:" + mcc + " mnc:" + mnc + " countIso:" + countryIso + " status:" + status + " nwMode:" + nwMode);
+        String line1Number = this.mTelephonyManager.getLine1NumberForSubscriber(id);
+        if (!TextUtils.isEmpty(line1Number) && !line1Number.equals(number)) {
+            logd("Line1Number is different: " + line1Number);
+            number = line1Number;
+        }
+        return new SubscriptionInfo(id, iccId, simSlotIndex, displayName, carrierName, nameSource, iconTint, number, dataRoaming, iconBitmap, mcc, mnc, countryIso, status, nwMode);
+    }
+
+    private String getSubscriptionCountryIso(int subId) {
+        int phoneId = getPhoneId(subId);
+        return phoneId < 0 ? "" : TelephonyManager.getTelephonyProperty(phoneId, "gsm.sim.operator.iso-country", "");
+    }
+
+    private List<SubscriptionInfo> getSubInfo(String selection, Object queryKey) {
+        ArrayList<SubscriptionInfo> subList;
+        logd("selection:" + selection + " " + queryKey);
+        String[] selectionArgs = null;
+        if (queryKey != null) {
+            selectionArgs = new String[]{queryKey.toString()};
+        }
+        ArrayList<SubscriptionInfo> subList2 = null;
+        Cursor cursor = this.mContext.getContentResolver().query(SubscriptionManager.CONTENT_URI, null, selection, selectionArgs, null);
+        try {
+            if (cursor != null) {
+                ArrayList<SubscriptionInfo> subList3 = null;
+                while (cursor.moveToNext()) {
+                    try {
+                        SubscriptionInfo subInfo = getSubInfoRecord(cursor);
+                        if (subInfo != null) {
+                            if (subList3 == null) {
+                                subList = new ArrayList<>();
+                            } else {
+                                subList = subList3;
+                            }
+                            subList.add(subInfo);
+                        } else {
+                            subList = subList3;
+                        }
+                        subList3 = subList;
+                    } catch (Throwable th) {
+                        th = th;
+                        if (cursor != null) {
+                            cursor.close();
+                        }
+                        throw th;
+                    }
+                }
+                subList2 = subList3;
+            } else {
+                logd("Query fail");
+            }
+            if (cursor != null) {
+                cursor.close();
+            }
+            return subList2;
+        } catch (Throwable th2) {
+            th = th2;
+        }
+    }
+
+    private int getUnusedColor() {
+        List<SubscriptionInfo> availableSubInfos = getActiveSubscriptionInfoList();
+        this.colorArr = this.mContext.getResources().getIntArray(17235978);
+        int colorIdx = 0;
+        if (availableSubInfos != null) {
+            for (int i = 0; i < this.colorArr.length; i++) {
+                int j = 0;
+                while (j < availableSubInfos.size() && this.colorArr[i] != availableSubInfos.get(j).getIconTint()) {
+                    j++;
+                }
+                if (j == availableSubInfos.size()) {
+                    return this.colorArr[i];
                 }
             }
-            logdl("[shouldDefaultBeCleared] return true not active subId=" + i);
-            return true;
+            colorIdx = availableSubInfos.size() % this.colorArr.length;
+        }
+        return this.colorArr[colorIdx];
+    }
+
+    public SubscriptionInfo getActiveSubscriptionInfo(int subId) {
+        enforceSubscriptionPermission();
+        if (!SubscriptionManager.isValidSubscriptionId(subId) || !isSubInfoReady()) {
+            logd("[getSubInfoUsingSubIdx]- invalid subId or not ready = " + subId);
+            return null;
+        }
+        List<SubscriptionInfo> subList = getActiveSubscriptionInfoList();
+        if (subList != null) {
+            for (SubscriptionInfo si : subList) {
+                if (si.getSubscriptionId() == subId) {
+                    logd("[getActiveSubInfoForSubscriber]+ subId=" + subId + " subInfo=" + si);
+                    return si;
+                }
+            }
+        }
+        logd("[getActiveSubInfoForSubscriber]- subId=" + subId + " subList=" + subList + " subInfo=null");
+        return null;
+    }
+
+    public SubscriptionInfo getActiveSubscriptionInfoForIccId(String iccId) {
+        enforceSubscriptionPermission();
+        List<SubscriptionInfo> subList = getActiveSubscriptionInfoList();
+        if (subList != null) {
+            for (SubscriptionInfo si : subList) {
+                if (si.getIccId() == iccId) {
+                    logd("[getActiveSubInfoUsingIccId]+ iccId=" + iccId + " subInfo=" + si);
+                    return si;
+                }
+            }
+        }
+        logd("[getActiveSubInfoUsingIccId]+ iccId=" + iccId + " subList=" + subList + " subInfo=null");
+        return null;
+    }
+
+    public SubscriptionInfo getActiveSubscriptionInfoForSimSlotIndex(int slotIdx) {
+        enforceSubscriptionPermission();
+        List<SubscriptionInfo> subList = getActiveSubscriptionInfoList();
+        if (subList != null) {
+            for (SubscriptionInfo si : subList) {
+                if (si.getSimSlotIndex() == slotIdx) {
+                    logd("[getActiveSubscriptionInfoForSimSlotIndex]+ slotIdx=" + slotIdx + " subId=" + si);
+                    return si;
+                }
+            }
+            logd("[getActiveSubscriptionInfoForSimSlotIndex]+ slotIdx=" + slotIdx + " subId=null");
         } else {
-            logdl("[shouldDefaultBeCleared] return false only one subId, subId=" + i);
-            return false;
+            logd("[getActiveSubscriptionInfoForSimSlotIndex]+ subList=null");
+        }
+        return null;
+    }
+
+    public List<SubscriptionInfo> getAllSubInfoList() {
+        logd("[getAllSubInfoList]+");
+        enforceSubscriptionPermission();
+        List<SubscriptionInfo> subList = getSubInfo(null, null);
+        if (subList != null) {
+            logd("[getAllSubInfoList]- " + subList.size() + " infos return");
+        } else {
+            logd("[getAllSubInfoList]- no info return");
+        }
+        return subList;
+    }
+
+    public List<SubscriptionInfo> getActiveSubscriptionInfoList() {
+        enforceSubscriptionPermission();
+        logdl("[getActiveSubInfoList]+");
+        if (!isSubInfoReady()) {
+            logdl("[getActiveSubInfoList] Sub Controller not ready");
+            return null;
+        }
+        List<SubscriptionInfo> subList = getSubInfo("sim_id>=0", null);
+        if (subList != null) {
+            Collections.sort(subList, new Comparator<SubscriptionInfo>() { // from class: com.android.internal.telephony.SubscriptionController.2
+                public int compare(SubscriptionInfo arg0, SubscriptionInfo arg1) {
+                    int flag = arg0.getSimSlotIndex() - arg1.getSimSlotIndex();
+                    if (flag == 0) {
+                        return arg0.getSubscriptionId() - arg1.getSubscriptionId();
+                    }
+                    return flag;
+                }
+            });
+            logdl("[getActiveSubInfoList]- " + subList.size() + " infos return");
+        } else {
+            logdl("[getActiveSubInfoList]- no info return");
+        }
+        return subList;
+    }
+
+    public int getActiveSubInfoCount() {
+        logd("[getActiveSubInfoCount]+");
+        List<SubscriptionInfo> records = getActiveSubscriptionInfoList();
+        if (records == null) {
+            logd("[getActiveSubInfoCount] records null");
+            return 0;
+        }
+        logd("[getActiveSubInfoCount]- count: " + records.size());
+        return records.size();
+    }
+
+    public int getAllSubInfoCount() {
+        logd("[getAllSubInfoCount]+");
+        enforceSubscriptionPermission();
+        Cursor cursor = this.mContext.getContentResolver().query(SubscriptionManager.CONTENT_URI, null, null, null, null);
+        if (cursor != null) {
+            try {
+                int count = cursor.getCount();
+                logd("[getAllSubInfoCount]- " + count + " SUB(s) in DB");
+            } finally {
+                if (cursor != null) {
+                    cursor.close();
+                }
+            }
+        } else {
+            if (cursor != null) {
+                cursor.close();
+            }
+            logd("[getAllSubInfoCount]- no SUB in DB");
+            return 0;
         }
     }
 
-    private static void slogd(String str) {
-        Rlog.d(LOG_TAG, str);
+    public int getActiveSubInfoCountMax() {
+        return this.mTelephonyManager.getSimCount();
     }
 
-    private void updateAllDataConnectionTrackers() {
-        int length = sProxyPhones.length;
-        logdl("[updateAllDataConnectionTrackers] sProxyPhones.length=" + length);
-        for (int i = 0; i < length; i++) {
-            logdl("[updateAllDataConnectionTrackers] phoneId=" + i);
-            sProxyPhones[i].updateDataConnectionTracker();
-        }
-    }
-
-    private void updateDataSubId(AsyncResult asyncResult) {
-        Integer num = (Integer) asyncResult.result;
-        logd(" updateDataSubId,  subId=" + num + " exception " + asyncResult.exception);
-        if (asyncResult.exception == null) {
-            setDataSubId(num.intValue());
-            this.mScheduler.updateCurrentDds(null);
-            broadcastDefaultDataSubIdChanged(num.intValue());
-            updateAllDataConnectionTrackers();
-            return;
-        }
-        int defaultDataSubId = getDefaultDataSubId();
-        logd("DDS switch failed, enforce last dds = " + defaultDataSubId);
-        setDefaultDataSubId(defaultDataSubId);
-    }
-
-    private void validateSubId(int i) {
-        logd("validateSubId subId: " + i);
-        if (!SubscriptionManager.isValidSubscriptionId(i)) {
-            throw new RuntimeException("Invalid sub id passed as parameter");
-        } else if (i == Integer.MAX_VALUE) {
-            throw new RuntimeException("Default sub id passed as parameter");
-        }
-    }
-
-    public void activateSubId(int i) {
-        if (getSubState(i) == 1) {
-            logd("activateSubId: subscription already active, subId = " + i);
-            return;
-        }
-        SubscriptionHelper.getInstance().setUiccSubscription(getSlotId(i), 1);
-    }
-
-    /* JADX WARNING: Removed duplicated region for block: B:18:0x00fe  */
-    /* JADX WARNING: Removed duplicated region for block: B:21:0x0114 A:{SYNTHETIC, Splitter:B:21:0x0114} */
-    /* JADX WARNING: Removed duplicated region for block: B:37:0x01ef  */
-    public int addSubInfoRecord(java.lang.String r13, int r14) {
+    /* JADX WARN: Removed duplicated region for block: B:20:0x012e  */
+    /* JADX WARN: Removed duplicated region for block: B:40:0x024a  */
+    /* JADX WARN: Removed duplicated region for block: B:63:0x0147 A[EXC_TOP_SPLITTER, SYNTHETIC] */
+    /*
+        Code decompiled incorrectly, please refer to instructions dump.
+        To view partially-correct code enable 'Show inconsistent code' option in preferences
+    */
+    public int addSubInfoRecord(java.lang.String r23, int r24) {
         /*
-        r12 = this;
-        r0 = -1;
-        r11 = 2;
-        r5 = 0;
-        r10 = 1;
-        r7 = 0;
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "[addSubInfoRecord]+ iccId:";
-        r1 = r1.append(r2);
-        r1 = r1.append(r13);
-        r2 = " slotId:";
-        r1 = r1.append(r2);
-        r1 = r1.append(r14);
-        r1 = r1.toString();
-        r12.logdl(r1);
-        r12.enforceSubscriptionPermission();
-        if (r13 != 0) goto L_0x0030;
-    L_0x002a:
-        r1 = "[addSubInfoRecord]- null iccId";
-        r12.logdl(r1);
-    L_0x002f:
-        return r0;
-    L_0x0030:
-        r1 = r12.getSubId(r14);
-        if (r1 == 0) goto L_0x0039;
-    L_0x0036:
-        r2 = r1.length;
-        if (r2 != 0) goto L_0x0050;
-    L_0x0039:
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r3 = "[addSubInfoRecord]- getSubId failed subIds == null || length == 0 subIds=";
-        r2 = r2.append(r3);
-        r1 = r2.append(r1);
-        r1 = r1.toString();
-        r12.logdl(r1);
-        goto L_0x002f;
-    L_0x0050:
-        r0 = r12.mTelephonyManager;
-        r1 = r1[r7];
-        r0 = r0.getSimOperatorNameForSubscription(r1);
-        r1 = android.text.TextUtils.isEmpty(r0);
-        if (r1 != 0) goto L_0x0214;
-    L_0x005e:
-        r6 = r0;
-    L_0x005f:
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "[addSubInfoRecord] sim name = ";
-        r1 = r1.append(r2);
-        r1 = r1.append(r6);
-        r1 = r1.toString();
-        r12.logdl(r1);
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "[addSubInfoRecord] carrier name = ";
-        r1 = r1.append(r2);
-        r0 = r1.append(r0);
-        r0 = r0.toString();
-        r12.logdl(r0);
-        r0 = r12.mContext;
-        r0 = r0.getContentResolver();
-        r1 = android.telephony.SubscriptionManager.CONTENT_URI;
-        r2 = 3;
-        r2 = new java.lang.String[r2];
-        r3 = "_id";
-        r2[r7] = r3;
-        r3 = "sim_id";
-        r2[r10] = r3;
-        r3 = "name_source";
-        r2[r11] = r3;
-        r3 = "icc_id=?";
-        r4 = new java.lang.String[r10];
-        r4[r7] = r13;
-        r1 = r0.query(r1, r2, r3, r4, r5);
-        r2 = r12.getUnusedColor();
-        if (r1 == 0) goto L_0x00b8;
-    L_0x00b2:
-        r3 = r1.moveToFirst();	 Catch:{ all -> 0x0280 }
-        if (r3 != 0) goto L_0x0230;
-    L_0x00b8:
-        r3 = new android.content.ContentValues;	 Catch:{ all -> 0x0280 }
-        r3.<init>();	 Catch:{ all -> 0x0280 }
-        r4 = "icc_id";
-        r3.put(r4, r13);	 Catch:{ all -> 0x0280 }
-        r4 = "color";
-        r2 = java.lang.Integer.valueOf(r2);	 Catch:{ all -> 0x0280 }
-        r3.put(r4, r2);	 Catch:{ all -> 0x0280 }
-        r2 = "sim_id";
-        r4 = java.lang.Integer.valueOf(r14);	 Catch:{ all -> 0x0280 }
-        r3.put(r2, r4);	 Catch:{ all -> 0x0280 }
-        r2 = "display_name";
-        r3.put(r2, r6);	 Catch:{ all -> 0x0280 }
-        r2 = "carrier_name";
-        r4 = "";
-        r3.put(r2, r4);	 Catch:{ all -> 0x0280 }
-        r2 = android.telephony.SubscriptionManager.CONTENT_URI;	 Catch:{ all -> 0x0280 }
-        r2 = r0.insert(r2, r3);	 Catch:{ all -> 0x0280 }
-        r3 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0280 }
-        r3.<init>();	 Catch:{ all -> 0x0280 }
-        r4 = "[addSubInfoRecord] New record created: ";
-        r3 = r3.append(r4);	 Catch:{ all -> 0x0280 }
-        r2 = r3.append(r2);	 Catch:{ all -> 0x0280 }
-        r2 = r2.toString();	 Catch:{ all -> 0x0280 }
-        r12.logdl(r2);	 Catch:{ all -> 0x0280 }
-    L_0x00fc:
-        if (r1 == 0) goto L_0x0101;
-    L_0x00fe:
-        r1.close();
-    L_0x0101:
-        r1 = android.telephony.SubscriptionManager.CONTENT_URI;
-        r3 = "sim_id=?";
-        r4 = new java.lang.String[r10];
-        r2 = java.lang.String.valueOf(r14);
-        r4[r7] = r2;
-        r2 = r5;
-        r1 = r0.query(r1, r2, r3, r4, r5);
-        if (r1 == 0) goto L_0x01ed;
-    L_0x0114:
-        r0 = r1.moveToFirst();	 Catch:{ all -> 0x028e }
-        if (r0 == 0) goto L_0x01ed;
-    L_0x011a:
-        r0 = "_id";
-        r0 = r1.getColumnIndexOrThrow(r0);	 Catch:{ all -> 0x028e }
-        r2 = r1.getInt(r0);	 Catch:{ all -> 0x028e }
-        r0 = mSlotIdxToSubId;	 Catch:{ all -> 0x028e }
-        r3 = java.lang.Integer.valueOf(r14);	 Catch:{ all -> 0x028e }
-        r0 = r0.get(r3);	 Catch:{ all -> 0x028e }
-        r0 = (java.lang.Integer) r0;	 Catch:{ all -> 0x028e }
-        if (r0 == 0) goto L_0x013c;
-    L_0x0132:
-        r0 = r0.intValue();	 Catch:{ all -> 0x028e }
-        r0 = android.telephony.SubscriptionManager.isValidSubscriptionId(r0);	 Catch:{ all -> 0x028e }
-        if (r0 != 0) goto L_0x0287;
-    L_0x013c:
-        r0 = mSlotIdxToSubId;	 Catch:{ all -> 0x028e }
-        r3 = java.lang.Integer.valueOf(r14);	 Catch:{ all -> 0x028e }
-        r4 = java.lang.Integer.valueOf(r2);	 Catch:{ all -> 0x028e }
-        r0.put(r3, r4);	 Catch:{ all -> 0x028e }
-        r0 = r12.getActiveSubInfoCountMax();	 Catch:{ all -> 0x028e }
-        r3 = r12.getDefaultSubId();	 Catch:{ all -> 0x028e }
-        r4 = new java.lang.StringBuilder;	 Catch:{ all -> 0x028e }
-        r4.<init>();	 Catch:{ all -> 0x028e }
-        r5 = "[addSubInfoRecord] mSlotIdxToSubId.size=";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x028e }
-        r5 = mSlotIdxToSubId;	 Catch:{ all -> 0x028e }
-        r5 = r5.size();	 Catch:{ all -> 0x028e }
-        r4 = r4.append(r5);	 Catch:{ all -> 0x028e }
-        r5 = " slotId=";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x028e }
-        r4 = r4.append(r14);	 Catch:{ all -> 0x028e }
-        r5 = " subId=";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x028e }
-        r4 = r4.append(r2);	 Catch:{ all -> 0x028e }
-        r5 = " defaultSubId=";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x028e }
-        r4 = r4.append(r3);	 Catch:{ all -> 0x028e }
-        r5 = " simCount=";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x028e }
-        r4 = r4.append(r0);	 Catch:{ all -> 0x028e }
-        r4 = r4.toString();	 Catch:{ all -> 0x028e }
-        r12.logdl(r4);	 Catch:{ all -> 0x028e }
-        r3 = android.telephony.SubscriptionManager.isValidSubscriptionId(r3);	 Catch:{ all -> 0x028e }
-        if (r3 == 0) goto L_0x019d;
-    L_0x019b:
-        if (r0 != r10) goto L_0x01a0;
-    L_0x019d:
-        r12.setDefaultFallbackSubId(r2);	 Catch:{ all -> 0x028e }
-    L_0x01a0:
-        if (r0 != r10) goto L_0x01c1;
-    L_0x01a2:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x028e }
-        r0.<init>();	 Catch:{ all -> 0x028e }
-        r3 = "[addSubInfoRecord] one sim set defaults to subId=";
-        r0 = r0.append(r3);	 Catch:{ all -> 0x028e }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x028e }
-        r0 = r0.toString();	 Catch:{ all -> 0x028e }
-        r12.logdl(r0);	 Catch:{ all -> 0x028e }
-        r12.setDataSubId(r2);	 Catch:{ all -> 0x028e }
-        r12.setDefaultSmsSubId(r2);	 Catch:{ all -> 0x028e }
-        r12.setDefaultVoiceSubId(r2);	 Catch:{ all -> 0x028e }
-    L_0x01c1:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x028e }
-        r0.<init>();	 Catch:{ all -> 0x028e }
-        r3 = "[addSubInfoRecord] hashmap(";
-        r0 = r0.append(r3);	 Catch:{ all -> 0x028e }
-        r0 = r0.append(r14);	 Catch:{ all -> 0x028e }
-        r3 = ",";
-        r0 = r0.append(r3);	 Catch:{ all -> 0x028e }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x028e }
-        r2 = ")";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x028e }
-        r0 = r0.toString();	 Catch:{ all -> 0x028e }
-        r12.logdl(r0);	 Catch:{ all -> 0x028e }
-        r0 = r1.moveToNext();	 Catch:{ all -> 0x028e }
-        if (r0 != 0) goto L_0x011a;
-    L_0x01ed:
-        if (r1 == 0) goto L_0x01f2;
-    L_0x01ef:
-        r1.close();
-    L_0x01f2:
-        r12.updateAllDataConnectionTrackers();
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "[addSubInfoRecord]- info size=";
-        r0 = r0.append(r1);
-        r1 = mSlotIdxToSubId;
-        r1 = r1.size();
-        r0 = r0.append(r1);
-        r0 = r0.toString();
-        r12.logdl(r0);
-        r0 = r7;
-        goto L_0x002f;
-    L_0x0214:
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "CARD ";
-        r1 = r1.append(r2);
-        r2 = r14 + 1;
-        r2 = java.lang.Integer.toString(r2);
-        r1 = r1.append(r2);
-        r1 = r1.toString();
-        r6 = r1;
-        goto L_0x005f;
-    L_0x0230:
-        r2 = 0;
-        r2 = r1.getInt(r2);	 Catch:{ all -> 0x0280 }
-        r3 = 1;
-        r3 = r1.getInt(r3);	 Catch:{ all -> 0x0280 }
-        r4 = 2;
-        r4 = r1.getInt(r4);	 Catch:{ all -> 0x0280 }
-        r8 = new android.content.ContentValues;	 Catch:{ all -> 0x0280 }
-        r8.<init>();	 Catch:{ all -> 0x0280 }
-        if (r14 == r3) goto L_0x024f;
-    L_0x0246:
-        r3 = "sim_id";
-        r9 = java.lang.Integer.valueOf(r14);	 Catch:{ all -> 0x0280 }
-        r8.put(r3, r9);	 Catch:{ all -> 0x0280 }
-    L_0x024f:
-        if (r4 == r11) goto L_0x0256;
-    L_0x0251:
-        r3 = "display_name";
-        r8.put(r3, r6);	 Catch:{ all -> 0x0280 }
-    L_0x0256:
-        r3 = r8.size();	 Catch:{ all -> 0x0280 }
-        if (r3 <= 0) goto L_0x0279;
-    L_0x025c:
-        r3 = android.telephony.SubscriptionManager.CONTENT_URI;	 Catch:{ all -> 0x0280 }
-        r4 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0280 }
-        r4.<init>();	 Catch:{ all -> 0x0280 }
-        r6 = "_id=";
-        r4 = r4.append(r6);	 Catch:{ all -> 0x0280 }
-        r2 = java.lang.Integer.toString(r2);	 Catch:{ all -> 0x0280 }
-        r2 = r4.append(r2);	 Catch:{ all -> 0x0280 }
-        r2 = r2.toString();	 Catch:{ all -> 0x0280 }
-        r4 = 0;
-        r0.update(r3, r8, r2, r4);	 Catch:{ all -> 0x0280 }
-    L_0x0279:
-        r2 = "[addSubInfoRecord] Record already exists";
-        r12.logdl(r2);	 Catch:{ all -> 0x0280 }
-        goto L_0x00fc;
-    L_0x0280:
-        r0 = move-exception;
-        if (r1 == 0) goto L_0x0286;
-    L_0x0283:
-        r1.close();
-    L_0x0286:
-        throw r0;
-    L_0x0287:
-        r0 = "[addSubInfoRecord] currentSubId != null && currentSubId is valid, IGNORE";
-        r12.logdl(r0);	 Catch:{ all -> 0x028e }
-        goto L_0x01c1;
-    L_0x028e:
-        r0 = move-exception;
-        if (r1 == 0) goto L_0x0294;
-    L_0x0291:
-        r1.close();
-    L_0x0294:
-        throw r0;
+            Method dump skipped, instructions count: 766
+            To view this dump change 'Code comments level' option to 'DEBUG'
         */
         throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.SubscriptionController.addSubInfoRecord(java.lang.String, int):int");
     }
 
-    public void clearDefaultsForInactiveSubIds() {
-        List activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-        logdl("[clearDefaultsForInactiveSubIds] records: " + activeSubscriptionInfoList);
-        if (shouldDefaultBeCleared(activeSubscriptionInfoList, getDefaultDataSubId())) {
-            logd("[clearDefaultsForInactiveSubIds] clearing default data sub id");
-            setDefaultDataSubId(-1);
+    public boolean setPlmnSpn(int slotId, boolean showPlmn, String plmn, boolean showSpn, String spn) {
+        int[] subIds = getSubId(slotId);
+        if (this.mContext.getPackageManager().resolveContentProvider(SubscriptionManager.CONTENT_URI.getAuthority(), 0) == null || subIds == null || !SubscriptionManager.isValidSubscriptionId(subIds[0])) {
+            logd("[setPlmnSpn] No valid subscription to store info");
+            notifySubscriptionInfoChanged();
+            return false;
         }
-        if (shouldDefaultBeCleared(activeSubscriptionInfoList, getDefaultSmsSubId())) {
-            logdl("[clearDefaultsForInactiveSubIds] clearing default sms sub id");
-            setDefaultSmsSubId(-1);
+        String carrierText = "";
+        if (showPlmn) {
+            carrierText = plmn;
+            if (showSpn) {
+                carrierText = carrierText + this.mContext.getString(17041030).toString() + spn;
+            }
+        } else if (showSpn) {
+            carrierText = spn;
         }
-        if (shouldDefaultBeCleared(activeSubscriptionInfoList, getDefaultVoiceSubId())) {
-            logdl("[clearDefaultsForInactiveSubIds] clearing default voice sub id");
-            setDefaultVoiceSubId(-1);
+        for (int i : subIds) {
+            setCarrierText(carrierText, i);
         }
+        return true;
+    }
+
+    public int setCarrierText(String text, int subId) {
+        logd("[setCarrierText]+ text:" + text + " subId:" + subId);
+        enforceSubscriptionPermission();
+        ContentValues value = new ContentValues(1);
+        value.put("carrier_name", text);
+        int result = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        notifySubscriptionInfoChanged();
+        return result;
+    }
+
+    public int setIconTint(int tint, int subId) {
+        logd("[setIconTint]+ tint:" + tint + " subId:" + subId);
+        enforceSubscriptionPermission();
+        validateSubId(subId);
+        ContentValues value = new ContentValues(1);
+        value.put("color", Integer.valueOf(tint));
+        logd("[setIconTint]- tint:" + tint + " set");
+        int result = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        notifySubscriptionInfoChanged();
+        return result;
+    }
+
+    public int setDisplayName(String displayName, int subId) {
+        return setDisplayNameUsingSrc(displayName, subId, -1L);
+    }
+
+    public int setDisplayNameUsingSrc(String displayName, int subId, long nameSource) {
+        String nameToSet;
+        logd("[setDisplayName]+  displayName:" + displayName + " subId:" + subId + " nameSource:" + nameSource);
+        enforceSubscriptionPermission();
+        validateSubId(subId);
+        if (displayName == null) {
+            nameToSet = this.mContext.getString(17039374);
+        } else {
+            nameToSet = displayName;
+        }
+        ContentValues value = new ContentValues(1);
+        value.put("display_name", nameToSet);
+        if (nameSource >= 0) {
+            logd("Set nameSource=" + nameSource);
+            value.put("name_source", Long.valueOf(nameSource));
+        }
+        logd("[setDisplayName]- mDisplayName:" + nameToSet + " set");
+        int result = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        notifySubscriptionInfoChanged();
+        return result;
+    }
+
+    public int setDisplayNumber(String number, int subId) {
+        logd("[setDisplayNumber]+ number:" + number + " subId:" + subId);
+        enforceSubscriptionPermission();
+        validateSubId(subId);
+        int phoneId = getPhoneId(subId);
+        if (number == null || phoneId < 0 || phoneId >= TelephonyManager.getDefault().getPhoneCount()) {
+            logd("[setDispalyNumber]- fail");
+            return -1;
+        }
+        ContentValues value = new ContentValues(1);
+        value.put(IccProvider.STR_NUMBER, number);
+        int result = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        logd("[setDisplayNumber]- number: " + number + " update result :" + result);
+        notifySubscriptionInfoChanged();
+        return result;
+    }
+
+    public int setDataRoaming(int roaming, int subId) {
+        logd("[setDataRoaming]+ roaming:" + roaming + " subId:" + subId);
+        enforceSubscriptionPermission();
+        validateSubId(subId);
+        if (roaming < 0) {
+            logd("[setDataRoaming]- fail");
+            return -1;
+        }
+        ContentValues value = new ContentValues(1);
+        value.put("data_roaming", Integer.valueOf(roaming));
+        logd("[setDataRoaming]- roaming:" + roaming + " set");
+        int update = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        notifySubscriptionInfoChanged();
+        return update;
+    }
+
+    public int setMccMnc(String mccMnc, int subId) {
+        int mcc = 0;
+        int mnc = 0;
+        try {
+            mcc = Integer.parseInt(mccMnc.substring(0, 3));
+            mnc = Integer.parseInt(mccMnc.substring(3));
+        } catch (NumberFormatException e) {
+            loge("[setMccMnc] - couldn't parse mcc/mnc: " + mccMnc);
+        }
+        logd("[setMccMnc]+ mcc/mnc:" + mcc + "/" + mnc + " subId:" + subId);
+        ContentValues value = new ContentValues(2);
+        value.put(Telephony.Carriers.MCC, Integer.valueOf(mcc));
+        value.put(Telephony.Carriers.MNC, Integer.valueOf(mnc));
+        int result = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        notifySubscriptionInfoChanged();
+        return result;
+    }
+
+    public int getSlotId(int subId) {
+        if (subId == Integer.MAX_VALUE) {
+            subId = getDefaultSubId();
+        }
+        if (!SubscriptionManager.isValidSubscriptionId(subId)) {
+            logd("[getSlotId]- subId invalid");
+            return -1;
+        } else if (subId >= DUMMY_SUB_ID_BASE) {
+            logd("getSlotId,  received dummy subId " + subId);
+            return subId - DUMMY_SUB_ID_BASE;
+        } else if (mSlotIdxToSubId.size() == 0) {
+            logd("[getSlotId]- size == 0, return SIM_NOT_INSERTED instead");
+            return -1;
+        } else {
+            for (Map.Entry<Integer, Integer> entry : mSlotIdxToSubId.entrySet()) {
+                int intValue = entry.getKey().intValue();
+                if (subId == entry.getValue().intValue()) {
+                    return intValue;
+                }
+            }
+            logd("[getSlotId]- return fail");
+            return -1;
+        }
+    }
+
+    @Deprecated
+    public int[] getSubId(int slotIdx) {
+        if (slotIdx == Integer.MAX_VALUE) {
+            slotIdx = getSlotId(getDefaultSubId());
+            logd("[getSubId] map default slotIdx=" + slotIdx);
+        }
+        if (!SubscriptionManager.isValidSlotId(slotIdx)) {
+            logd("[getSubId]- invalid slotIdx=" + slotIdx);
+            return null;
+        } else if (mSlotIdxToSubId.size() == 0) {
+            logd("[getSubId]- mSlotIdToSubIdMap.size == 0, return DummySubIds slotIdx=" + slotIdx);
+            return getDummySubIds(slotIdx);
+        } else {
+            ArrayList<Integer> subIds = new ArrayList<>();
+            for (Map.Entry<Integer, Integer> entry : mSlotIdxToSubId.entrySet()) {
+                int slot = entry.getKey().intValue();
+                int sub = entry.getValue().intValue();
+                if (slotIdx == slot) {
+                    subIds.add(Integer.valueOf(sub));
+                }
+            }
+            int numSubIds = subIds.size();
+            if (numSubIds > 0) {
+                int[] subIdArr = new int[numSubIds];
+                for (int i = 0; i < numSubIds; i++) {
+                    subIdArr[i] = subIds.get(i).intValue();
+                }
+                return subIdArr;
+            }
+            logd("[getSubId]- numSubIds == 0, return DummySubIds slotIdx=" + slotIdx);
+            return getDummySubIds(slotIdx);
+        }
+    }
+
+    public int getPhoneId(int subId) {
+        if (subId == Integer.MAX_VALUE) {
+            subId = getDefaultSubId();
+            logdl("[getPhoneId] asked for default subId=" + subId);
+        }
+        if (!SubscriptionManager.isValidSubscriptionId(subId)) {
+            logdl("[getPhoneId]- invalid subId return=-1");
+            return -1;
+        } else if (subId >= DUMMY_SUB_ID_BASE) {
+            logd("getPhoneId,  received dummy subId " + subId);
+            return subId - DUMMY_SUB_ID_BASE;
+        } else if (mSlotIdxToSubId.size() == 0) {
+            int phoneId = mDefaultPhoneId;
+            logdl("[getPhoneId]- no sims, returning default phoneId=" + phoneId);
+            return phoneId;
+        } else {
+            for (Map.Entry<Integer, Integer> entry : mSlotIdxToSubId.entrySet()) {
+                int sim = entry.getKey().intValue();
+                if (subId == entry.getValue().intValue()) {
+                    logd("[getPhoneId]- return =" + sim);
+                    return sim;
+                }
+            }
+            int phoneId2 = mDefaultPhoneId;
+            logdl("[getPhoneId]- subId=" + subId + " not found return default phoneId=" + phoneId2);
+            return phoneId2;
+        }
+    }
+
+    private int[] getDummySubIds(int slotIdx) {
+        int numSubs = getActiveSubInfoCountMax();
+        if (numSubs <= 0) {
+            return null;
+        }
+        int[] dummyValues = new int[numSubs];
+        for (int i = 0; i < numSubs; i++) {
+            dummyValues[i] = DUMMY_SUB_ID_BASE + slotIdx;
+        }
+        logd("getDummySubIds: slotIdx=" + slotIdx + " return " + numSubs + " DummySubIds with each subId=" + dummyValues[0]);
+        return dummyValues;
     }
 
     public int clearSubInfo() {
@@ -885,791 +722,597 @@ public class SubscriptionController extends Stub {
         return size;
     }
 
-    public void deactivateSubId(int i) {
-        if (getSubState(i) == 0) {
-            logd("activateSubId: subscription already deactivated, subId = " + i);
-            return;
-        }
-        SubscriptionHelper.getInstance().setUiccSubscription(getSlotId(i), 0);
+    private void logvl(String msg) {
+        logv(msg);
+        this.mLocalLog.log(msg);
     }
 
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        this.mContext.enforceCallingOrSelfPermission("android.permission.DUMP", "Requires DUMP");
-        long clearCallingIdentity = Binder.clearCallingIdentity();
+    private void logv(String msg) {
+        Rlog.v(LOG_TAG, msg);
+    }
+
+    private void logdl(String msg) {
+        logd(msg);
+        this.mLocalLog.log(msg);
+    }
+
+    private static void slogd(String msg) {
+        Rlog.d(LOG_TAG, msg);
+    }
+
+    public void logd(String msg) {
+        Rlog.d(LOG_TAG, msg);
+    }
+
+    private void logel(String msg) {
+        loge(msg);
+        this.mLocalLog.log(msg);
+    }
+
+    private void loge(String msg) {
+        Rlog.e(LOG_TAG, msg);
+    }
+
+    public int getDefaultSubId() {
+        int subId;
+        if (this.mContext.getResources().getBoolean(17956947)) {
+            subId = getDefaultVoiceSubId();
+        } else {
+            subId = getDefaultDataSubId();
+        }
+        if (!isActiveSubId(subId)) {
+            return mDefaultFallbackSubId;
+        }
+        return subId;
+    }
+
+    public void setDefaultSmsSubId(int subId) {
+        if (subId == Integer.MAX_VALUE) {
+            throw new RuntimeException("setDefaultSmsSubId called with DEFAULT_SUB_ID");
+        }
+        logdl("[setDefaultSmsSubId] subId=" + subId);
+        Settings.Global.putInt(this.mContext.getContentResolver(), "multi_sim_sms", subId);
+        broadcastDefaultSmsSubIdChanged(subId);
+    }
+
+    private void broadcastDefaultSmsSubIdChanged(int subId) {
+        logdl("[broadcastDefaultSmsSubIdChanged] subId=" + subId);
+        Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_SMS_SUBSCRIPTION_CHANGED");
+        intent.addFlags(536870912);
+        intent.putExtra("subscription", subId);
+        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
+    }
+
+    public int getDefaultSmsSubId() {
+        return Settings.Global.getInt(this.mContext.getContentResolver(), "multi_sim_sms", -1);
+    }
+
+    public void setDefaultVoiceSubId(int subId) {
+        if (subId == Integer.MAX_VALUE) {
+            throw new RuntimeException("setDefaultVoiceSubId called with DEFAULT_SUB_ID");
+        }
+        logdl("[setDefaultVoiceSubId] subId=" + subId);
+        Settings.Global.putInt(this.mContext.getContentResolver(), "multi_sim_voice_call", subId);
+        broadcastDefaultVoiceSubIdChanged(subId);
+    }
+
+    private void broadcastDefaultVoiceSubIdChanged(int subId) {
+        logdl("[broadcastDefaultVoiceSubIdChanged] subId=" + subId);
+        Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_VOICE_SUBSCRIPTION_CHANGED");
+        intent.addFlags(536870912);
+        intent.putExtra("subscription", subId);
+        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
+    }
+
+    public int getDefaultVoiceSubId() {
+        return Settings.Global.getInt(this.mContext.getContentResolver(), "multi_sim_voice_call", -1);
+    }
+
+    public boolean isSMSPromptEnabled() {
+        int value = 0;
         try {
-            printWriter.println("SubscriptionController:");
-            printWriter.println(" defaultSubId=" + getDefaultSubId());
-            printWriter.println(" defaultDataSubId=" + getDefaultDataSubId());
-            printWriter.println(" defaultVoiceSubId=" + getDefaultVoiceSubId());
-            printWriter.println(" defaultSmsSubId=" + getDefaultSmsSubId());
-            printWriter.println(" defaultDataPhoneId=" + SubscriptionManager.from(this.mContext).getDefaultDataPhoneId());
-            printWriter.println(" defaultVoicePhoneId=" + SubscriptionManager.getDefaultVoicePhoneId());
-            printWriter.println(" defaultSmsPhoneId=" + SubscriptionManager.from(this.mContext).getDefaultSmsPhoneId());
-            printWriter.flush();
-            for (Entry entry : mSlotIdxToSubId.entrySet()) {
-                printWriter.println(" mSlotIdToSubIdMap[" + entry.getKey() + "]: subId=" + entry.getValue());
-            }
-            printWriter.flush();
-            printWriter.println("++++++++++++++++++++++++++++++++");
-            List<SubscriptionInfo> activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-            if (activeSubscriptionInfoList != null) {
-                printWriter.println(" ActiveSubInfoList:");
-                for (SubscriptionInfo subscriptionInfo : activeSubscriptionInfoList) {
-                    printWriter.println("  " + subscriptionInfo.toString());
-                }
-            } else {
-                printWriter.println(" ActiveSubInfoList: is null");
-            }
-            printWriter.flush();
-            printWriter.println("++++++++++++++++++++++++++++++++");
-            activeSubscriptionInfoList = getAllSubInfoList();
-            if (activeSubscriptionInfoList != null) {
-                printWriter.println(" AllSubInfoList:");
-                for (SubscriptionInfo subscriptionInfo2 : activeSubscriptionInfoList) {
-                    printWriter.println("  " + subscriptionInfo2.toString());
-                }
-            } else {
-                printWriter.println(" AllSubInfoList: is null");
-            }
-            printWriter.flush();
-            printWriter.println("++++++++++++++++++++++++++++++++");
-            this.mLocalLog.dump(fileDescriptor, printWriter, strArr);
-            printWriter.flush();
-            printWriter.println("++++++++++++++++++++++++++++++++");
-            printWriter.flush();
-        } finally {
-            Binder.restoreCallingIdentity(clearCallingIdentity);
+            value = Settings.Global.getInt(this.mContext.getContentResolver(), "multi_sim_sms_prompt");
+        } catch (Settings.SettingNotFoundException e) {
+            loge("Settings Exception Reading Dual Sim SMS Prompt Values");
         }
+        return value != 0;
     }
 
-    public int[] getActivatedSubIdList() {
-        Set entrySet = mSlotIdxToSubId.entrySet();
-        logd("getActivatedSubIdList: simInfoSet=" + entrySet);
-        int[] iArr = new int[entrySet.size()];
-        int i = 0;
-        Iterator it = entrySet.iterator();
-        while (true) {
-            int i2 = i;
-            if (it.hasNext()) {
-                iArr[i2] = ((Integer) ((Entry) it.next()).getValue()).intValue();
-                i = i2 + 1;
-            } else {
-                logd("getActivatedSubIdList: X subIdArr.length=" + iArr.length);
-                return iArr;
-            }
-        }
+    public void setSMSPromptEnabled(boolean enabled) {
+        Settings.Global.putInt(this.mContext.getContentResolver(), "multi_sim_sms_prompt", !enabled ? 0 : 1);
+        logd("setSMSPromptOption to " + enabled);
     }
 
-    public int[] getActiveSubIdList() {
-        Set entrySet = mSlotIdxToSubId.entrySet();
-        logdl("[getActiveSubIdList] simInfoSet=" + entrySet);
-        int[] iArr = new int[entrySet.size()];
-        int i = 0;
-        Iterator it = entrySet.iterator();
-        while (true) {
-            int i2 = i;
-            if (it.hasNext()) {
-                iArr[i2] = ((Integer) ((Entry) it.next()).getValue()).intValue();
-                i = i2 + 1;
-            } else {
-                logdl("[getActiveSubIdList] X subIdArr.length=" + iArr.length);
-                return iArr;
-            }
-        }
-    }
-
-    public int getActiveSubInfoCount() {
-        logd("[getActiveSubInfoCount]+");
-        List activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-        if (activeSubscriptionInfoList == null) {
-            logd("[getActiveSubInfoCount] records null");
-            return 0;
-        }
-        logd("[getActiveSubInfoCount]- count: " + activeSubscriptionInfoList.size());
-        return activeSubscriptionInfoList.size();
-    }
-
-    public int getActiveSubInfoCountMax() {
-        return this.mTelephonyManager.getSimCount();
-    }
-
-    public SubscriptionInfo getActiveSubscriptionInfo(int i) {
-        enforceSubscriptionPermission();
-        if (SubscriptionManager.isValidSubscriptionId(i) && isSubInfoReady()) {
-            List<SubscriptionInfo> activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-            if (activeSubscriptionInfoList != null) {
-                for (SubscriptionInfo subscriptionInfo : activeSubscriptionInfoList) {
-                    if (subscriptionInfo.getSubscriptionId() == i) {
-                        logd("[getActiveSubInfoForSubscriber]+ subId=" + i + " subInfo=" + subscriptionInfo);
-                        return subscriptionInfo;
-                    }
-                }
-            }
-            logd("[getActiveSubInfoForSubscriber]- subId=" + i + " subList=" + activeSubscriptionInfoList + " subInfo=null");
-            return null;
-        }
-        logd("[getSubInfoUsingSubIdx]- invalid subId or not ready = " + i);
-        return null;
-    }
-
-    public SubscriptionInfo getActiveSubscriptionInfoForIccId(String str) {
-        enforceSubscriptionPermission();
-        List<SubscriptionInfo> activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-        if (activeSubscriptionInfoList != null) {
-            for (SubscriptionInfo subscriptionInfo : activeSubscriptionInfoList) {
-                if (subscriptionInfo.getIccId() == str) {
-                    logd("[getActiveSubInfoUsingIccId]+ iccId=" + str + " subInfo=" + subscriptionInfo);
-                    return subscriptionInfo;
-                }
-            }
-        }
-        logd("[getActiveSubInfoUsingIccId]+ iccId=" + str + " subList=" + activeSubscriptionInfoList + " subInfo=null");
-        return null;
-    }
-
-    public SubscriptionInfo getActiveSubscriptionInfoForSimSlotIndex(int i) {
-        enforceSubscriptionPermission();
-        List<SubscriptionInfo> activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-        if (activeSubscriptionInfoList != null) {
-            for (SubscriptionInfo subscriptionInfo : activeSubscriptionInfoList) {
-                if (subscriptionInfo.getSimSlotIndex() == i) {
-                    logd("[getActiveSubscriptionInfoForSimSlotIndex]+ slotIdx=" + i + " subId=" + subscriptionInfo);
-                    return subscriptionInfo;
-                }
-            }
-            logd("[getActiveSubscriptionInfoForSimSlotIndex]+ slotIdx=" + i + " subId=null");
-        } else {
-            logd("[getActiveSubscriptionInfoForSimSlotIndex]+ subList=null");
-        }
-        return null;
-    }
-
-    public List<SubscriptionInfo> getActiveSubscriptionInfoList() {
-        List<SubscriptionInfo> list = null;
-        enforceSubscriptionPermission();
-        logdl("[getActiveSubInfoList]+");
-        if (isSubInfoReady()) {
-            list = getSubInfo("sim_id>=0", null);
-            if (list != null) {
-                Collections.sort(list, new Comparator<SubscriptionInfo>() {
-                    public int compare(SubscriptionInfo subscriptionInfo, SubscriptionInfo subscriptionInfo2) {
-                        int simSlotIndex = subscriptionInfo.getSimSlotIndex() - subscriptionInfo2.getSimSlotIndex();
-                        return simSlotIndex == 0 ? subscriptionInfo.getSubscriptionId() - subscriptionInfo2.getSubscriptionId() : simSlotIndex;
-                    }
-                });
-                logdl("[getActiveSubInfoList]- " + list.size() + " infos return");
-            } else {
-                logdl("[getActiveSubInfoList]- no info return");
-            }
-        } else {
-            logdl("[getActiveSubInfoList] Sub Controller not ready");
-        }
-        return list;
-    }
-
-    public int getAllSubInfoCount() {
-        logd("[getAllSubInfoCount]+");
-        enforceSubscriptionPermission();
-        Cursor query = this.mContext.getContentResolver().query(SubscriptionManager.CONTENT_URI, null, null, null, null);
-        if (query != null) {
-            try {
-                int count = query.getCount();
-                logd("[getAllSubInfoCount]- " + count + " SUB(s) in DB");
-                return count;
-            } finally {
-                if (query != null) {
-                    query.close();
-                }
-            }
-        } else {
-            if (query != null) {
-                query.close();
-            }
-            logd("[getAllSubInfoCount]- no SUB in DB");
-            return 0;
-        }
-    }
-
-    public List<SubscriptionInfo> getAllSubInfoList() {
-        logd("[getAllSubInfoList]+");
-        enforceSubscriptionPermission();
-        List subInfo = getSubInfo(null, null);
-        if (subInfo != null) {
-            logd("[getAllSubInfoList]- " + subInfo.size() + " infos return");
-        } else {
-            logd("[getAllSubInfoList]- no info return");
-        }
-        return subInfo;
+    public int getDefaultDataSubId() {
+        return Settings.Global.getInt(this.mContext.getContentResolver(), "multi_sim_data_call", -1);
     }
 
     public int getCurrentDds() {
         return this.mScheduler.getCurrentDds();
     }
 
-    public int getDefaultDataSubId() {
-        return Global.getInt(this.mContext.getContentResolver(), "multi_sim_data_call", -1);
-    }
-
-    public int getDefaultSmsSubId() {
-        return Global.getInt(this.mContext.getContentResolver(), "multi_sim_sms", -1);
-    }
-
-    public int getDefaultSubId() {
-        int defaultVoiceSubId = this.mContext.getResources().getBoolean(17956947) ? getDefaultVoiceSubId() : getDefaultDataSubId();
-        return !isActiveSubId(defaultVoiceSubId) ? mDefaultFallbackSubId : defaultVoiceSubId;
-    }
-
-    public int getDefaultVoiceSubId() {
-        return Global.getInt(this.mContext.getContentResolver(), "multi_sim_voice_call", -1);
-    }
-
-    public int getNwMode(int i) {
-        SubscriptionInfo activeSubscriptionInfo = getActiveSubscriptionInfo(i);
-        if (activeSubscriptionInfo != null) {
-            return activeSubscriptionInfo.mNwMode;
+    public void updateDataSubId(AsyncResult ar) {
+        Integer subId = (Integer) ar.result;
+        logd(" updateDataSubId,  subId=" + subId + " exception " + ar.exception);
+        if (ar.exception == null) {
+            setDataSubId(subId.intValue());
+            this.mScheduler.updateCurrentDds(null);
+            broadcastDefaultDataSubIdChanged(subId.intValue());
+            updateAllDataConnectionTrackers();
+            return;
         }
-        loge("getSubState: invalid subId = " + i);
+        int defaultDds = getDefaultDataSubId();
+        logd("DDS switch failed, enforce last dds = " + defaultDds);
+        setDefaultDataSubId(defaultDds);
+    }
+
+    public void setDefaultDataSubId(int subId) {
+        if (subId == Integer.MAX_VALUE) {
+            throw new RuntimeException("setDefaultDataSubId called with DEFAULT_SUB_ID");
+        }
+        logdl("[setDefaultDataSubId] subId=" + subId);
+        if (this.mDctController == null) {
+            this.mDctController = DctController.getInstance();
+            this.mDctController.registerForDefaultDataSwitchInfo(this.mDataConnectionHandler, 1, null);
+        }
+        this.mDctController.setDefaultDataSubId(subId);
+    }
+
+    public void setDataSubId(int subId) {
+        Settings.Global.putInt(this.mContext.getContentResolver(), "multi_sim_data_call", subId);
+    }
+
+    private void updateAllDataConnectionTrackers() {
+        int len = sProxyPhones.length;
+        logdl("[updateAllDataConnectionTrackers] sProxyPhones.length=" + len);
+        for (int phoneId = 0; phoneId < len; phoneId++) {
+            logdl("[updateAllDataConnectionTrackers] phoneId=" + phoneId);
+            sProxyPhones[phoneId].updateDataConnectionTracker();
+        }
+    }
+
+    private void broadcastDefaultDataSubIdChanged(int subId) {
+        logdl("[broadcastDefaultDataSubIdChanged] subId=" + subId);
+        Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED");
+        intent.addFlags(536870912);
+        intent.putExtra("subscription", getDefaultDataSubId());
+        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
+    }
+
+    private void setDefaultFallbackSubId(int subId) {
+        if (subId == Integer.MAX_VALUE) {
+            throw new RuntimeException("setDefaultSubId called with DEFAULT_SUB_ID");
+        }
+        logdl("[setDefaultFallbackSubId] subId=" + subId);
+        if (SubscriptionManager.isValidSubscriptionId(subId)) {
+            int phoneId = getPhoneId(subId);
+            if (phoneId < 0 || (phoneId >= TelephonyManager.getDefault().getPhoneCount() && TelephonyManager.getDefault().getSimCount() != 1)) {
+                logdl("[setDefaultFallbackSubId] not set invalid phoneId=" + phoneId + " subId=" + subId);
+                return;
+            }
+            logdl("[setDefaultFallbackSubId] set mDefaultFallbackSubId=" + subId);
+            mDefaultFallbackSubId = subId;
+            MccTable.updateMccMncConfiguration(this.mContext, TelephonyManager.getDefault().getSimOperator(phoneId), false);
+            Intent intent = new Intent("android.intent.action.ACTION_DEFAULT_SUBSCRIPTION_CHANGED");
+            intent.addFlags(536870912);
+            SubscriptionManager.putPhoneIdAndSubIdExtra(intent, phoneId, subId);
+            logdl("[setDefaultFallbackSubId] broadcast default subId changed phoneId=" + phoneId + " subId=" + subId);
+            this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
+        }
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class DataConnectionHandler extends Handler {
+        private DataConnectionHandler() {
+            SubscriptionController.this = r1;
+        }
+
+        @Override // android.os.Handler
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case 1:
+                    AsyncResult ar = (AsyncResult) msg.obj;
+                    SubscriptionController.this.logd("EVENT_SET_DEFAULT_DATA_DONE subId:" + ((Integer) ar.result));
+                    SubscriptionController.this.updateDataSubId(ar);
+                    return;
+                default:
+                    return;
+            }
+        }
+    }
+
+    public void clearDefaultsForInactiveSubIds() {
+        List<SubscriptionInfo> records = getActiveSubscriptionInfoList();
+        logdl("[clearDefaultsForInactiveSubIds] records: " + records);
+        if (shouldDefaultBeCleared(records, getDefaultDataSubId())) {
+            logd("[clearDefaultsForInactiveSubIds] clearing default data sub id");
+            setDefaultDataSubId(-1);
+        }
+        if (shouldDefaultBeCleared(records, getDefaultSmsSubId())) {
+            logdl("[clearDefaultsForInactiveSubIds] clearing default sms sub id");
+            setDefaultSmsSubId(-1);
+        }
+        if (shouldDefaultBeCleared(records, getDefaultVoiceSubId())) {
+            logdl("[clearDefaultsForInactiveSubIds] clearing default voice sub id");
+            setDefaultVoiceSubId(-1);
+        }
+    }
+
+    private boolean shouldDefaultBeCleared(List<SubscriptionInfo> records, int subId) {
+        logdl("[shouldDefaultBeCleared: subId] " + subId);
+        if (records == null) {
+            logdl("[shouldDefaultBeCleared] return true no records subId=" + subId);
+            return true;
+        } else if (!SubscriptionManager.isValidSubscriptionId(subId)) {
+            logdl("[shouldDefaultBeCleared] return false only one subId, subId=" + subId);
+            return false;
+        } else {
+            for (SubscriptionInfo record : records) {
+                int id = record.getSubscriptionId();
+                logdl("[shouldDefaultBeCleared] Record.id: " + id);
+                if (id == subId) {
+                    logdl("[shouldDefaultBeCleared] return false subId is active, subId=" + subId);
+                    return false;
+                }
+            }
+            logdl("[shouldDefaultBeCleared] return true not active subId=" + subId);
+            return true;
+        }
+    }
+
+    public int getSubIdUsingPhoneId(int phoneId) {
+        int[] subIds = getSubId(phoneId);
+        if (subIds == null || subIds.length == 0) {
+            return -1;
+        }
+        return subIds[0];
+    }
+
+    public int[] getSubIdUsingSlotId(int slotId) {
+        return getSubId(slotId);
+    }
+
+    public List<SubscriptionInfo> getSubInfoUsingSlotIdWithCheck(int slotId, boolean needCheck) {
+        Throwable th;
+        logd("[getSubInfoUsingSlotIdWithCheck]+ slotId:" + slotId);
+        enforceSubscriptionPermission();
+        if (slotId == Integer.MAX_VALUE) {
+            slotId = getSlotId(getDefaultSubId());
+        }
+        if (!SubscriptionManager.isValidSlotId(slotId)) {
+            logd("[getSubInfoUsingSlotIdWithCheck]- invalid slotId");
+            return null;
+        } else if (!needCheck || isSubInfoReady()) {
+            Cursor cursor = this.mContext.getContentResolver().query(SubscriptionManager.CONTENT_URI, null, "sim_id=?", new String[]{String.valueOf(slotId)}, null);
+            ArrayList<SubscriptionInfo> subList = null;
+            if (cursor != null) {
+                while (cursor.moveToNext()) {
+                    try {
+                        SubscriptionInfo subInfo = getSubInfoRecord(cursor);
+                        if (subInfo != null) {
+                            if (subList == null) {
+                                subList = new ArrayList<>();
+                            } else {
+                                subList = subList;
+                            }
+                            try {
+                                subList.add(subInfo);
+                            } catch (Throwable th2) {
+                                th = th2;
+                                if (cursor != null) {
+                                    cursor.close();
+                                }
+                                throw th;
+                            }
+                        } else {
+                            subList = subList;
+                        }
+                    } catch (Throwable th3) {
+                        th = th3;
+                    }
+                }
+                subList = subList;
+            }
+            if (cursor != null) {
+                cursor.close();
+            }
+            logd("[getSubInfoUsingSlotId]- null info return");
+            return subList;
+        } else {
+            logd("[getSubInfoUsingSlotIdWithCheck]- not ready");
+            return null;
+        }
+    }
+
+    private void validateSubId(int subId) {
+        logd("validateSubId subId: " + subId);
+        if (!SubscriptionManager.isValidSubscriptionId(subId)) {
+            throw new RuntimeException("Invalid sub id passed as parameter");
+        } else if (subId == Integer.MAX_VALUE) {
+            throw new RuntimeException("Default sub id passed as parameter");
+        }
+    }
+
+    public void updatePhonesAvailability(PhoneProxy[] phones) {
+        sProxyPhones = phones;
+    }
+
+    public int[] getActiveSubIdList() {
+        Set<Map.Entry<Integer, Integer>> simInfoSet = mSlotIdxToSubId.entrySet();
+        logdl("[getActiveSubIdList] simInfoSet=" + simInfoSet);
+        int[] subIdArr = new int[simInfoSet.size()];
+        int i = 0;
+        for (Map.Entry<Integer, Integer> entry : simInfoSet) {
+            subIdArr[i] = entry.getValue().intValue();
+            i++;
+        }
+        logdl("[getActiveSubIdList] X subIdArr.length=" + subIdArr.length);
+        return subIdArr;
+    }
+
+    public void activateSubId(int subId) {
+        if (getSubState(subId) == 1) {
+            logd("activateSubId: subscription already active, subId = " + subId);
+            return;
+        }
+        SubscriptionHelper.getInstance().setUiccSubscription(getSlotId(subId), 1);
+    }
+
+    public void deactivateSubId(int subId) {
+        if (getSubState(subId) == 0) {
+            logd("activateSubId: subscription already deactivated, subId = " + subId);
+            return;
+        }
+        SubscriptionHelper.getInstance().setUiccSubscription(getSlotId(subId), 0);
+    }
+
+    public void setNwMode(int subId, int nwMode) {
+        logd("setNwMode, nwMode: " + nwMode + " subId: " + subId);
+        ContentValues value = new ContentValues(1);
+        value.put("network_mode", Integer.valueOf(nwMode));
+        this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+    }
+
+    public int getNwMode(int subId) {
+        SubscriptionInfo subInfo = getActiveSubscriptionInfo(subId);
+        if (subInfo != null) {
+            return subInfo.mNwMode;
+        }
+        loge("getSubState: invalid subId = " + subId);
         return -1;
+    }
+
+    public int setSubState(int subId, int subStatus) {
+        int result = 0;
+        logd("setSubState, subStatus: " + subStatus + " subId: " + subId);
+        if (ModemStackController.getInstance().isStackReady()) {
+            ContentValues value = new ContentValues(1);
+            value.put("sub_state", Integer.valueOf(subStatus));
+            result = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, value, "_id=" + Integer.toString(subId), null);
+        }
+        Intent intent = new Intent("android.intent.action.ACTION_SUBINFO_CONTENT_CHANGE");
+        intent.putExtra("_id", subId);
+        intent.putExtra("columnName", "sub_state");
+        intent.putExtra("intContent", subStatus);
+        intent.putExtra("stringContent", "None");
+        this.mContext.sendBroadcast(intent);
+        this.mContext.sendBroadcast(new Intent("android.intent.action.ACTION_SUBINFO_RECORD_UPDATED"));
+        return result;
+    }
+
+    public int getSubState(int subId) {
+        SubscriptionInfo subInfo = getActiveSubscriptionInfo(subId);
+        if (subInfo == null || subInfo.getSimSlotIndex() < 0) {
+            return 0;
+        }
+        return subInfo.mStatus;
+    }
+
+    public void updateUserPrefs(boolean setDds) {
+        List<SubscriptionInfo> subInfoList = getActiveSubscriptionInfoList();
+        int mActCount = 0;
+        SubscriptionInfo mNextActivatedSub = null;
+        if (subInfoList == null) {
+            int[] dummySubId = getDummySubIds(mDefaultPhoneId);
+            logd("updateUserPrefs: subscription are not avaiable dds = " + getDefaultDataSubId() + " voice = " + getDefaultVoiceSubId() + " sms = " + getDefaultSmsSubId() + " setDDs = " + setDds);
+            setDefaultFallbackSubId(dummySubId[0]);
+            setDefaultVoiceSubId(dummySubId[0]);
+            setDefaultSmsSubId(dummySubId[0]);
+            setDataSubId(dummySubId[0]);
+            return;
+        }
+        for (SubscriptionInfo subInfo : subInfoList) {
+            if (getSubState(subInfo.getSubscriptionId()) == 1) {
+                mActCount++;
+                if (mNextActivatedSub == null) {
+                    mNextActivatedSub = subInfo;
+                }
+            }
+        }
+        logd("updateUserPrefs: active sub count = " + mActCount + " dds = " + getDefaultDataSubId() + " voice = " + getDefaultVoiceSubId() + " sms = " + getDefaultSmsSubId() + " setDDs = " + setDds);
+        if (mActCount < 2) {
+            setSMSPromptEnabled(false);
+            setVoicePromptEnabled(false);
+        }
+        if (mNextActivatedSub != null) {
+            if (getSubState(getDefaultSubId()) == 0) {
+                setDefaultFallbackSubId(mNextActivatedSub.getSubscriptionId());
+            }
+            int ddsSubId = getDefaultDataSubId();
+            int ddsSubState = getSubState(ddsSubId);
+            if (setDds || ddsSubState == 0) {
+                if (ddsSubState == 0) {
+                    ddsSubId = mNextActivatedSub.getSubscriptionId();
+                }
+                setDefaultDataSubId(ddsSubId);
+            }
+            if (getSubState(getDefaultVoiceSubId()) == 0 && !isVoicePromptEnabled()) {
+                setDefaultVoiceSubId(mNextActivatedSub.getSubscriptionId());
+            }
+            if (getSubState(getDefaultSmsSubId()) == 0 && !isSMSPromptEnabled()) {
+                setDefaultSmsSubId(mNextActivatedSub.getSubscriptionId());
+            }
+            logd("updateUserPrefs: after currentDds = " + getDefaultDataSubId() + " voice = " + getDefaultVoiceSubId() + " sms = " + getDefaultSmsSubId() + " newDds = " + ddsSubId);
+        }
+    }
+
+    public boolean isVoicePromptEnabled() {
+        int value = 0;
+        try {
+            value = Settings.Global.getInt(this.mContext.getContentResolver(), "multi_sim_voice_prompt");
+        } catch (Settings.SettingNotFoundException e) {
+            loge("Settings Exception Reading Dual Sim Voice Prompt Values");
+        }
+        return value != 0;
+    }
+
+    public void setVoicePromptEnabled(boolean enabled) {
+        Settings.Global.putInt(this.mContext.getContentResolver(), "multi_sim_voice_prompt", !enabled ? 0 : 1);
+        logd("setVoicePromptOption to " + enabled);
     }
 
     public int getOnDemandDataSubId() {
         return getCurrentDds();
     }
 
-    public int getPhoneId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            i = getDefaultSubId();
-            logdl("[getPhoneId] asked for default subId=" + i);
-        }
-        int i2;
-        if (!SubscriptionManager.isValidSubscriptionId(i)) {
-            logdl("[getPhoneId]- invalid subId return=-1");
-            return -1;
-        } else if (i >= DUMMY_SUB_ID_BASE) {
-            logd("getPhoneId,  received dummy subId " + i);
-            return i - DUMMY_SUB_ID_BASE;
-        } else if (mSlotIdxToSubId.size() == 0) {
-            i2 = mDefaultPhoneId;
-            logdl("[getPhoneId]- no sims, returning default phoneId=" + i2);
-            return i2;
-        } else {
-            for (Entry entry : mSlotIdxToSubId.entrySet()) {
-                int intValue = ((Integer) entry.getKey()).intValue();
-                if (i == ((Integer) entry.getValue()).intValue()) {
-                    logd("[getPhoneId]- return =" + intValue);
-                    return intValue;
-                }
-            }
-            i2 = mDefaultPhoneId;
-            logdl("[getPhoneId]- subId=" + i + " not found return default phoneId=" + i2);
-            return i2;
-        }
+    public void registerForOnDemandDdsLockNotification(int clientSubId, OnDemandDdsLockNotifier callback) {
+        logd("registerForOnDemandDdsLockNotification for client=" + clientSubId);
+        this.mOnDemandDdsLockNotificationRegistrants.put(Integer.valueOf(clientSubId), callback);
     }
 
-    public int getSimStateForSubscriber(int i) {
-        Object obj;
-        String str;
-        int phoneId = getPhoneId(i);
-        if (phoneId < 0) {
-            obj = State.UNKNOWN;
-            str = "invalid PhoneIdx";
-        } else {
-            Phone phone = PhoneFactory.getPhone(phoneId);
-            if (phone == null) {
-                obj = State.UNKNOWN;
-                str = "phone == null";
-            } else {
-                IccCard iccCard = phone.getIccCard();
-                if (iccCard == null) {
-                    obj = State.UNKNOWN;
-                    str = "icc == null";
-                } else {
-                    obj = iccCard.getState();
-                    str = "";
-                }
-            }
-        }
-        logd("getSimStateForSubscriber: " + str + " simState=" + obj + " ordinal=" + obj.ordinal());
-        return obj.ordinal();
-    }
-
-    public int getSlotId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            i = getDefaultSubId();
-        }
-        if (!SubscriptionManager.isValidSubscriptionId(i)) {
-            logd("[getSlotId]- subId invalid");
-            return -1;
-        } else if (i >= DUMMY_SUB_ID_BASE) {
-            logd("getSlotId,  received dummy subId " + i);
-            return i - DUMMY_SUB_ID_BASE;
-        } else if (mSlotIdxToSubId.size() == 0) {
-            logd("[getSlotId]- size == 0, return SIM_NOT_INSERTED instead");
-            return -1;
-        } else {
-            for (Entry entry : mSlotIdxToSubId.entrySet()) {
-                int intValue = ((Integer) entry.getKey()).intValue();
-                if (i == ((Integer) entry.getValue()).intValue()) {
-                    return intValue;
-                }
-            }
-            logd("[getSlotId]- return fail");
-            return -1;
-        }
-    }
-
-    @Deprecated
-    public int[] getSubId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            i = getSlotId(getDefaultSubId());
-            logd("[getSubId] map default slotIdx=" + i);
-        }
-        if (!SubscriptionManager.isValidSlotId(i)) {
-            logd("[getSubId]- invalid slotIdx=" + i);
-            return null;
-        } else if (mSlotIdxToSubId.size() == 0) {
-            logd("[getSubId]- mSlotIdToSubIdMap.size == 0, return DummySubIds slotIdx=" + i);
-            return getDummySubIds(i);
-        } else {
-            ArrayList arrayList = new ArrayList();
-            for (Entry entry : mSlotIdxToSubId.entrySet()) {
-                int intValue = ((Integer) entry.getKey()).intValue();
-                int intValue2 = ((Integer) entry.getValue()).intValue();
-                if (i == intValue) {
-                    arrayList.add(Integer.valueOf(intValue2));
-                }
-            }
-            int size = arrayList.size();
-            if (size > 0) {
-                int[] iArr = new int[size];
-                for (int i2 = 0; i2 < size; i2++) {
-                    iArr[i2] = ((Integer) arrayList.get(i2)).intValue();
-                }
-                return iArr;
-            }
-            logd("[getSubId]- numSubIds == 0, return DummySubIds slotIdx=" + i);
-            return getDummySubIds(i);
-        }
-    }
-
-    public int getSubIdFromNetworkRequest(NetworkRequest networkRequest) {
-        if (networkRequest == null) {
-            return getDefaultDataSubId();
-        }
-        try {
-            return Integer.parseInt(networkRequest.networkCapabilities.getNetworkSpecifier());
-        } catch (NumberFormatException e) {
-            loge("Exception e = " + e);
-            return getDefaultDataSubId();
-        }
-    }
-
-    public int getSubIdUsingPhoneId(int i) {
-        int[] subId = getSubId(i);
-        return (subId == null || subId.length == 0) ? -1 : subId[0];
-    }
-
-    public int[] getSubIdUsingSlotId(int i) {
-        return getSubId(i);
-    }
-
-    /* JADX WARNING: Removed duplicated region for block: B:26:0x0077  */
-    public java.util.List<android.telephony.SubscriptionInfo> getSubInfoUsingSlotIdWithCheck(int r8, boolean r9) {
-        /*
-        r7 = this;
-        r2 = 0;
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "[getSubInfoUsingSlotIdWithCheck]+ slotId:";
-        r0 = r0.append(r1);
-        r0 = r0.append(r8);
-        r0 = r0.toString();
-        r7.logd(r0);
-        r7.enforceSubscriptionPermission();
-        r0 = 2147483647; // 0x7fffffff float:NaN double:1.060997895E-314;
-        if (r8 != r0) goto L_0x0027;
-    L_0x001f:
-        r0 = r7.getDefaultSubId();
-        r8 = r7.getSlotId(r0);
-    L_0x0027:
-        r0 = android.telephony.SubscriptionManager.isValidSlotId(r8);
-        if (r0 != 0) goto L_0x0033;
-    L_0x002d:
-        r0 = "[getSubInfoUsingSlotIdWithCheck]- invalid slotId";
-        r7.logd(r0);
-    L_0x0032:
-        return r2;
-    L_0x0033:
-        if (r9 == 0) goto L_0x0041;
-    L_0x0035:
-        r0 = r7.isSubInfoReady();
-        if (r0 != 0) goto L_0x0041;
-    L_0x003b:
-        r0 = "[getSubInfoUsingSlotIdWithCheck]- not ready";
-        r7.logd(r0);
-        goto L_0x0032;
-    L_0x0041:
-        r0 = r7.mContext;
-        r0 = r0.getContentResolver();
-        r1 = android.telephony.SubscriptionManager.CONTENT_URI;
-        r3 = "sim_id=?";
-        r4 = 1;
-        r4 = new java.lang.String[r4];
-        r5 = 0;
-        r6 = java.lang.String.valueOf(r8);
-        r4[r5] = r6;
-        r5 = r2;
-        r1 = r0.query(r1, r2, r3, r4, r5);
-        if (r1 == 0) goto L_0x007c;
-    L_0x005c:
-        r0 = r2;
-    L_0x005d:
-        r2 = r1.moveToNext();	 Catch:{ all -> 0x0087 }
-        if (r2 == 0) goto L_0x007b;
-    L_0x0063:
-        r2 = r7.getSubInfoRecord(r1);	 Catch:{ all -> 0x0087 }
-        if (r2 == 0) goto L_0x005d;
-    L_0x0069:
-        if (r0 != 0) goto L_0x0070;
-    L_0x006b:
-        r0 = new java.util.ArrayList;	 Catch:{ all -> 0x0087 }
-        r0.<init>();	 Catch:{ all -> 0x0087 }
-    L_0x0070:
-        r0.add(r2);	 Catch:{ all -> 0x0074 }
-        goto L_0x005d;
-    L_0x0074:
-        r0 = move-exception;
-    L_0x0075:
-        if (r1 == 0) goto L_0x007a;
-    L_0x0077:
-        r1.close();
-    L_0x007a:
-        throw r0;
-    L_0x007b:
-        r2 = r0;
-    L_0x007c:
-        if (r1 == 0) goto L_0x0081;
-    L_0x007e:
-        r1.close();
-    L_0x0081:
-        r0 = "[getSubInfoUsingSlotId]- null info return";
-        r7.logd(r0);
-        goto L_0x0032;
-    L_0x0087:
-        r0 = move-exception;
-        goto L_0x0075;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.SubscriptionController.getSubInfoUsingSlotIdWithCheck(int, boolean):java.util.List");
-    }
-
-    public int getSubState(int i) {
-        SubscriptionInfo activeSubscriptionInfo = getActiveSubscriptionInfo(i);
-        return (activeSubscriptionInfo == null || activeSubscriptionInfo.getSimSlotIndex() < 0) ? 0 : activeSubscriptionInfo.mStatus;
-    }
-
-    public boolean isSMSPromptEnabled() {
-        int i;
-        try {
-            i = Global.getInt(this.mContext.getContentResolver(), "multi_sim_sms_prompt");
-        } catch (SettingNotFoundException e) {
-            loge("Settings Exception Reading Dual Sim SMS Prompt Values");
-            i = 0;
-        }
-        return i != 0;
-    }
-
-    public boolean isVoicePromptEnabled() {
-        int i;
-        try {
-            i = Global.getInt(this.mContext.getContentResolver(), "multi_sim_voice_prompt");
-        } catch (SettingNotFoundException e) {
-            loge("Settings Exception Reading Dual Sim Voice Prompt Values");
-            i = 0;
-        }
-        return i != 0;
-    }
-
-    public void notifyOnDemandDataSubIdChanged(NetworkRequest networkRequest) {
-        OnDemandDdsLockNotifier onDemandDdsLockNotifier = (OnDemandDdsLockNotifier) this.mOnDemandDdsLockNotificationRegistrants.get(Integer.valueOf(getSubIdFromNetworkRequest(networkRequest)));
-        if (onDemandDdsLockNotifier != null) {
-            onDemandDdsLockNotifier.notifyOnDemandDdsLockGranted(networkRequest);
+    public void notifyOnDemandDataSubIdChanged(NetworkRequest n) {
+        OnDemandDdsLockNotifier notifier = this.mOnDemandDdsLockNotificationRegistrants.get(Integer.valueOf(getSubIdFromNetworkRequest(n)));
+        if (notifier != null) {
+            notifier.notifyOnDemandDdsLockGranted(n);
         } else {
             logd("No registrants for OnDemandDdsLockGranted event");
         }
     }
 
-    public void notifySubscriptionInfoChanged() {
-        if (checkNotifyPermission("notifySubscriptionInfoChanged")) {
-            ITelephonyRegistry asInterface = ITelephonyRegistry.Stub.asInterface(ServiceManager.getService("telephony.registry"));
-            try {
-                logd("notifySubscriptionInfoChanged:");
-                asInterface.notifySubscriptionInfoChanged();
-            } catch (RemoteException e) {
-            }
-            broadcastSimInfoContentChanged();
-        }
-    }
-
-    public void registerForOnDemandDdsLockNotification(int i, OnDemandDdsLockNotifier onDemandDdsLockNotifier) {
-        logd("registerForOnDemandDdsLockNotification for client=" + i);
-        this.mOnDemandDdsLockNotificationRegistrants.put(Integer.valueOf(i), onDemandDdsLockNotifier);
-    }
-
-    public void removeStaleSubPreferences(String str) {
-        List<SubscriptionInfo> allSubInfoList = getAllSubInfoList();
-        SharedPreferences defaultSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this.mContext);
-        for (SubscriptionInfo subscriptionInfo : allSubInfoList) {
-            if (subscriptionInfo.getSimSlotIndex() == -1) {
-                defaultSharedPreferences.edit().remove(str + subscriptionInfo.getSubscriptionId()).commit();
+    public void removeStaleSubPreferences(String prefKey) {
+        List<SubscriptionInfo> subInfoList = getAllSubInfoList();
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this.mContext);
+        for (SubscriptionInfo subInfo : subInfoList) {
+            if (subInfo.getSimSlotIndex() == -1) {
+                sp.edit().remove(prefKey + subInfo.getSubscriptionId()).commit();
             }
         }
     }
 
-    public int setDataRoaming(int i, int i2) {
-        logd("[setDataRoaming]+ roaming:" + i + " subId:" + i2);
-        enforceSubscriptionPermission();
-        validateSubId(i2);
-        if (i < 0) {
-            logd("[setDataRoaming]- fail");
-            return -1;
-        }
-        ContentValues contentValues = new ContentValues(1);
-        contentValues.put("data_roaming", Integer.valueOf(i));
-        logd("[setDataRoaming]- roaming:" + i + " set");
-        int update = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i2), null);
-        notifySubscriptionInfoChanged();
-        return update;
-    }
-
-    public void setDataSubId(int i) {
-        Global.putInt(this.mContext.getContentResolver(), "multi_sim_data_call", i);
-    }
-
-    public void setDefaultDataSubId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            throw new RuntimeException("setDefaultDataSubId called with DEFAULT_SUB_ID");
-        }
-        logdl("[setDefaultDataSubId] subId=" + i);
-        if (this.mDctController == null) {
-            this.mDctController = DctController.getInstance();
-            this.mDctController.registerForDefaultDataSwitchInfo(this.mDataConnectionHandler, 1, null);
-        }
-        this.mDctController.setDefaultDataSubId(i);
-    }
-
-    public void setDefaultSmsSubId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            throw new RuntimeException("setDefaultSmsSubId called with DEFAULT_SUB_ID");
-        }
-        logdl("[setDefaultSmsSubId] subId=" + i);
-        Global.putInt(this.mContext.getContentResolver(), "multi_sim_sms", i);
-        broadcastDefaultSmsSubIdChanged(i);
-    }
-
-    public void setDefaultVoiceSubId(int i) {
-        if (i == Integer.MAX_VALUE) {
-            throw new RuntimeException("setDefaultVoiceSubId called with DEFAULT_SUB_ID");
-        }
-        logdl("[setDefaultVoiceSubId] subId=" + i);
-        Global.putInt(this.mContext.getContentResolver(), "multi_sim_voice_call", i);
-        broadcastDefaultVoiceSubIdChanged(i);
-    }
-
-    public int setDisplayName(String str, int i) {
-        return setDisplayNameUsingSrc(str, i, -1);
-    }
-
-    public int setDisplayNameUsingSrc(String str, int i, long j) {
-        logd("[setDisplayName]+  displayName:" + str + " subId:" + i + " nameSource:" + j);
-        enforceSubscriptionPermission();
-        validateSubId(i);
-        if (str == null) {
-            str = this.mContext.getString(17039374);
-        }
-        ContentValues contentValues = new ContentValues(1);
-        contentValues.put("display_name", str);
-        if (j >= 0) {
-            logd("Set nameSource=" + j);
-            contentValues.put("name_source", Long.valueOf(j));
-        }
-        logd("[setDisplayName]- mDisplayName:" + str + " set");
-        int update = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
-        notifySubscriptionInfoChanged();
-        return update;
-    }
-
-    public int setDisplayNumber(String str, int i) {
-        logd("[setDisplayNumber]+ number:" + str + " subId:" + i);
-        enforceSubscriptionPermission();
-        validateSubId(i);
-        int phoneId = getPhoneId(i);
-        if (str == null || phoneId < 0 || phoneId >= TelephonyManager.getDefault().getPhoneCount()) {
-            logd("[setDispalyNumber]- fail");
-            return -1;
-        }
-        ContentValues contentValues = new ContentValues(1);
-        contentValues.put(IccProvider.STR_NUMBER, str);
-        phoneId = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
-        logd("[setDisplayNumber]- number: " + str + " update result :" + phoneId);
-        notifySubscriptionInfoChanged();
-        return phoneId;
-    }
-
-    public int setIconTint(int i, int i2) {
-        logd("[setIconTint]+ tint:" + i + " subId:" + i2);
-        enforceSubscriptionPermission();
-        validateSubId(i2);
-        ContentValues contentValues = new ContentValues(1);
-        contentValues.put("color", Integer.valueOf(i));
-        logd("[setIconTint]- tint:" + i + " set");
-        int update = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i2), null);
-        notifySubscriptionInfoChanged();
-        return update;
-    }
-
-    public int setMccMnc(String str, int i) {
-        int parseInt;
-        ContentValues contentValues;
-        int i2 = 0;
-        try {
-            parseInt = Integer.parseInt(str.substring(0, 3));
-            try {
-                i2 = Integer.parseInt(str.substring(3));
-            } catch (NumberFormatException e) {
-            }
-        } catch (NumberFormatException e2) {
-            parseInt = i2;
-            loge("[setMccMnc] - couldn't parse mcc/mnc: " + str);
-            logd("[setMccMnc]+ mcc/mnc:" + parseInt + "/" + i2 + " subId:" + i);
-            contentValues = new ContentValues(2);
-            contentValues.put(Carriers.MCC, Integer.valueOf(parseInt));
-            contentValues.put(Carriers.MNC, Integer.valueOf(i2));
-            i2 = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
-            notifySubscriptionInfoChanged();
-            return i2;
-        }
-        logd("[setMccMnc]+ mcc/mnc:" + parseInt + "/" + i2 + " subId:" + i);
-        contentValues = new ContentValues(2);
-        contentValues.put(Carriers.MCC, Integer.valueOf(parseInt));
-        contentValues.put(Carriers.MNC, Integer.valueOf(i2));
-        i2 = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
-        notifySubscriptionInfoChanged();
-        return i2;
-    }
-
-    public void setNwMode(int i, int i2) {
-        logd("setNwMode, nwMode: " + i2 + " subId: " + i);
-        ContentValues contentValues = new ContentValues(1);
-        contentValues.put("network_mode", Integer.valueOf(i2));
-        this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
-    }
-
-    public boolean setPlmnSpn(int i, boolean z, String str, boolean z2, String str2) {
-        int[] subId = getSubId(i);
-        if (this.mContext.getPackageManager().resolveContentProvider(SubscriptionManager.CONTENT_URI.getAuthority(), 0) == null || subId == null || !SubscriptionManager.isValidSubscriptionId(subId[0])) {
-            logd("[setPlmnSpn] No valid subscription to store info");
-            notifySubscriptionInfoChanged();
+    private boolean isActiveSubId(int subId) {
+        if (!SubscriptionManager.isValidSubscriptionId(subId)) {
             return false;
         }
-        String str3 = "";
-        if (!z) {
-            str = z2 ? str2 : str3;
-        } else if (z2) {
-            str = str + this.mContext.getString(17041030).toString() + str2;
+        for (Map.Entry<Integer, Integer> entry : mSlotIdxToSubId.entrySet()) {
+            if (subId == entry.getValue().intValue()) {
+                return true;
+            }
         }
-        for (int carrierText : subId) {
-            setCarrierText(str, carrierText);
+        return false;
+    }
+
+    public int getSimStateForSubscriber(int subId) {
+        IccCardConstants.State simState;
+        String err;
+        int phoneIdx = getPhoneId(subId);
+        if (phoneIdx < 0) {
+            simState = IccCardConstants.State.UNKNOWN;
+            err = "invalid PhoneIdx";
+        } else {
+            Phone phone = PhoneFactory.getPhone(phoneIdx);
+            if (phone == null) {
+                simState = IccCardConstants.State.UNKNOWN;
+                err = "phone == null";
+            } else {
+                IccCard icc = phone.getIccCard();
+                if (icc == null) {
+                    simState = IccCardConstants.State.UNKNOWN;
+                    err = "icc == null";
+                } else {
+                    simState = icc.getState();
+                    err = "";
+                }
+            }
         }
-        return true;
+        logd("getSimStateForSubscriber: " + err + " simState=" + simState + " ordinal=" + simState.ordinal());
+        return simState.ordinal();
     }
 
-    public void setSMSPromptEnabled(boolean z) {
-        Global.putInt(this.mContext.getContentResolver(), "multi_sim_sms_prompt", !z ? 0 : 1);
-        logd("setSMSPromptOption to " + z);
-    }
-
-    public int setSubState(int i, int i2) {
-        int i3 = 0;
-        logd("setSubState, subStatus: " + i2 + " subId: " + i);
-        if (ModemStackController.getInstance().isStackReady()) {
-            ContentValues contentValues = new ContentValues(1);
-            contentValues.put("sub_state", Integer.valueOf(i2));
-            i3 = this.mContext.getContentResolver().update(SubscriptionManager.CONTENT_URI, contentValues, "_id=" + Integer.toString(i), null);
+    private static void printStackTrace(String msg) {
+        RuntimeException re = new RuntimeException();
+        slogd("StackTrace - " + msg);
+        StackTraceElement[] st = re.getStackTrace();
+        boolean first = true;
+        for (StackTraceElement ste : st) {
+            if (first) {
+                first = false;
+            } else {
+                slogd(ste.toString());
+            }
         }
-        Intent intent = new Intent("android.intent.action.ACTION_SUBINFO_CONTENT_CHANGE");
-        intent.putExtra("_id", i);
-        intent.putExtra("columnName", "sub_state");
-        intent.putExtra("intContent", i2);
-        intent.putExtra("stringContent", "None");
-        this.mContext.sendBroadcast(intent);
-        this.mContext.sendBroadcast(new Intent("android.intent.action.ACTION_SUBINFO_RECORD_UPDATED"));
-        return i3;
     }
 
-    public void setVoicePromptEnabled(boolean z) {
-        Global.putInt(this.mContext.getContentResolver(), "multi_sim_voice_prompt", !z ? 0 : 1);
-        logd("setVoicePromptOption to " + z);
-    }
-
-    public void startOnDemandDataSubscriptionRequest(NetworkRequest networkRequest) {
-        logd("startOnDemandDataSubscriptionRequest = " + networkRequest);
-        this.mSchedulerAc.allocateDds(networkRequest);
-    }
-
-    public void stopOnDemandDataSubscriptionRequest(NetworkRequest networkRequest) {
-        logd("stopOnDemandDataSubscriptionRequest = " + networkRequest);
-        this.mSchedulerAc.freeDds(networkRequest);
-    }
-
-    public void updatePhonesAvailability(PhoneProxy[] phoneProxyArr) {
-        sProxyPhones = phoneProxyArr;
-    }
-
-    public void updateUserPrefs(boolean z) {
-        List<SubscriptionInfo> activeSubscriptionInfoList = getActiveSubscriptionInfoList();
-        if (activeSubscriptionInfoList == null) {
-            int[] dummySubIds = getDummySubIds(mDefaultPhoneId);
-            logd("updateUserPrefs: subscription are not avaiable dds = " + getDefaultDataSubId() + " voice = " + getDefaultVoiceSubId() + " sms = " + getDefaultSmsSubId() + " setDDs = " + z);
-            setDefaultFallbackSubId(dummySubIds[0]);
-            setDefaultVoiceSubId(dummySubIds[0]);
-            setDefaultSmsSubId(dummySubIds[0]);
-            setDataSubId(dummySubIds[0]);
-            return;
-        }
+    public int[] getActivatedSubIdList() {
+        Set<Map.Entry<Integer, Integer>> simInfoSet = mSlotIdxToSubId.entrySet();
+        logd("getActivatedSubIdList: simInfoSet=" + simInfoSet);
+        int[] subIdArr = new int[simInfoSet.size()];
         int i = 0;
-        SubscriptionInfo subscriptionInfo = null;
-        for (SubscriptionInfo subscriptionInfo2 : activeSubscriptionInfoList) {
-            if (getSubState(subscriptionInfo2.getSubscriptionId()) == 1) {
-                i++;
-                if (subscriptionInfo == null) {
-                    subscriptionInfo = subscriptionInfo2;
-                }
-            }
+        for (Map.Entry<Integer, Integer> entry : simInfoSet) {
+            subIdArr[i] = entry.getValue().intValue();
+            i++;
         }
-        logd("updateUserPrefs: active sub count = " + i + " dds = " + getDefaultDataSubId() + " voice = " + getDefaultVoiceSubId() + " sms = " + getDefaultSmsSubId() + " setDDs = " + z);
-        if (i < 2) {
-            setSMSPromptEnabled(false);
-            setVoicePromptEnabled(false);
-        }
-        if (subscriptionInfo != null) {
-            if (getSubState(getDefaultSubId()) == 0) {
-                setDefaultFallbackSubId(subscriptionInfo.getSubscriptionId());
+        logd("getActivatedSubIdList: X subIdArr.length=" + subIdArr.length);
+        return subIdArr;
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        this.mContext.enforceCallingOrSelfPermission("android.permission.DUMP", "Requires DUMP");
+        long token = Binder.clearCallingIdentity();
+        try {
+            pw.println("SubscriptionController:");
+            pw.println(" defaultSubId=" + getDefaultSubId());
+            pw.println(" defaultDataSubId=" + getDefaultDataSubId());
+            pw.println(" defaultVoiceSubId=" + getDefaultVoiceSubId());
+            pw.println(" defaultSmsSubId=" + getDefaultSmsSubId());
+            pw.println(" defaultDataPhoneId=" + SubscriptionManager.from(this.mContext).getDefaultDataPhoneId());
+            pw.println(" defaultVoicePhoneId=" + SubscriptionManager.getDefaultVoicePhoneId());
+            pw.println(" defaultSmsPhoneId=" + SubscriptionManager.from(this.mContext).getDefaultSmsPhoneId());
+            pw.flush();
+            for (Map.Entry<Integer, Integer> entry : mSlotIdxToSubId.entrySet()) {
+                pw.println(" mSlotIdToSubIdMap[" + entry.getKey() + "]: subId=" + entry.getValue());
             }
-            int defaultDataSubId = getDefaultDataSubId();
-            i = getSubState(defaultDataSubId);
-            if (z || i == 0) {
-                if (i == 0) {
-                    defaultDataSubId = subscriptionInfo.getSubscriptionId();
+            pw.flush();
+            pw.println("++++++++++++++++++++++++++++++++");
+            List<SubscriptionInfo> sirl = getActiveSubscriptionInfoList();
+            if (sirl != null) {
+                pw.println(" ActiveSubInfoList:");
+                Iterator i$ = sirl.iterator();
+                while (i$.hasNext()) {
+                    pw.println("  " + i$.next().toString());
                 }
-                setDefaultDataSubId(defaultDataSubId);
+            } else {
+                pw.println(" ActiveSubInfoList: is null");
             }
-            if (getSubState(getDefaultVoiceSubId()) == 0 && !isVoicePromptEnabled()) {
-                setDefaultVoiceSubId(subscriptionInfo.getSubscriptionId());
+            pw.flush();
+            pw.println("++++++++++++++++++++++++++++++++");
+            List<SubscriptionInfo> sirl2 = getAllSubInfoList();
+            if (sirl2 != null) {
+                pw.println(" AllSubInfoList:");
+                Iterator i$2 = sirl2.iterator();
+                while (i$2.hasNext()) {
+                    pw.println("  " + i$2.next().toString());
+                }
+            } else {
+                pw.println(" AllSubInfoList: is null");
             }
-            if (getSubState(getDefaultSmsSubId()) == 0 && !isSMSPromptEnabled()) {
-                setDefaultSmsSubId(subscriptionInfo.getSubscriptionId());
-            }
-            logd("updateUserPrefs: after currentDds = " + getDefaultDataSubId() + " voice = " + getDefaultVoiceSubId() + " sms = " + getDefaultSmsSubId() + " newDds = " + defaultDataSubId);
+            pw.flush();
+            pw.println("++++++++++++++++++++++++++++++++");
+            this.mLocalLog.dump(fd, pw, args);
+            pw.flush();
+            pw.println("++++++++++++++++++++++++++++++++");
+            pw.flush();
+        } finally {
+            Binder.restoreCallingIdentity(token);
         }
     }
 }

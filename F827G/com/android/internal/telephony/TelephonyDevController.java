@@ -9,20 +9,23 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class TelephonyDevController extends Handler {
     private static final boolean DBG = true;
     private static final int EVENT_HARDWARE_CONFIG_CHANGED = 1;
     private static final String LOG_TAG = "TDC";
     private static final Object mLock = new Object();
-    private static ArrayList<HardwareConfig> mModems = new ArrayList();
-    private static ArrayList<HardwareConfig> mSims = new ArrayList();
+    private static ArrayList<HardwareConfig> mModems = new ArrayList<>();
+    private static ArrayList<HardwareConfig> mSims = new ArrayList<>();
     private static Message sRilHardwareConfig;
     private static TelephonyDevController sTelephonyDevController;
 
-    private TelephonyDevController() {
-        initFromResource();
-        mModems.trimToSize();
-        mSims.trimToSize();
+    private static void logd(String s) {
+        Rlog.d(LOG_TAG, s);
+    }
+
+    private static void loge(String s) {
+        Rlog.e(LOG_TAG, s);
     }
 
     public static TelephonyDevController create() {
@@ -48,221 +51,212 @@ public class TelephonyDevController extends Handler {
         return telephonyDevController;
     }
 
-    public static int getModemCount() {
-        int size;
-        synchronized (mLock) {
-            size = mModems.size();
-            logd("getModemCount: " + size);
+    private void initFromResource() {
+        String[] hwStrings = Resources.getSystem().getStringArray(17236024);
+        if (hwStrings != null) {
+            for (String hwString : hwStrings) {
+                HardwareConfig hw = new HardwareConfig(hwString);
+                if (hw != null) {
+                    if (hw.type == 0) {
+                        updateOrInsert(hw, mModems);
+                    } else if (hw.type == 1) {
+                        updateOrInsert(hw, mSims);
+                    }
+                }
+            }
         }
-        return size;
     }
 
-    private static void handleGetHardwareConfigChanged(AsyncResult asyncResult) {
-        if (asyncResult.exception != null || asyncResult.result == null) {
+    private TelephonyDevController() {
+        initFromResource();
+        mModems.trimToSize();
+        mSims.trimToSize();
+    }
+
+    public static void registerRIL(CommandsInterface cmdsIf) {
+        cmdsIf.getHardwareConfig(sRilHardwareConfig);
+        if (sRilHardwareConfig != null) {
+            AsyncResult ar = (AsyncResult) sRilHardwareConfig.obj;
+            if (ar.exception == null) {
+                handleGetHardwareConfigChanged(ar);
+            }
+        }
+        cmdsIf.registerForHardwareConfigChanged(sTelephonyDevController, 1, null);
+    }
+
+    public static void unregisterRIL(CommandsInterface cmdsIf) {
+        cmdsIf.unregisterForHardwareConfigChanged(sTelephonyDevController);
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case 1:
+                logd("handleMessage: received EVENT_HARDWARE_CONFIG_CHANGED");
+                handleGetHardwareConfigChanged((AsyncResult) msg.obj);
+                return;
+            default:
+                loge("handleMessage: Unknown Event " + msg.what);
+                return;
+        }
+    }
+
+    private static void updateOrInsert(HardwareConfig hw, ArrayList<HardwareConfig> list) {
+        synchronized (mLock) {
+            int size = list.size();
+            for (int i = 0; i < size; i++) {
+                HardwareConfig item = list.get(i);
+                if (item.uuid.compareTo(hw.uuid) == 0) {
+                    logd("updateOrInsert: removing: " + item);
+                    list.remove(i);
+                }
+            }
+            logd("updateOrInsert: inserting: " + hw);
+            list.add(hw);
+        }
+    }
+
+    private static void handleGetHardwareConfigChanged(AsyncResult ar) {
+        if (ar.exception != null || ar.result == null) {
             loge("handleGetHardwareConfigChanged - returned an error.");
             return;
         }
-        List list = (List) asyncResult.result;
-        int i = 0;
-        while (true) {
-            int i2 = i;
-            if (i2 < list.size()) {
-                HardwareConfig hardwareConfig = (HardwareConfig) list.get(i2);
-                if (hardwareConfig != null) {
-                    if (hardwareConfig.type == 0) {
-                        updateOrInsert(hardwareConfig, mModems);
-                    } else if (hardwareConfig.type == 1) {
-                        updateOrInsert(hardwareConfig, mSims);
-                    }
-                }
-                i = i2 + 1;
-            } else {
-                return;
-            }
-        }
-    }
-
-    private void initFromResource() {
-        String[] stringArray = Resources.getSystem().getStringArray(17236024);
-        if (stringArray != null) {
-            for (String hardwareConfig : stringArray) {
-                HardwareConfig hardwareConfig2 = new HardwareConfig(hardwareConfig);
-                if (hardwareConfig2 != null) {
-                    if (hardwareConfig2.type == 0) {
-                        updateOrInsert(hardwareConfig2, mModems);
-                    } else if (hardwareConfig2.type == 1) {
-                        updateOrInsert(hardwareConfig2, mSims);
-                    }
+        List hwcfg = (List) ar.result;
+        for (int i = 0; i < hwcfg.size(); i++) {
+            HardwareConfig hw = (HardwareConfig) hwcfg.get(i);
+            if (hw != null) {
+                if (hw.type == 0) {
+                    updateOrInsert(hw, mModems);
+                } else if (hw.type == 1) {
+                    updateOrInsert(hw, mSims);
                 }
             }
         }
     }
 
-    private static void logd(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    private static void loge(String str) {
-        Rlog.e(LOG_TAG, str);
-    }
-
-    public static void registerRIL(CommandsInterface commandsInterface) {
-        commandsInterface.getHardwareConfig(sRilHardwareConfig);
-        if (sRilHardwareConfig != null) {
-            AsyncResult asyncResult = (AsyncResult) sRilHardwareConfig.obj;
-            if (asyncResult.exception == null) {
-                handleGetHardwareConfigChanged(asyncResult);
-            }
-        }
-        commandsInterface.registerForHardwareConfigChanged(sTelephonyDevController, 1, null);
-    }
-
-    public static void unregisterRIL(CommandsInterface commandsInterface) {
-        commandsInterface.unregisterForHardwareConfigChanged(sTelephonyDevController);
-    }
-
-    private static void updateOrInsert(HardwareConfig hardwareConfig, ArrayList<HardwareConfig> arrayList) {
+    public static int getModemCount() {
+        int count;
         synchronized (mLock) {
-            int size = arrayList.size();
-            for (int i = 0; i < size; i++) {
-                HardwareConfig hardwareConfig2 = (HardwareConfig) arrayList.get(i);
-                if (hardwareConfig2.uuid.compareTo(hardwareConfig.uuid) == 0) {
-                    logd("updateOrInsert: removing: " + hardwareConfig2);
-                    arrayList.remove(i);
-                }
-            }
-            logd("updateOrInsert: inserting: " + hardwareConfig);
-            arrayList.add(hardwareConfig);
+            count = mModems.size();
+            logd("getModemCount: " + count);
         }
+        return count;
     }
 
-    public ArrayList<HardwareConfig> getAllModems() {
-        ArrayList arrayList;
-        synchronized (mLock) {
-            arrayList = new ArrayList();
-            if (mModems.isEmpty()) {
-                logd("getAllModems: empty list.");
-            } else {
-                Iterator it = mModems.iterator();
-                while (it.hasNext()) {
-                    arrayList.add((HardwareConfig) it.next());
-                }
-            }
-        }
-        return arrayList;
-    }
-
-    public ArrayList<HardwareConfig> getAllSims() {
-        ArrayList arrayList;
-        synchronized (mLock) {
-            arrayList = new ArrayList();
-            if (mSims.isEmpty()) {
-                logd("getAllSims: empty list.");
-            } else {
-                Iterator it = mSims.iterator();
-                while (it.hasNext()) {
-                    arrayList.add((HardwareConfig) it.next());
-                }
-            }
-        }
-        return arrayList;
-    }
-
-    public ArrayList<HardwareConfig> getAllSimsForModem(int i) {
-        synchronized (mLock) {
-            if (mSims.isEmpty()) {
-                loge("getAllSimsForModem: no registered sim device?!?");
-                return null;
-            } else if (i > getModemCount()) {
-                loge("getAllSimsForModem: out-of-bounds access for modem device " + i + " max: " + getModemCount());
-                return null;
-            } else {
-                logd("getAllSimsForModem " + i);
-                ArrayList<HardwareConfig> arrayList = new ArrayList();
-                HardwareConfig modem = getModem(i);
-                Iterator it = mSims.iterator();
-                while (it.hasNext()) {
-                    HardwareConfig hardwareConfig = (HardwareConfig) it.next();
-                    if (hardwareConfig.modemUuid.equals(modem.uuid)) {
-                        arrayList.add(hardwareConfig);
-                    }
-                }
-                return arrayList;
-            }
-        }
-    }
-
-    public HardwareConfig getModem(int i) {
+    public HardwareConfig getModem(int index) {
         HardwareConfig hardwareConfig = null;
         synchronized (mLock) {
             if (mModems.isEmpty()) {
                 loge("getModem: no registered modem device?!?");
-            } else if (i > getModemCount()) {
-                loge("getModem: out-of-bounds access for modem device " + i + " max: " + getModemCount());
+            } else if (index > getModemCount()) {
+                loge("getModem: out-of-bounds access for modem device " + index + " max: " + getModemCount());
             } else {
-                logd("getModem: " + i);
-                hardwareConfig = (HardwareConfig) mModems.get(i);
-            }
-        }
-        return hardwareConfig;
-    }
-
-    public HardwareConfig getModemForSim(int i) {
-        synchronized (mLock) {
-            if (mModems.isEmpty() || mSims.isEmpty()) {
-                loge("getModemForSim: no registered modem/sim device?!?");
-                return null;
-            } else if (i > getSimCount()) {
-                loge("getModemForSim: out-of-bounds access for sim device " + i + " max: " + getSimCount());
-                return null;
-            } else {
-                logd("getModemForSim " + i);
-                HardwareConfig sim = getSim(i);
-                Iterator it = mModems.iterator();
-                while (it.hasNext()) {
-                    HardwareConfig hardwareConfig = (HardwareConfig) it.next();
-                    if (hardwareConfig.uuid.equals(sim.modemUuid)) {
-                        return hardwareConfig;
-                    }
-                }
-                return null;
-            }
-        }
-    }
-
-    public HardwareConfig getSim(int i) {
-        HardwareConfig hardwareConfig = null;
-        synchronized (mLock) {
-            if (mSims.isEmpty()) {
-                loge("getSim: no registered sim device?!?");
-            } else if (i > getSimCount()) {
-                loge("getSim: out-of-bounds access for sim device " + i + " max: " + getSimCount());
-            } else {
-                logd("getSim: " + i);
-                hardwareConfig = (HardwareConfig) mSims.get(i);
+                logd("getModem: " + index);
+                hardwareConfig = mModems.get(index);
             }
         }
         return hardwareConfig;
     }
 
     public int getSimCount() {
-        int size;
+        int count;
         synchronized (mLock) {
-            size = mSims.size();
-            logd("getSimCount: " + size);
+            count = mSims.size();
+            logd("getSimCount: " + count);
         }
-        return size;
+        return count;
     }
 
-    public void handleMessage(Message message) {
-        switch (message.what) {
-            case 1:
-                logd("handleMessage: received EVENT_HARDWARE_CONFIG_CHANGED");
-                handleGetHardwareConfigChanged((AsyncResult) message.obj);
-                return;
-            default:
-                loge("handleMessage: Unknown Event " + message.what);
-                return;
+    public HardwareConfig getSim(int index) {
+        HardwareConfig hardwareConfig = null;
+        synchronized (mLock) {
+            if (mSims.isEmpty()) {
+                loge("getSim: no registered sim device?!?");
+            } else if (index > getSimCount()) {
+                loge("getSim: out-of-bounds access for sim device " + index + " max: " + getSimCount());
+            } else {
+                logd("getSim: " + index);
+                hardwareConfig = mSims.get(index);
+            }
         }
+        return hardwareConfig;
+    }
+
+    public HardwareConfig getModemForSim(int simIndex) {
+        synchronized (mLock) {
+            if (mModems.isEmpty() || mSims.isEmpty()) {
+                loge("getModemForSim: no registered modem/sim device?!?");
+                return null;
+            } else if (simIndex > getSimCount()) {
+                loge("getModemForSim: out-of-bounds access for sim device " + simIndex + " max: " + getSimCount());
+                return null;
+            } else {
+                logd("getModemForSim " + simIndex);
+                HardwareConfig sim = getSim(simIndex);
+                Iterator i$ = mModems.iterator();
+                while (i$.hasNext()) {
+                    HardwareConfig modem = i$.next();
+                    if (modem.uuid.equals(sim.modemUuid)) {
+                        return modem;
+                    }
+                }
+                return null;
+            }
+        }
+    }
+
+    public ArrayList<HardwareConfig> getAllSimsForModem(int modemIndex) {
+        ArrayList<HardwareConfig> result = null;
+        synchronized (mLock) {
+            if (mSims.isEmpty()) {
+                loge("getAllSimsForModem: no registered sim device?!?");
+            } else if (modemIndex > getModemCount()) {
+                loge("getAllSimsForModem: out-of-bounds access for modem device " + modemIndex + " max: " + getModemCount());
+            } else {
+                logd("getAllSimsForModem " + modemIndex);
+                result = new ArrayList<>();
+                HardwareConfig modem = getModem(modemIndex);
+                Iterator i$ = mSims.iterator();
+                while (i$.hasNext()) {
+                    HardwareConfig sim = i$.next();
+                    if (sim.modemUuid.equals(modem.uuid)) {
+                        result.add(sim);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public ArrayList<HardwareConfig> getAllModems() {
+        ArrayList<HardwareConfig> modems;
+        synchronized (mLock) {
+            modems = new ArrayList<>();
+            if (mModems.isEmpty()) {
+                logd("getAllModems: empty list.");
+            } else {
+                Iterator i$ = mModems.iterator();
+                while (i$.hasNext()) {
+                    modems.add(i$.next());
+                }
+            }
+        }
+        return modems;
+    }
+
+    public ArrayList<HardwareConfig> getAllSims() {
+        ArrayList<HardwareConfig> sims;
+        synchronized (mLock) {
+            sims = new ArrayList<>();
+            if (mSims.isEmpty()) {
+                logd("getAllSims: empty list.");
+            } else {
+                Iterator i$ = mSims.iterator();
+                while (i$.hasNext()) {
+                    sims.add(i$.next());
+                }
+            }
+        }
+        return sims;
     }
 }

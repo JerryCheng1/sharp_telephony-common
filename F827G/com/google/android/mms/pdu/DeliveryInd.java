@@ -2,44 +2,46 @@ package com.google.android.mms.pdu;
 
 import com.google.android.mms.InvalidHeaderValueException;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DeliveryInd extends GenericPdu {
     public DeliveryInd() throws InvalidHeaderValueException {
         setMessageType(134);
     }
 
-    DeliveryInd(PduHeaders pduHeaders) {
-        super(pduHeaders);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public DeliveryInd(PduHeaders headers) {
+        super(headers);
     }
 
     public long getDate() {
         return this.mPduHeaders.getLongInteger(133);
     }
 
+    public void setDate(long value) {
+        this.mPduHeaders.setLongInteger(value, 133);
+    }
+
     public byte[] getMessageId() {
         return this.mPduHeaders.getTextString(139);
+    }
+
+    public void setMessageId(byte[] value) {
+        this.mPduHeaders.setTextString(value, 139);
     }
 
     public int getStatus() {
         return this.mPduHeaders.getOctet(149);
     }
 
+    public void setStatus(int value) throws InvalidHeaderValueException {
+        this.mPduHeaders.setOctet(value, 149);
+    }
+
     public EncodedStringValue[] getTo() {
         return this.mPduHeaders.getEncodedStringValues(151);
     }
 
-    public void setDate(long j) {
-        this.mPduHeaders.setLongInteger(j, 133);
-    }
-
-    public void setMessageId(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 139);
-    }
-
-    public void setStatus(int i) throws InvalidHeaderValueException {
-        this.mPduHeaders.setOctet(i, 149);
-    }
-
-    public void setTo(EncodedStringValue[] encodedStringValueArr) {
-        this.mPduHeaders.setEncodedStringValues(encodedStringValueArr, 151);
+    public void setTo(EncodedStringValue[] value) {
+        this.mPduHeaders.setEncodedStringValues(value, 151);
     }
 }

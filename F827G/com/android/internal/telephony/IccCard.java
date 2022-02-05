@@ -2,11 +2,12 @@ package com.android.internal.telephony;
 
 import android.os.Handler;
 import android.os.Message;
-import com.android.internal.telephony.IccCardConstants.State;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppType;
+import com.android.internal.telephony.IccCardConstants;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.IccFileHandler;
 import com.android.internal.telephony.uicc.IccRecords;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface IccCard {
     public static final String INTENT_KEY_ICC_STATE_SHARP = "ss_sharp";
     public static final String INTENT_KEY_LOCKED_REASON_SHARP = "reason_sharp";
@@ -45,11 +46,11 @@ public interface IccCard {
 
     int getSimLock();
 
-    State getState();
+    IccCardConstants.State getState();
 
     boolean hasIccCard();
 
-    boolean isApplicationOnIcc(AppType appType);
+    boolean isApplicationOnIcc(IccCardApplicationStatus.AppType appType);
 
     void openLogicalChannel(String str, Message message);
 

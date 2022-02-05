@@ -3,6 +3,7 @@ package com.google.android.mms;
 import com.google.android.mms.pdu.CharacterSets;
 import java.util.ArrayList;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ContentType {
     public static final String APP_DRM_CONTENT = "application/vnd.oma.drm.content";
     public static final String APP_DRM_MESSAGE = "application/vnd.oma.drm.message";
@@ -54,10 +55,10 @@ public class ContentType {
     public static final String VIDEO_H263 = "video/h263";
     public static final String VIDEO_MP4 = "video/mp4";
     public static final String VIDEO_UNSPECIFIED = "video/*";
-    private static final ArrayList<String> sSupportedAudioTypes = new ArrayList();
-    private static final ArrayList<String> sSupportedContentTypes = new ArrayList();
-    private static final ArrayList<String> sSupportedImageTypes = new ArrayList();
-    private static final ArrayList<String> sSupportedVideoTypes = new ArrayList();
+    private static final ArrayList<String> sSupportedContentTypes = new ArrayList<>();
+    private static final ArrayList<String> sSupportedImageTypes = new ArrayList<>();
+    private static final ArrayList<String> sSupportedAudioTypes = new ArrayList<>();
+    private static final ArrayList<String> sSupportedVideoTypes = new ArrayList<>();
 
     static {
         sSupportedContentTypes.add(TEXT_PLAIN);
@@ -140,59 +141,59 @@ public class ContentType {
     private ContentType() {
     }
 
-    public static ArrayList<String> getAudioTypes() {
-        return (ArrayList) sSupportedAudioTypes.clone();
+    public static boolean isSupportedType(String contentType) {
+        return contentType != null && sSupportedContentTypes.contains(contentType);
+    }
+
+    public static boolean isSupportedImageType(String contentType) {
+        return isImageType(contentType) && isSupportedType(contentType);
+    }
+
+    public static boolean isSupportedAudioType(String contentType) {
+        return isAudioType(contentType) && isSupportedType(contentType);
+    }
+
+    public static boolean isSupportedVideoType(String contentType) {
+        return isVideoType(contentType) && isSupportedType(contentType);
+    }
+
+    public static boolean isTextType(String contentType) {
+        return contentType != null && contentType.startsWith("text/");
+    }
+
+    public static boolean isImageType(String contentType) {
+        return contentType != null && contentType.startsWith("image/");
+    }
+
+    public static boolean isAudioType(String contentType) {
+        return contentType != null && contentType.startsWith("audio/");
+    }
+
+    public static boolean isVideoType(String contentType) {
+        return contentType != null && contentType.startsWith("video/");
+    }
+
+    public static boolean isDrmType(String contentType) {
+        return contentType != null && (contentType.equals(APP_DRM_CONTENT) || contentType.equals("application/vnd.oma.drm.message"));
+    }
+
+    public static boolean isUnspecified(String contentType) {
+        return contentType != null && contentType.endsWith(CharacterSets.MIMENAME_ANY_CHARSET);
     }
 
     public static ArrayList<String> getImageTypes() {
         return (ArrayList) sSupportedImageTypes.clone();
     }
 
-    public static ArrayList<String> getSupportedTypes() {
-        return (ArrayList) sSupportedContentTypes.clone();
+    public static ArrayList<String> getAudioTypes() {
+        return (ArrayList) sSupportedAudioTypes.clone();
     }
 
     public static ArrayList<String> getVideoTypes() {
         return (ArrayList) sSupportedVideoTypes.clone();
     }
 
-    public static boolean isAudioType(String str) {
-        return str != null && str.startsWith("audio/");
-    }
-
-    public static boolean isDrmType(String str) {
-        return str != null && (str.equals(APP_DRM_CONTENT) || str.equals("application/vnd.oma.drm.message"));
-    }
-
-    public static boolean isImageType(String str) {
-        return str != null && str.startsWith("image/");
-    }
-
-    public static boolean isSupportedAudioType(String str) {
-        return isAudioType(str) && isSupportedType(str);
-    }
-
-    public static boolean isSupportedImageType(String str) {
-        return isImageType(str) && isSupportedType(str);
-    }
-
-    public static boolean isSupportedType(String str) {
-        return str != null && sSupportedContentTypes.contains(str);
-    }
-
-    public static boolean isSupportedVideoType(String str) {
-        return isVideoType(str) && isSupportedType(str);
-    }
-
-    public static boolean isTextType(String str) {
-        return str != null && str.startsWith("text/");
-    }
-
-    public static boolean isUnspecified(String str) {
-        return str != null && str.endsWith(CharacterSets.MIMENAME_ANY_CHARSET);
-    }
-
-    public static boolean isVideoType(String str) {
-        return str != null && str.startsWith("video/");
+    public static ArrayList<String> getSupportedTypes() {
+        return (ArrayList) sSupportedContentTypes.clone();
     }
 }

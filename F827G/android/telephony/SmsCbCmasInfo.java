@@ -2,8 +2,8 @@ package android.telephony;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsCbCmasInfo implements Parcelable {
     public static final int CMAS_CATEGORY_CBRNE = 10;
     public static final int CMAS_CATEGORY_ENV = 7;
@@ -44,13 +44,17 @@ public class SmsCbCmasInfo implements Parcelable {
     public static final int CMAS_URGENCY_EXPECTED = 1;
     public static final int CMAS_URGENCY_IMMEDIATE = 0;
     public static final int CMAS_URGENCY_UNKNOWN = -1;
-    public static final Creator<SmsCbCmasInfo> CREATOR = new Creator<SmsCbCmasInfo>() {
-        public SmsCbCmasInfo createFromParcel(Parcel parcel) {
-            return new SmsCbCmasInfo(parcel);
+    public static final Parcelable.Creator<SmsCbCmasInfo> CREATOR = new Parcelable.Creator<SmsCbCmasInfo>() { // from class: android.telephony.SmsCbCmasInfo.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbCmasInfo createFromParcel(Parcel in) {
+            return new SmsCbCmasInfo(in);
         }
 
-        public SmsCbCmasInfo[] newArray(int i) {
-            return new SmsCbCmasInfo[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbCmasInfo[] newArray(int size) {
+            return new SmsCbCmasInfo[size];
         }
     };
     private final int mCategory;
@@ -60,38 +64,41 @@ public class SmsCbCmasInfo implements Parcelable {
     private final int mSeverity;
     private final int mUrgency;
 
-    public SmsCbCmasInfo(int i, int i2, int i3, int i4, int i5, int i6) {
-        this.mMessageClass = i;
-        this.mCategory = i2;
-        this.mResponseType = i3;
-        this.mSeverity = i4;
-        this.mUrgency = i5;
-        this.mCertainty = i6;
+    public SmsCbCmasInfo(int messageClass, int category, int responseType, int severity, int urgency, int certainty) {
+        this.mMessageClass = messageClass;
+        this.mCategory = category;
+        this.mResponseType = responseType;
+        this.mSeverity = severity;
+        this.mUrgency = urgency;
+        this.mCertainty = certainty;
     }
 
-    SmsCbCmasInfo(Parcel parcel) {
-        this.mMessageClass = parcel.readInt();
-        this.mCategory = parcel.readInt();
-        this.mResponseType = parcel.readInt();
-        this.mSeverity = parcel.readInt();
-        this.mUrgency = parcel.readInt();
-        this.mCertainty = parcel.readInt();
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SmsCbCmasInfo(Parcel in) {
+        this.mMessageClass = in.readInt();
+        this.mCategory = in.readInt();
+        this.mResponseType = in.readInt();
+        this.mSeverity = in.readInt();
+        this.mUrgency = in.readInt();
+        this.mCertainty = in.readInt();
     }
 
-    public int describeContents() {
-        return 0;
-    }
-
-    public int getCategory() {
-        return this.mCategory;
-    }
-
-    public int getCertainty() {
-        return this.mCertainty;
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.mMessageClass);
+        dest.writeInt(this.mCategory);
+        dest.writeInt(this.mResponseType);
+        dest.writeInt(this.mSeverity);
+        dest.writeInt(this.mUrgency);
+        dest.writeInt(this.mCertainty);
     }
 
     public int getMessageClass() {
         return this.mMessageClass;
+    }
+
+    public int getCategory() {
+        return this.mCategory;
     }
 
     public int getResponseType() {
@@ -106,16 +113,16 @@ public class SmsCbCmasInfo implements Parcelable {
         return this.mUrgency;
     }
 
+    public int getCertainty() {
+        return this.mCertainty;
+    }
+
     public String toString() {
         return "SmsCbCmasInfo{messageClass=" + this.mMessageClass + ", category=" + this.mCategory + ", responseType=" + this.mResponseType + ", severity=" + this.mSeverity + ", urgency=" + this.mUrgency + ", certainty=" + this.mCertainty + '}';
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeInt(this.mMessageClass);
-        parcel.writeInt(this.mCategory);
-        parcel.writeInt(this.mResponseType);
-        parcel.writeInt(this.mSeverity);
-        parcel.writeInt(this.mUrgency);
-        parcel.writeInt(this.mCertainty);
+    @Override // android.os.Parcelable
+    public int describeContents() {
+        return 0;
     }
 }

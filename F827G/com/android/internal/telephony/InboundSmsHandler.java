@@ -1,35 +1,33 @@
 package com.android.internal.telephony;
 
 import android.app.ActivityManagerNative;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences.Editor;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.UserInfo;
+import android.database.Cursor;
+import android.database.SQLException;
 import android.net.Uri;
 import android.os.AsyncResult;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
 import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.preference.PreferenceManager;
-import android.provider.Telephony.Carriers;
-import android.provider.Telephony.CellBroadcasts;
-import android.provider.Telephony.Sms;
-import android.provider.Telephony.Sms.Inbox;
-import android.provider.Telephony.Sms.Intents;
-import android.provider.Telephony.TextBasedSmsColumns;
-import android.service.carrier.ICarrierMessagingCallback.Stub;
+import android.provider.Telephony;
+import android.service.carrier.ICarrierMessagingCallback;
 import android.service.carrier.ICarrierMessagingService;
 import android.service.carrier.MessagePdu;
 import android.telephony.CarrierMessagingServiceManager;
@@ -39,16 +37,20 @@ import android.telephony.SmsMessage;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import com.android.internal.telephony.SmsHeader.ConcatRef;
-import com.android.internal.telephony.SmsHeader.PortAddrs;
+import com.android.internal.telephony.SmsHeader;
+import com.android.internal.telephony.uicc.UiccCard;
+import com.android.internal.telephony.uicc.UiccController;
+import com.android.internal.util.HexDump;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
+import java.io.ByteArrayOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import jp.co.sharp.android.internal.telephony.SmsDuplicate;
-import jp.co.sharp.android.internal.telephony.SmsDuplicate.ResultJudgeDuplicate;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class InboundSmsHandler extends StateMachine {
     static final int ADDRESS_COLUMN = 6;
     static final int COUNT_COLUMN = 5;
@@ -65,8 +67,6 @@ public abstract class InboundSmsHandler extends StateMachine {
     static final int EVENT_UPDATE_PHONE_OBJECT = 7;
     static final int ID_COLUMN = 7;
     static final int PDU_COLUMN = 0;
-    private static final String[] PDU_PROJECTION = new String[]{"pdu"};
-    private static final String[] PDU_SEQUENCE_PORT_PROJECTION = new String[]{"pdu", "sequence", "destination_port"};
     static final int REFERENCE_NUMBER_COLUMN = 4;
     static final String SELECT_BY_ID = "_id=?";
     static final String SELECT_BY_REFERENCE = "address=? AND reference_number=? AND count=?";
@@ -74,176 +74,144 @@ public abstract class InboundSmsHandler extends StateMachine {
     private static final long TOLERANCE_TIME_MILLIS = 604800000;
     private static final boolean VDBG = false;
     private static final int WAKELOCK_TIMEOUT = 3000;
-    private static final Uri sRawUri = Uri.withAppendedPath(Sms.CONTENT_URI, "raw");
     protected CellBroadcastHandler mCellBroadcastHandler;
     protected final Context mContext;
-    final DefaultState mDefaultState = new DefaultState();
-    final DeliveringState mDeliveringState = new DeliveringState();
     protected SmsDuplicate mDuplicate;
-    final IdleState mIdleState = new IdleState();
     protected PhoneBase mPhone;
     private final ContentResolver mResolver;
     private final boolean mSmsReceiveDisabled;
-    final StartupState mStartupState = new StartupState();
     protected SmsStorageMonitor mStorageMonitor;
     private UserManager mUserManager;
-    final WaitingState mWaitingState = new WaitingState();
-    final WakeLock mWakeLock;
+    final PowerManager.WakeLock mWakeLock;
     private final WapPushOverSms mWapPush;
+    private static final String[] PDU_PROJECTION = {"pdu"};
+    private static final String[] PDU_SEQUENCE_PORT_PROJECTION = {"pdu", "sequence", "destination_port"};
+    private static final Uri sRawUri = Uri.withAppendedPath(Telephony.Sms.CONTENT_URI, "raw");
+    final DefaultState mDefaultState = new DefaultState();
+    final StartupState mStartupState = new StartupState();
+    final IdleState mIdleState = new IdleState();
+    final DeliveringState mDeliveringState = new DeliveringState();
+    final WaitingState mWaitingState = new WaitingState();
 
-    private final class CarrierSmsFilter extends CarrierMessagingServiceManager {
-        private final int mDestPort;
-        private final byte[][] mPdus;
-        private final SmsBroadcastReceiver mSmsBroadcastReceiver;
-        private volatile CarrierSmsFilterCallback mSmsFilterCallback;
-        private final String mSmsFormat;
+    protected abstract void acknowledgeLastIncomingSms(boolean z, int i, Message message);
 
-        CarrierSmsFilter(byte[][] bArr, int i, String str, SmsBroadcastReceiver smsBroadcastReceiver) {
-            this.mPdus = bArr;
-            this.mDestPort = i;
-            this.mSmsFormat = str;
-            this.mSmsBroadcastReceiver = smsBroadcastReceiver;
+    protected abstract int dispatchMessageRadioSpecific(SmsMessageBase smsMessageBase);
+
+    protected abstract boolean is3gpp2();
+
+    public InboundSmsHandler(String name, Context context, SmsStorageMonitor storageMonitor, PhoneBase phone, CellBroadcastHandler cellBroadcastHandler) {
+        super(name);
+        boolean z;
+        this.mContext = context;
+        this.mStorageMonitor = storageMonitor;
+        this.mPhone = phone;
+        this.mCellBroadcastHandler = cellBroadcastHandler;
+        this.mResolver = context.getContentResolver();
+        this.mWapPush = new WapPushOverSms(context);
+        if (!SystemProperties.getBoolean("telephony.sms.receive", this.mContext.getResources().getBoolean(17956949))) {
+            z = true;
+        } else {
+            z = false;
         }
+        this.mSmsReceiveDisabled = z;
+        this.mWakeLock = ((PowerManager) this.mContext.getSystemService("power")).newWakeLock(1, name);
+        this.mWakeLock.acquire();
+        this.mUserManager = (UserManager) this.mContext.getSystemService(Telephony.Carriers.USER);
+        addState(this.mDefaultState);
+        addState(this.mStartupState, this.mDefaultState);
+        addState(this.mIdleState, this.mDefaultState);
+        addState(this.mDeliveringState, this.mDefaultState);
+        addState(this.mWaitingState, this.mDeliveringState);
+        setInitialState(this.mStartupState);
+        log("created InboundSmsHandler");
+    }
 
-        /* Access modifiers changed, original: 0000 */
-        public void filterSms(String str, CarrierSmsFilterCallback carrierSmsFilterCallback) {
-            this.mSmsFilterCallback = carrierSmsFilterCallback;
-            if (bindToCarrierMessagingService(InboundSmsHandler.this.mContext, str)) {
-                InboundSmsHandler.this.logv("bindService() for carrier messaging service succeeded");
-                return;
-            }
-            InboundSmsHandler.this.loge("bindService() for carrier messaging service failed");
-            carrierSmsFilterCallback.onFilterComplete(true);
-        }
+    public void dispose() {
+        quit();
+    }
 
-        /* Access modifiers changed, original: protected */
-        public void onServiceReady(ICarrierMessagingService iCarrierMessagingService) {
-            try {
-                iCarrierMessagingService.filterSms(new MessagePdu(Arrays.asList(this.mPdus)), this.mSmsFormat, this.mDestPort, InboundSmsHandler.this.mPhone.getSubId(), this.mSmsFilterCallback);
-            } catch (RemoteException e) {
-                InboundSmsHandler.this.loge("Exception filtering the SMS: " + e);
-                this.mSmsFilterCallback.onFilterComplete(true);
-            }
+    public void updatePhoneObject(PhoneBase phone) {
+        sendMessage(7, phone);
+    }
+
+    public void onQuitting() {
+        this.mWapPush.dispose();
+        while (this.mWakeLock.isHeld()) {
+            this.mWakeLock.release();
         }
     }
 
-    private final class CarrierSmsFilterCallback extends Stub {
-        private final CarrierSmsFilter mSmsFilter;
-
-        CarrierSmsFilterCallback(CarrierSmsFilter carrierSmsFilter) {
-            this.mSmsFilter = carrierSmsFilter;
-        }
-
-        public void onDownloadMmsComplete(int i) {
-            InboundSmsHandler.this.loge("Unexpected onDownloadMmsComplete call with result: " + i);
-        }
-
-        public void onFilterComplete(boolean z) {
-            this.mSmsFilter.disposeConnection(InboundSmsHandler.this.mContext);
-            InboundSmsHandler.this.logv("onFilterComplete: keepMessage is " + z);
-            if (z) {
-                InboundSmsHandler.this.dispatchSmsDeliveryIntent(this.mSmsFilter.mPdus, this.mSmsFilter.mSmsFormat, this.mSmsFilter.mDestPort, this.mSmsFilter.mSmsBroadcastReceiver);
-                return;
-            }
-            long clearCallingIdentity = Binder.clearCallingIdentity();
-            try {
-                InboundSmsHandler.this.deleteFromRawTable(this.mSmsFilter.mSmsBroadcastReceiver.mDeleteWhere, this.mSmsFilter.mSmsBroadcastReceiver.mDeleteWhereArgs);
-                InboundSmsHandler.this.sendMessage(3);
-            } finally {
-                Binder.restoreCallingIdentity(clearCallingIdentity);
-            }
-        }
-
-        public void onSendMmsComplete(int i, byte[] bArr) {
-            InboundSmsHandler.this.loge("Unexpected onSendMmsComplete call with result: " + i);
-        }
-
-        public void onSendMultipartSmsComplete(int i, int[] iArr) {
-            InboundSmsHandler.this.loge("Unexpected onSendMultipartSmsComplete call with result: " + i);
-        }
-
-        public void onSendSmsComplete(int i, int i2) {
-            InboundSmsHandler.this.loge("Unexpected onSendSmsComplete call with result: " + i);
-        }
+    public PhoneBase getPhone() {
+        return this.mPhone;
     }
 
-    class DefaultState extends State {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class DefaultState extends State {
         DefaultState() {
+            InboundSmsHandler.this = r1;
         }
 
-        public boolean processMessage(Message message) {
-            switch (message.what) {
+        public boolean processMessage(Message msg) {
+            switch (msg.what) {
                 case 7:
-                    InboundSmsHandler.this.onUpdatePhoneObject((PhoneBase) message.obj);
-                    break;
+                    InboundSmsHandler.this.onUpdatePhoneObject((PhoneBase) msg.obj);
+                    return true;
                 default:
-                    String str = "processMessage: unhandled message type " + message.what + " currState=" + InboundSmsHandler.this.getCurrentState().getName();
-                    if (!Build.IS_DEBUGGABLE) {
-                        InboundSmsHandler.this.loge(str);
-                        break;
+                    String errorText = "processMessage: unhandled message type " + msg.what + " currState=" + InboundSmsHandler.this.getCurrentState().getName();
+                    if (Build.IS_DEBUGGABLE) {
+                        InboundSmsHandler.this.loge("---- Dumping InboundSmsHandler ----");
+                        InboundSmsHandler.this.loge("Total records=" + InboundSmsHandler.this.getLogRecCount());
+                        for (int i = Math.max(InboundSmsHandler.this.getLogRecSize() - 20, 0); i < InboundSmsHandler.this.getLogRecSize(); i++) {
+                            InboundSmsHandler.this.loge("Rec[%d]: %s\n" + i + InboundSmsHandler.this.getLogRec(i).toString());
+                        }
+                        InboundSmsHandler.this.loge("---- Dumped InboundSmsHandler ----");
+                        throw new RuntimeException(errorText);
                     }
-                    InboundSmsHandler.this.loge("---- Dumping InboundSmsHandler ----");
-                    InboundSmsHandler.this.loge("Total records=" + InboundSmsHandler.this.getLogRecCount());
-                    for (int max = Math.max(InboundSmsHandler.this.getLogRecSize() - 20, 0); max < InboundSmsHandler.this.getLogRecSize(); max++) {
-                        InboundSmsHandler.this.loge("Rec[%d]: %s\n" + max + InboundSmsHandler.this.getLogRec(max).toString());
-                    }
-                    InboundSmsHandler.this.loge("---- Dumped InboundSmsHandler ----");
-                    throw new RuntimeException(str);
+                    InboundSmsHandler.this.loge(errorText);
+                    return true;
             }
-            return true;
         }
     }
 
-    class DeliveringState extends State {
-        DeliveringState() {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class StartupState extends State {
+        StartupState() {
+            InboundSmsHandler.this = r1;
         }
 
-        public void enter() {
-            InboundSmsHandler.this.log("entering Delivering state");
-        }
-
-        public void exit() {
-            InboundSmsHandler.this.log("leaving Delivering state");
-        }
-
-        public boolean processMessage(Message message) {
-            InboundSmsHandler.this.log("DeliveringState.processMessage:" + message.what);
-            switch (message.what) {
+        public boolean processMessage(Message msg) {
+            InboundSmsHandler.this.log("StartupState.processMessage:" + msg.what);
+            switch (msg.what) {
                 case 1:
-                    InboundSmsHandler.this.handleNewSms((AsyncResult) message.obj);
-                    InboundSmsHandler.this.sendMessage(4);
-                    return true;
                 case 2:
-                    if (InboundSmsHandler.this.processMessagePart((InboundSmsTracker) message.obj)) {
-                        InboundSmsHandler.this.transitionTo(InboundSmsHandler.this.mWaitingState);
-                    }
-                    return true;
-                case 4:
-                    InboundSmsHandler.this.transitionTo(InboundSmsHandler.this.mIdleState);
-                    return true;
-                case 5:
-                    InboundSmsHandler.this.mWakeLock.release();
-                    if (!InboundSmsHandler.this.mWakeLock.isHeld()) {
-                        InboundSmsHandler.this.loge("mWakeLock released while delivering/broadcasting!");
-                    }
-                    return true;
                 case 8:
-                    InboundSmsHandler.this.handleInjectSms((AsyncResult) message.obj);
-                    InboundSmsHandler.this.sendMessage(4);
+                    InboundSmsHandler.this.deferMessage(msg);
                     return true;
+                case 3:
+                case 4:
+                case 5:
+                case 7:
                 default:
                     return false;
+                case 6:
+                    InboundSmsHandler.this.transitionTo(InboundSmsHandler.this.mIdleState);
+                    return true;
             }
         }
     }
 
-    class IdleState extends State {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class IdleState extends State {
         IdleState() {
+            InboundSmsHandler.this = r1;
         }
 
         public void enter() {
             InboundSmsHandler.this.log("entering Idle state");
-            InboundSmsHandler.this.sendMessageDelayed(5, 3000);
+            InboundSmsHandler.this.sendMessageDelayed(5, 3000L);
         }
 
         public void exit() {
@@ -251,16 +219,21 @@ public abstract class InboundSmsHandler extends StateMachine {
             InboundSmsHandler.this.log("acquired wakelock, leaving Idle state");
         }
 
-        public boolean processMessage(Message message) {
-            InboundSmsHandler.this.log("IdleState.processMessage:" + message.what);
-            InboundSmsHandler.this.log("Idle state processing message type " + message.what);
-            switch (message.what) {
+        public boolean processMessage(Message msg) {
+            InboundSmsHandler.this.log("IdleState.processMessage:" + msg.what);
+            InboundSmsHandler.this.log("Idle state processing message type " + msg.what);
+            switch (msg.what) {
                 case 1:
                 case 2:
                 case 8:
-                    InboundSmsHandler.this.deferMessage(message);
+                    InboundSmsHandler.this.deferMessage(msg);
                     InboundSmsHandler.this.transitionTo(InboundSmsHandler.this.mDeliveringState);
                     return true;
+                case 3:
+                case 6:
+                case 7:
+                default:
+                    return false;
                 case 4:
                     return true;
                 case 5:
@@ -271,84 +244,71 @@ public abstract class InboundSmsHandler extends StateMachine {
                     }
                     InboundSmsHandler.this.log("mWakeLock released");
                     return true;
+            }
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class DeliveringState extends State {
+        DeliveringState() {
+            InboundSmsHandler.this = r1;
+        }
+
+        public void enter() {
+            InboundSmsHandler.this.log("entering Delivering state");
+        }
+
+        public void exit() {
+            InboundSmsHandler.this.log("leaving Delivering state");
+        }
+
+        public boolean processMessage(Message msg) {
+            InboundSmsHandler.this.log("DeliveringState.processMessage:" + msg.what);
+            switch (msg.what) {
+                case 1:
+                    InboundSmsHandler.this.handleNewSms((AsyncResult) msg.obj);
+                    InboundSmsHandler.this.sendMessage(4);
+                    return true;
+                case 2:
+                    if (InboundSmsHandler.this.processMessagePart((InboundSmsTracker) msg.obj)) {
+                        InboundSmsHandler.this.transitionTo(InboundSmsHandler.this.mWaitingState);
+                    }
+                    return true;
+                case 3:
+                case 6:
+                case 7:
                 default:
                     return false;
-            }
-        }
-    }
-
-    private final class SmsBroadcastReceiver extends BroadcastReceiver {
-        private long mBroadcastTimeNano = System.nanoTime();
-        private final String mDeleteWhere;
-        private final String[] mDeleteWhereArgs;
-
-        SmsBroadcastReceiver(InboundSmsTracker inboundSmsTracker) {
-            this.mDeleteWhere = inboundSmsTracker.getDeleteWhere();
-            this.mDeleteWhereArgs = inboundSmsTracker.getDeleteWhereArgs();
-        }
-
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action.equals(Intents.SMS_DELIVER_ACTION)) {
-                intent.setAction(Intents.SMS_RECEIVED_ACTION);
-                intent.setComponent(null);
-                InboundSmsHandler.this.dispatchIntent(intent, "android.permission.RECEIVE_SMS", 16, this, UserHandle.ALL);
-            } else if (action.equals(Intents.WAP_PUSH_DELIVER_ACTION)) {
-                intent.setAction(Intents.WAP_PUSH_RECEIVED_ACTION);
-                intent.setComponent(null);
-                InboundSmsHandler.this.dispatchIntent(intent, "android.permission.RECEIVE_SMS", 16, this, UserHandle.OWNER);
-            } else {
-                if (!(Intents.DATA_SMS_RECEIVED_ACTION.equals(action) || Intents.SMS_RECEIVED_ACTION.equals(action) || Intents.DATA_SMS_RECEIVED_ACTION.equals(action) || Intents.WAP_PUSH_RECEIVED_ACTION.equals(action))) {
-                    InboundSmsHandler.this.loge("unexpected BroadcastReceiver action: " + action);
-                }
-                int resultCode = getResultCode();
-                if (resultCode == -1 || resultCode == 1) {
-                    InboundSmsHandler.this.log("successful broadcast, deleting from raw table.");
-                } else {
-                    InboundSmsHandler.this.loge("a broadcast receiver set the result code to " + resultCode + ", deleting from raw table anyway!");
-                }
-                InboundSmsHandler.this.deleteFromRawTable(this.mDeleteWhere, this.mDeleteWhereArgs);
-                InboundSmsHandler.this.sendMessage(3);
-                resultCode = (int) ((System.nanoTime() - this.mBroadcastTimeNano) / 1000000);
-                if (resultCode >= 5000) {
-                    InboundSmsHandler.this.loge("Slow ordered broadcast completion time: " + resultCode + " ms");
-                } else {
-                    InboundSmsHandler.this.log("ordered broadcast completed in: " + resultCode + " ms");
-                }
-            }
-        }
-    }
-
-    class StartupState extends State {
-        StartupState() {
-        }
-
-        public boolean processMessage(Message message) {
-            InboundSmsHandler.this.log("StartupState.processMessage:" + message.what);
-            switch (message.what) {
-                case 1:
-                case 2:
-                case 8:
-                    InboundSmsHandler.this.deferMessage(message);
-                    return true;
-                case 6:
+                case 4:
                     InboundSmsHandler.this.transitionTo(InboundSmsHandler.this.mIdleState);
                     return true;
-                default:
-                    return false;
+                case 5:
+                    InboundSmsHandler.this.mWakeLock.release();
+                    if (!InboundSmsHandler.this.mWakeLock.isHeld()) {
+                        InboundSmsHandler.this.loge("mWakeLock released while delivering/broadcasting!");
+                    }
+                    return true;
+                case 8:
+                    InboundSmsHandler.this.handleInjectSms((AsyncResult) msg.obj);
+                    InboundSmsHandler.this.sendMessage(4);
+                    return true;
             }
         }
     }
 
-    class WaitingState extends State {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class WaitingState extends State {
         WaitingState() {
+            InboundSmsHandler.this = r1;
         }
 
-        public boolean processMessage(Message message) {
-            InboundSmsHandler.this.log("WaitingState.processMessage:" + message.what);
-            switch (message.what) {
+        public boolean processMessage(Message msg) {
+            InboundSmsHandler.this.log("WaitingState.processMessage:" + msg.what);
+            switch (msg.what) {
                 case 2:
-                    InboundSmsHandler.this.deferMessage(message);
+                    InboundSmsHandler.this.deferMessage(msg);
                     return true;
                 case 3:
                     InboundSmsHandler.this.sendMessage(4);
@@ -362,315 +322,102 @@ public abstract class InboundSmsHandler extends StateMachine {
         }
     }
 
-    protected InboundSmsHandler(String str, Context context, SmsStorageMonitor smsStorageMonitor, PhoneBase phoneBase, CellBroadcastHandler cellBroadcastHandler) {
-        super(str);
-        this.mContext = context;
-        this.mStorageMonitor = smsStorageMonitor;
-        this.mPhone = phoneBase;
-        this.mCellBroadcastHandler = cellBroadcastHandler;
-        this.mResolver = context.getContentResolver();
-        this.mWapPush = new WapPushOverSms(context);
-        this.mSmsReceiveDisabled = !SystemProperties.getBoolean("telephony.sms.receive", this.mContext.getResources().getBoolean(17956949));
-        this.mWakeLock = ((PowerManager) this.mContext.getSystemService("power")).newWakeLock(1, str);
-        this.mWakeLock.acquire();
-        this.mUserManager = (UserManager) this.mContext.getSystemService(Carriers.USER);
-        addState(this.mDefaultState);
-        addState(this.mStartupState, this.mDefaultState);
-        addState(this.mIdleState, this.mDefaultState);
-        addState(this.mDeliveringState, this.mDefaultState);
-        addState(this.mWaitingState, this.mDeliveringState);
-        setInitialState(this.mStartupState);
-        log("created InboundSmsHandler");
-    }
-
-    /* JADX WARNING: Removed duplicated region for block: B:33:0x012a  */
-    private int addTrackerToRawTable(com.android.internal.telephony.InboundSmsTracker r14) {
-        /*
-        r13 = this;
-        r8 = 0;
-        r6 = 2;
-        r7 = 1;
-        r0 = r14.getMessageCount();
-        if (r0 == r7) goto L_0x012e;
-    L_0x0009:
-        r0 = r14.getTimestamp();	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r2 = 604800000; // 0x240c8400 float:3.046947E-17 double:2.988109026E-315;
-        r0 = r0 - r2;
-        r0 = java.lang.Long.toString(r0);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r1 = r13.mResolver;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r2 = sRawUri;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r3 = "date<?";
-        r4 = 1;
-        r4 = new java.lang.String[r4];	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r5 = 0;
-        r4[r5] = r0;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r1.delete(r2, r3, r4);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r0 = r14.getSequenceNumber();	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r5 = r14.getAddress();	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r1 = r14.getReferenceNumber();	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r9 = java.lang.Integer.toString(r1);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r1 = r14.getMessageCount();	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r10 = java.lang.Integer.toString(r1);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r11 = java.lang.Integer.toString(r0);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r0 = "address=? AND reference_number=? AND count=?";
-        r1 = 3;
-        r1 = new java.lang.String[r1];	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r2 = 0;
-        r1[r2] = r5;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r2 = 1;
-        r1[r2] = r9;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r2 = 2;
-        r1[r2] = r10;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r14.setDeleteWhere(r0, r1);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r0 = r13.mResolver;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r1 = sRawUri;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r2 = PDU_PROJECTION;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r3 = "address=? AND reference_number=? AND count=? AND sequence=?";
-        r4 = 4;
-        r4 = new java.lang.String[r4];	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r12 = 0;
-        r4[r12] = r5;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r5 = 1;
-        r4[r5] = r9;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r5 = 2;
-        r4[r5] = r10;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r5 = 3;
-        r4[r5] = r11;	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r5 = 0;
-        r1 = r0.query(r1, r2, r3, r4, r5);	 Catch:{ SQLException -> 0x0119, all -> 0x0126 }
-        r0 = r1.moveToNext();	 Catch:{ SQLException -> 0x0155 }
-        if (r0 == 0) goto L_0x00d4;
-    L_0x0073:
-        r0 = new java.lang.StringBuilder;	 Catch:{ SQLException -> 0x0155 }
-        r0.<init>();	 Catch:{ SQLException -> 0x0155 }
-        r2 = "Discarding duplicate message segment, refNumber=";
-        r0 = r0.append(r2);	 Catch:{ SQLException -> 0x0155 }
-        r0 = r0.append(r9);	 Catch:{ SQLException -> 0x0155 }
-        r2 = " seqNumber=";
-        r0 = r0.append(r2);	 Catch:{ SQLException -> 0x0155 }
-        r0 = r0.append(r11);	 Catch:{ SQLException -> 0x0155 }
-        r0 = r0.toString();	 Catch:{ SQLException -> 0x0155 }
-        r13.loge(r0);	 Catch:{ SQLException -> 0x0155 }
-        r0 = 0;
-        r0 = r1.getString(r0);	 Catch:{ SQLException -> 0x0155 }
-        r2 = r14.getPdu();	 Catch:{ SQLException -> 0x0155 }
-        r0 = com.android.internal.util.HexDump.hexStringToByteArray(r0);	 Catch:{ SQLException -> 0x0155 }
-        r3 = r14.getPdu();	 Catch:{ SQLException -> 0x0155 }
-        r3 = java.util.Arrays.equals(r0, r3);	 Catch:{ SQLException -> 0x0155 }
-        if (r3 != 0) goto L_0x00cc;
-    L_0x00aa:
-        r3 = new java.lang.StringBuilder;	 Catch:{ SQLException -> 0x0155 }
-        r3.<init>();	 Catch:{ SQLException -> 0x0155 }
-        r4 = "Warning: dup message segment PDU of length ";
-        r3 = r3.append(r4);	 Catch:{ SQLException -> 0x0155 }
-        r2 = r2.length;	 Catch:{ SQLException -> 0x0155 }
-        r2 = r3.append(r2);	 Catch:{ SQLException -> 0x0155 }
-        r3 = " is different from existing PDU of length ";
-        r2 = r2.append(r3);	 Catch:{ SQLException -> 0x0155 }
-        r0 = r0.length;	 Catch:{ SQLException -> 0x0155 }
-        r0 = r2.append(r0);	 Catch:{ SQLException -> 0x0155 }
-        r0 = r0.toString();	 Catch:{ SQLException -> 0x0155 }
-        r13.loge(r0);	 Catch:{ SQLException -> 0x0155 }
-    L_0x00cc:
-        r0 = 5;
-        if (r1 == 0) goto L_0x00d2;
-    L_0x00cf:
-        r1.close();
-    L_0x00d2:
-        r6 = r0;
-    L_0x00d3:
-        return r6;
-    L_0x00d4:
-        r1.close();	 Catch:{ SQLException -> 0x0155 }
-        if (r1 == 0) goto L_0x00dc;
-    L_0x00d9:
-        r1.close();
-    L_0x00dc:
-        r0 = r14.getContentValues();
-        r1 = r13.mResolver;
-        r2 = sRawUri;
-        r1 = r1.insert(r2, r0);
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r2 = "URI of new row -> ";
-        r0 = r0.append(r2);
-        r0 = r0.append(r1);
-        r0 = r0.toString();
-        r13.log(r0);
-        r2 = android.content.ContentUris.parseId(r1);	 Catch:{ Exception -> 0x013b }
-        r0 = r14.getMessageCount();	 Catch:{ Exception -> 0x013b }
-        if (r0 != r7) goto L_0x0117;
-    L_0x0108:
-        r0 = "_id=?";
-        r4 = 1;
-        r4 = new java.lang.String[r4];	 Catch:{ Exception -> 0x013b }
-        r5 = 0;
-        r2 = java.lang.Long.toString(r2);	 Catch:{ Exception -> 0x013b }
-        r4[r5] = r2;	 Catch:{ Exception -> 0x013b }
-        r14.setDeleteWhere(r0, r4);	 Catch:{ Exception -> 0x013b }
-    L_0x0117:
-        r6 = r7;
-        goto L_0x00d3;
-    L_0x0119:
-        r0 = move-exception;
-        r1 = r8;
-    L_0x011b:
-        r2 = "Can't access multipart SMS database";
-        r13.loge(r2, r0);	 Catch:{ all -> 0x0153 }
-        if (r1 == 0) goto L_0x0157;
-    L_0x0122:
-        r1.close();
-        goto L_0x00d3;
-    L_0x0126:
-        r0 = move-exception;
-        r1 = r8;
-    L_0x0128:
-        if (r1 == 0) goto L_0x012d;
-    L_0x012a:
-        r1.close();
-    L_0x012d:
-        throw r0;
-    L_0x012e:
-        r0 = r13.judSmsDuplicate(r14);
-        if (r0 == 0) goto L_0x00dc;
-    L_0x0134:
-        r0 = "Received SMS is duplicate";
-        r13.log(r0);
-        r6 = 5;
-        goto L_0x00d3;
-    L_0x013b:
-        r0 = move-exception;
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r3 = "error parsing URI for new row: ";
-        r2 = r2.append(r3);
-        r1 = r2.append(r1);
-        r1 = r1.toString();
-        r13.loge(r1, r0);
-        goto L_0x00d3;
-    L_0x0153:
-        r0 = move-exception;
-        goto L_0x0128;
-    L_0x0155:
-        r0 = move-exception;
-        goto L_0x011b;
-    L_0x0157:
-        r0 = r6;
-        goto L_0x00d2;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.InboundSmsHandler.addTrackerToRawTable(com.android.internal.telephony.InboundSmsTracker):int");
-    }
-
-    private static String buildMessageBodyFromPdus(SmsMessage[] smsMessageArr) {
-        int i = 0;
-        if (smsMessageArr.length == 1) {
-            return replaceFormFeeds(smsMessageArr[0].getDisplayMessageBody());
+    void handleNewSms(AsyncResult ar) {
+        int result;
+        boolean handled = true;
+        if (ar.exception != null) {
+            loge("Exception processing incoming SMS: " + ar.exception);
+            return;
         }
-        StringBuilder stringBuilder = new StringBuilder();
-        int length = smsMessageArr.length;
-        while (i < length) {
-            stringBuilder.append(smsMessageArr[i].getDisplayMessageBody());
-            i++;
+        try {
+            result = dispatchMessage(((SmsMessage) ar.result).mWrappedSmsMessage);
+        } catch (RuntimeException ex) {
+            loge("Exception dispatching message", ex);
+            result = 2;
         }
-        return replaceFormFeeds(stringBuilder.toString());
+        SmsHeader smsHeader = ((SmsMessage) ar.result).mWrappedSmsMessage.getUserDataHeader();
+        if (smsHeader != null && smsHeader.portAddrs != null && smsHeader.portAddrs.destPort == 2948 && result == 3) {
+            acknowledgeLastIncomingSms(false, result, null);
+        } else if (result != -1) {
+            if (result != 1) {
+                handled = false;
+            }
+            notifyAndAcknowledgeLastIncomingSms(handled, result, null);
+        }
     }
 
-    private byte[] getMessage_NotmtiPdu(byte[] bArr) {
-        int length = bArr.length;
-        int i = bArr[0] + 1;
-        if (i >= length) {
-            return bArr;
-        }
-        int i2 = i + 1;
-        byte[] bArr2 = new byte[(length - i2)];
-        System.arraycopy(bArr, i2, bArr2, 0, length - i2);
-        return bArr2;
-    }
-
-    private List<String> getSystemAppForIntent(Intent intent) {
-        ArrayList arrayList = new ArrayList();
-        PackageManager packageManager = this.mContext.getPackageManager();
-        for (ResolveInfo resolveInfo : packageManager.queryIntentServices(intent, 0)) {
-            if (resolveInfo.serviceInfo == null) {
-                loge("Can't get service information from " + resolveInfo);
+    void handleInjectSms(AsyncResult ar) {
+        int result;
+        PendingIntent receivedIntent = null;
+        try {
+            receivedIntent = (PendingIntent) ar.userObj;
+            SmsMessage sms = (SmsMessage) ar.result;
+            if (sms == null) {
+                result = 2;
             } else {
-                String str = resolveInfo.serviceInfo.packageName;
-                if (packageManager.checkPermission("android.permission.CARRIER_FILTER_SMS", str) == 0) {
-                    arrayList.add(str);
-                    log("getSystemAppForIntent: added package " + str);
-                }
+                result = dispatchMessage(sms.mWrappedSmsMessage);
             }
+        } catch (RuntimeException ex) {
+            loge("Exception dispatching message", ex);
+            result = 2;
         }
-        return arrayList;
-    }
-
-    static boolean isCurrentFormat3gpp2() {
-        return 2 == TelephonyManager.getDefault().getCurrentPhoneType();
-    }
-
-    private static ContentValues parseSmsMessage(SmsMessage[] smsMessageArr) {
-        int i = 0;
-        SmsMessage smsMessage = smsMessageArr[0];
-        ContentValues contentValues = new ContentValues();
-        contentValues.put("address", smsMessage.getDisplayOriginatingAddress());
-        contentValues.put("body", buildMessageBodyFromPdus(smsMessageArr));
-        contentValues.put("date_sent", Long.valueOf(smsMessage.getTimestampMillis()));
-        contentValues.put("date", Long.valueOf(System.currentTimeMillis()));
-        contentValues.put("protocol", Integer.valueOf(smsMessage.getProtocolIdentifier()));
-        contentValues.put("seen", Integer.valueOf(0));
-        contentValues.put("read", Integer.valueOf(0));
-        String pseudoSubject = smsMessage.getPseudoSubject();
-        if (!TextUtils.isEmpty(pseudoSubject)) {
-            contentValues.put(TextBasedSmsColumns.SUBJECT, pseudoSubject);
-        }
-        if (smsMessage.isReplyPathPresent()) {
-            i = 1;
-        }
-        contentValues.put(TextBasedSmsColumns.REPLY_PATH_PRESENT, Integer.valueOf(i));
-        contentValues.put(TextBasedSmsColumns.SERVICE_CENTER, smsMessage.getServiceCenterAddress());
-        return contentValues;
-    }
-
-    private static String replaceFormFeeds(String str) {
-        return str == null ? "" : str.replace(12, 10);
-    }
-
-    private Uri writeInboxMessage(Intent intent) {
-        Uri uri = null;
-        SmsMessage[] messagesFromIntent = Intents.getMessagesFromIntent(intent);
-        if (messagesFromIntent == null || messagesFromIntent.length < 1) {
-            loge("Failed to parse SMS pdu");
-        } else {
-            int length = messagesFromIntent.length;
-            int i = 0;
-            while (i < length) {
-                try {
-                    messagesFromIntent[i].getDisplayMessageBody();
-                    i++;
-                } catch (NullPointerException e) {
-                    loge("NPE inside SmsMessage");
-                }
-            }
-            ContentValues parseSmsMessage = parseSmsMessage(messagesFromIntent);
-            long clearCallingIdentity = Binder.clearCallingIdentity();
+        if (receivedIntent != null) {
             try {
-                uri = this.mContext.getContentResolver().insert(Inbox.CONTENT_URI, parseSmsMessage);
-            } catch (Exception e2) {
-                loge("Failed to persist inbox message", e2);
-            } finally {
-                Binder.restoreCallingIdentity(clearCallingIdentity);
+                receivedIntent.send(result);
+            } catch (PendingIntent.CanceledException e) {
             }
         }
-        return uri;
     }
 
-    public abstract void acknowledgeLastIncomingSms(boolean z, int i, Message message);
+    public int dispatchMessage(SmsMessageBase smsb) {
+        if (smsb == null) {
+            loge("dispatchSmsMessage: message is null");
+            return 2;
+        } else if (!this.mSmsReceiveDisabled) {
+            return dispatchMessageRadioSpecific(smsb);
+        } else {
+            log("Received short message on device which doesn't support receiving SMS. Ignored.");
+            return 1;
+        }
+    }
 
-    /* Access modifiers changed, original: protected */
-    public int addTrackerToRawTableAndSendMessage(InboundSmsTracker inboundSmsTracker) {
-        switch (addTrackerToRawTable(inboundSmsTracker)) {
+    public void onUpdatePhoneObject(PhoneBase phone) {
+        this.mPhone = phone;
+        this.mStorageMonitor = this.mPhone.mSmsStorageMonitor;
+        log("onUpdatePhoneObject: phone=" + this.mPhone.getClass().getSimpleName());
+    }
+
+    void notifyAndAcknowledgeLastIncomingSms(boolean success, int result, Message response) {
+        if (!success) {
+            Intent intent = new Intent(Telephony.Sms.Intents.SMS_REJECTED_ACTION);
+            intent.putExtra("result", result);
+            this.mContext.sendBroadcast(intent, "android.permission.RECEIVE_SMS");
+        }
+        acknowledgeLastIncomingSms(success, result, response);
+    }
+
+    protected int dispatchNormalMessage(SmsMessageBase sms) {
+        InboundSmsTracker tracker;
+        SmsHeader smsHeader = sms.getUserDataHeader();
+        if (smsHeader == null || smsHeader.concatRef == null) {
+            int destPort = -1;
+            if (!(smsHeader == null || smsHeader.portAddrs == null)) {
+                destPort = smsHeader.portAddrs.destPort;
+                log("destination port: " + destPort);
+            }
+            tracker = new InboundSmsTracker(sms.getPdu(), sms.getTimestampMillis(), destPort, is3gpp2(), false);
+        } else {
+            SmsHeader.ConcatRef concatRef = smsHeader.concatRef;
+            SmsHeader.PortAddrs portAddrs = smsHeader.portAddrs;
+            tracker = new InboundSmsTracker(sms.getPdu(), sms.getTimestampMillis(), portAddrs != null ? portAddrs.destPort : -1, is3gpp2(), sms.getOriginatingAddress(), concatRef.refNumber, concatRef.seqNumber, concatRef.msgCount, false);
+        }
+        return addTrackerToRawTableAndSendMessage(tracker);
+    }
+
+    protected int addTrackerToRawTableAndSendMessage(InboundSmsTracker tracker) {
+        switch (addTrackerToRawTable(tracker)) {
             case 1:
-                sendMessage(2, inboundSmsTracker);
+                sendMessage(2, tracker);
                 return 1;
             case 5:
                 return 1;
@@ -679,543 +426,495 @@ public abstract class InboundSmsHandler extends StateMachine {
         }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void deleteFromRawTable(String str, String[] strArr) {
-        int delete = this.mResolver.delete(sRawUri, str, strArr);
-        if (delete == 0) {
-            loge("No rows were deleted from raw table!");
+    boolean processMessagePart(InboundSmsTracker tracker) {
+        byte[][] pdus;
+        int messageCount = tracker.getMessageCount();
+        int destPort = tracker.getDestPort();
+        String address = "";
+        if (messageCount == 1) {
+            pdus = new byte[][]{tracker.getPdu()};
         } else {
-            log("Deleted " + delete + " rows from raw table.");
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void dispatchIntent(Intent intent, String str, int i, BroadcastReceiver broadcastReceiver, UserHandle userHandle) {
-        intent.addFlags(134217728);
-        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhone.getPhoneId());
-        if (userHandle.equals(UserHandle.ALL)) {
-            int[] iArr = null;
+            Cursor cursor = null;
             try {
-                iArr = ActivityManagerNative.getDefault().getRunningUserIds();
-            } catch (RemoteException e) {
-            }
-            if (iArr == null) {
-                iArr = new int[]{userHandle.getIdentifier()};
-            }
-            int[] iArr2 = iArr;
-            for (int length = iArr2.length - 1; length >= 0; length--) {
-                UserHandle userHandle2 = new UserHandle(iArr2[length]);
-                if (iArr2[length] != 0) {
-                    if (!this.mUserManager.hasUserRestriction("no_sms", userHandle2)) {
-                        UserInfo userInfo = this.mUserManager.getUserInfo(iArr2[length]);
-                        if (userInfo != null) {
-                            if (userInfo.isManagedProfile()) {
+                try {
+                    address = tracker.getAddress();
+                    cursor = this.mResolver.query(sRawUri, PDU_SEQUENCE_PORT_PROJECTION, SELECT_BY_REFERENCE, new String[]{address, Integer.toString(tracker.getReferenceNumber()), Integer.toString(tracker.getMessageCount())}, null);
+                    if (cursor.getCount() >= messageCount) {
+                        pdus = new byte[messageCount];
+                        while (cursor.moveToNext()) {
+                            int index = cursor.getInt(1) - tracker.getIndexOffset();
+                            pdus[index] = HexDump.hexStringToByteArray(cursor.getString(0));
+                            if (index == 0 && !cursor.isNull(2)) {
+                                int port = InboundSmsTracker.getRealDestPort(cursor.getInt(2));
+                                if (port != -1) {
+                                    destPort = port;
+                                }
                             }
                         }
+                        if (cursor != null) {
+                            cursor.close();
+                        }
+                    } else if (cursor == null) {
+                        return false;
+                    } else {
+                        cursor.close();
+                        return false;
+                    }
+                } catch (SQLException e) {
+                    loge("Can't access multipart SMS database", e);
+                    if (cursor == null) {
+                        return false;
+                    }
+                    cursor.close();
+                    return false;
+                }
+            } catch (Throwable th) {
+                if (cursor != null) {
+                    cursor.close();
+                }
+                throw th;
+            }
+        }
+        SmsBroadcastReceiver resultReceiver = new SmsBroadcastReceiver(tracker);
+        if (destPort == 2948) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            for (byte[] pdu : pdus) {
+                if (!tracker.is3gpp2()) {
+                    SmsMessage msg = SmsMessage.createFromPdu(pdu, SmsMessage.FORMAT_3GPP);
+                    pdu = msg.getUserData();
+                    if (address == "") {
+                        address = msg.getOriginatingAddress();
+                    } else if (address == "") {
+                        address = tracker.getAddress();
                     }
                 }
-                this.mContext.sendOrderedBroadcastAsUser(intent, userHandle2, str, i, iArr2[length] == 0 ? broadcastReceiver : null, getHandler(), -1, null, null);
+                output.write(pdu, 0, pdu.length);
+            }
+            this.mWapPush.setDeleteWhere(tracker.getDeleteWhere());
+            this.mWapPush.setDeleteWhereArgs(tracker.getDeleteWhereArgs());
+            int result = this.mWapPush.dispatchWapPdu(output.toByteArray(), resultReceiver, this, address);
+            log("dispatchWapPdu() returned " + result);
+            return result == -1;
+        }
+        List<String> carrierPackages = null;
+        UiccCard card = UiccController.getInstance().getUiccCard(this.mPhone.getPhoneId());
+        if (card != null) {
+            carrierPackages = card.getCarrierPackageNamesForIntent(this.mContext.getPackageManager(), new Intent("android.service.carrier.CarrierMessagingService"));
+        } else {
+            loge("UiccCard not initialized.");
+        }
+        List<String> systemPackages = getSystemAppForIntent(new Intent("android.service.carrier.CarrierMessagingService"));
+        if (carrierPackages != null && carrierPackages.size() == 1) {
+            log("Found carrier package.");
+            CarrierSmsFilter smsFilter = new CarrierSmsFilter(pdus, destPort, tracker.getFormat(), resultReceiver);
+            smsFilter.filterSms(carrierPackages.get(0), new CarrierSmsFilterCallback(smsFilter));
+        } else if (systemPackages == null || systemPackages.size() != 1) {
+            logv("Unable to find carrier package: " + carrierPackages + ", nor systemPackages: " + systemPackages);
+            dispatchSmsDeliveryIntent(pdus, tracker.getFormat(), destPort, resultReceiver);
+        } else {
+            log("Found system package.");
+            CarrierSmsFilter smsFilter2 = new CarrierSmsFilter(pdus, destPort, tracker.getFormat(), resultReceiver);
+            smsFilter2.filterSms(systemPackages.get(0), new CarrierSmsFilterCallback(smsFilter2));
+        }
+        return true;
+    }
+
+    private List<String> getSystemAppForIntent(Intent intent) {
+        List<String> packages = new ArrayList<>();
+        PackageManager packageManager = this.mContext.getPackageManager();
+        for (ResolveInfo info : packageManager.queryIntentServices(intent, 0)) {
+            if (info.serviceInfo == null) {
+                loge("Can't get service information from " + info);
+            } else {
+                String packageName = info.serviceInfo.packageName;
+                if (packageManager.checkPermission("android.permission.CARRIER_FILTER_SMS", packageName) == 0) {
+                    packages.add(packageName);
+                    log("getSystemAppForIntent: added package " + packageName);
+                }
+            }
+        }
+        return packages;
+    }
+
+    public void dispatchIntent(Intent intent, String permission, int appOp, BroadcastReceiver resultReceiver, UserHandle user) {
+        UserInfo info;
+        intent.addFlags(134217728);
+        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhone.getPhoneId());
+        if (user.equals(UserHandle.ALL)) {
+            int[] users = null;
+            try {
+                users = ActivityManagerNative.getDefault().getRunningUserIds();
+            } catch (RemoteException e) {
+            }
+            if (users == null) {
+                users = new int[]{user.getIdentifier()};
+            }
+            for (int i = users.length - 1; i >= 0; i--) {
+                UserHandle targetUser = new UserHandle(users[i]);
+                if (users[i] == 0 || (!this.mUserManager.hasUserRestriction("no_sms", targetUser) && (info = this.mUserManager.getUserInfo(users[i])) != null && !info.isManagedProfile())) {
+                    this.mContext.sendOrderedBroadcastAsUser(intent, targetUser, permission, appOp, users[i] == 0 ? resultReceiver : null, getHandler(), -1, null, null);
+                }
             }
             return;
         }
-        this.mContext.sendOrderedBroadcastAsUser(intent, userHandle, str, i, broadcastReceiver, getHandler(), -1, null, null);
+        this.mContext.sendOrderedBroadcastAsUser(intent, user, permission, appOp, resultReceiver, getHandler(), -1, null, null);
     }
 
-    public int dispatchMessage(SmsMessageBase smsMessageBase) {
-        if (smsMessageBase == null) {
-            loge("dispatchSmsMessage: message is null");
-            return 2;
-        } else if (!this.mSmsReceiveDisabled) {
-            return dispatchMessageRadioSpecific(smsMessageBase);
+    public void deleteFromRawTable(String deleteWhere, String[] deleteWhereArgs) {
+        int rows = this.mResolver.delete(sRawUri, deleteWhere, deleteWhereArgs);
+        if (rows == 0) {
+            loge("No rows were deleted from raw table!");
         } else {
-            log("Received short message on device which doesn't support receiving SMS. Ignored.");
-            return 1;
+            log("Deleted " + rows + " rows from raw table.");
         }
     }
 
-    public abstract int dispatchMessageRadioSpecific(SmsMessageBase smsMessageBase);
-
-    /* Access modifiers changed, original: protected */
-    public int dispatchNormalMessage(SmsMessageBase smsMessageBase) {
-        InboundSmsTracker inboundSmsTracker;
-        SmsHeader userDataHeader = smsMessageBase.getUserDataHeader();
-        if (userDataHeader == null || userDataHeader.concatRef == null) {
-            int i = -1;
-            if (!(userDataHeader == null || userDataHeader.portAddrs == null)) {
-                i = userDataHeader.portAddrs.destPort;
-                log("destination port: " + i);
-            }
-            inboundSmsTracker = new InboundSmsTracker(smsMessageBase.getPdu(), smsMessageBase.getTimestampMillis(), i, is3gpp2(), false);
-        } else {
-            ConcatRef concatRef = userDataHeader.concatRef;
-            PortAddrs portAddrs = userDataHeader.portAddrs;
-            inboundSmsTracker = new InboundSmsTracker(smsMessageBase.getPdu(), smsMessageBase.getTimestampMillis(), portAddrs != null ? portAddrs.destPort : -1, is3gpp2(), smsMessageBase.getOriginatingAddress(), concatRef.refNumber, concatRef.seqNumber, concatRef.msgCount, false);
-        }
-        return addTrackerToRawTableAndSendMessage(inboundSmsTracker);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void dispatchSmsDeliveryIntent(byte[][] bArr, String str, int i, BroadcastReceiver broadcastReceiver) {
+    /* JADX WARN: Multi-variable type inference failed */
+    void dispatchSmsDeliveryIntent(byte[][] pdus, String format, int destPort, BroadcastReceiver resultReceiver) {
+        Uri uri;
         Intent intent = new Intent();
-        intent.putExtra("pdus", bArr);
-        intent.putExtra(CellBroadcasts.MESSAGE_FORMAT, str);
-        if (i == -1) {
-            intent.setAction(Intents.SMS_DELIVER_ACTION);
-            ComponentName defaultSmsApplication = SmsApplication.getDefaultSmsApplication(this.mContext, true);
-            if (defaultSmsApplication != null) {
-                intent.setComponent(defaultSmsApplication);
-                log("Delivering SMS to: " + defaultSmsApplication.getPackageName() + " " + defaultSmsApplication.getClassName());
+        intent.putExtra("pdus", (Serializable) pdus);
+        intent.putExtra(Telephony.CellBroadcasts.MESSAGE_FORMAT, format);
+        if (destPort == -1) {
+            intent.setAction(Telephony.Sms.Intents.SMS_DELIVER_ACTION);
+            ComponentName componentName = SmsApplication.getDefaultSmsApplication(this.mContext, true);
+            if (componentName != null) {
+                intent.setComponent(componentName);
+                log("Delivering SMS to: " + componentName.getPackageName() + " " + componentName.getClassName());
             } else {
                 intent.setComponent(null);
             }
-            if (SmsManager.getDefault().getAutoPersisting()) {
-                Uri writeInboxMessage = writeInboxMessage(intent);
-                if (writeInboxMessage != null) {
-                    intent.putExtra("uri", writeInboxMessage.toString());
-                }
+            if (SmsManager.getDefault().getAutoPersisting() && (uri = writeInboxMessage(intent)) != null) {
+                intent.putExtra("uri", uri.toString());
             }
         } else {
-            intent.setAction(Intents.DATA_SMS_RECEIVED_ACTION);
-            intent.setData(Uri.parse("sms://localhost:" + i));
+            intent.setAction(Telephony.Sms.Intents.DATA_SMS_RECEIVED_ACTION);
+            intent.setData(Uri.parse("sms://localhost:" + destPort));
             intent.setComponent(null);
         }
-        dispatchIntent(intent, "android.permission.RECEIVE_SMS", 16, broadcastReceiver, UserHandle.OWNER);
+        dispatchIntent(intent, "android.permission.RECEIVE_SMS", 16, resultReceiver, UserHandle.OWNER);
     }
 
-    public void dispose() {
-        quit();
-    }
-
-    public PhoneBase getPhone() {
-        return this.mPhone;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    /* JADX WARNING: Removed duplicated region for block: B:19:? A:{SYNTHETIC, RETURN} */
-    /* JADX WARNING: Removed duplicated region for block: B:8:0x000f A:{SYNTHETIC, Splitter:B:8:0x000f} */
-    public void handleInjectSms(android.os.AsyncResult r5) {
-        /*
-        r4 = this;
-        r3 = 2;
-        r2 = 0;
-        r0 = r5.userObj;	 Catch:{ RuntimeException -> 0x001a }
-        r0 = (android.app.PendingIntent) r0;	 Catch:{ RuntimeException -> 0x001a }
-        r1 = r5.result;	 Catch:{ RuntimeException -> 0x0026 }
-        r1 = (android.telephony.SmsMessage) r1;	 Catch:{ RuntimeException -> 0x0026 }
-        if (r1 != 0) goto L_0x0013;
-    L_0x000c:
-        r1 = r3;
-    L_0x000d:
-        if (r0 == 0) goto L_0x0012;
-    L_0x000f:
-        r0.send(r1);	 Catch:{ CanceledException -> 0x0024 }
-    L_0x0012:
-        return;
-    L_0x0013:
-        r1 = r1.mWrappedSmsMessage;	 Catch:{ RuntimeException -> 0x0026 }
-        r1 = r4.dispatchMessage(r1);	 Catch:{ RuntimeException -> 0x0026 }
-        goto L_0x000d;
-    L_0x001a:
-        r0 = move-exception;
-        r1 = r0;
-    L_0x001c:
-        r0 = "Exception dispatching message";
-        r4.loge(r0, r1);
-        r1 = r3;
-        r0 = r2;
-        goto L_0x000d;
-    L_0x0024:
-        r0 = move-exception;
-        goto L_0x0012;
-    L_0x0026:
-        r1 = move-exception;
-        r2 = r0;
-        goto L_0x001c;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.InboundSmsHandler.handleInjectSms(android.os.AsyncResult):void");
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void handleNewSms(AsyncResult asyncResult) {
-        if (asyncResult.exception != null) {
-            loge("Exception processing incoming SMS: " + asyncResult.exception);
-            return;
+    private int addTrackerToRawTable(InboundSmsTracker tracker) {
+        Cursor cursor;
+        if (tracker.getMessageCount() != 1) {
+            try {
+                cursor = null;
+                try {
+                    this.mResolver.delete(sRawUri, "date<?", new String[]{Long.toString(tracker.getTimestamp() - TOLERANCE_TIME_MILLIS)});
+                    int sequence = tracker.getSequenceNumber();
+                    String address = tracker.getAddress();
+                    String refNumber = Integer.toString(tracker.getReferenceNumber());
+                    String count = Integer.toString(tracker.getMessageCount());
+                    String seqNumber = Integer.toString(sequence);
+                    tracker.setDeleteWhere(SELECT_BY_REFERENCE, new String[]{address, refNumber, count});
+                    Cursor cursor2 = this.mResolver.query(sRawUri, PDU_PROJECTION, "address=? AND reference_number=? AND count=? AND sequence=?", new String[]{address, refNumber, count, seqNumber}, null);
+                    if (cursor2.moveToNext()) {
+                        loge("Discarding duplicate message segment, refNumber=" + refNumber + " seqNumber=" + seqNumber);
+                        String oldPduString = cursor2.getString(0);
+                        byte[] pdu = tracker.getPdu();
+                        byte[] oldPdu = HexDump.hexStringToByteArray(oldPduString);
+                        if (!Arrays.equals(oldPdu, tracker.getPdu())) {
+                            loge("Warning: dup message segment PDU of length " + pdu.length + " is different from existing PDU of length " + oldPdu.length);
+                        }
+                        if (cursor2 == null) {
+                            return 5;
+                        }
+                        cursor2.close();
+                        return 5;
+                    }
+                    cursor2.close();
+                    if (cursor2 != null) {
+                        cursor2.close();
+                    }
+                } catch (SQLException e) {
+                    loge("Can't access multipart SMS database", e);
+                    if (0 == 0) {
+                        return 2;
+                    }
+                    cursor.close();
+                    return 2;
+                }
+            } catch (Throwable th) {
+                if (0 != 0) {
+                    cursor.close();
+                }
+                throw th;
+            }
+        } else if (judSmsDuplicate(tracker)) {
+            log("Received SMS is duplicate");
+            return 5;
         }
-        int dispatchMessage;
+        Uri newUri = this.mResolver.insert(sRawUri, tracker.getContentValues());
+        log("URI of new row -> " + newUri);
         try {
-            dispatchMessage = dispatchMessage(((SmsMessage) asyncResult.result).mWrappedSmsMessage);
-        } catch (RuntimeException e) {
-            loge("Exception dispatching message", e);
-            dispatchMessage = 2;
-        }
-        SmsHeader userDataHeader = ((SmsMessage) asyncResult.result).mWrappedSmsMessage.getUserDataHeader();
-        if (userDataHeader != null && userDataHeader.portAddrs != null && userDataHeader.portAddrs.destPort == SmsHeader.PORT_WAP_PUSH && dispatchMessage == 3) {
-            acknowledgeLastIncomingSms(false, dispatchMessage, null);
-        } else if (dispatchMessage != -1) {
-            notifyAndAcknowledgeLastIncomingSms(dispatchMessage == 1, dispatchMessage, null);
+            long rowId = ContentUris.parseId(newUri);
+            if (tracker.getMessageCount() == 1) {
+                tracker.setDeleteWhere(SELECT_BY_ID, new String[]{Long.toString(rowId)});
+            }
+            return 1;
+        } catch (Exception e2) {
+            loge("error parsing URI for new row: " + newUri, e2);
+            return 2;
         }
     }
 
-    public abstract boolean is3gpp2();
+    public static boolean isCurrentFormat3gpp2() {
+        return 2 == TelephonyManager.getDefault().getCurrentPhoneType();
+    }
 
-    /* Access modifiers changed, original: protected */
-    public boolean judSmsDuplicate(InboundSmsTracker inboundSmsTracker) {
-        boolean z = true;
-        if (inboundSmsTracker.getDestPort() == SmsHeader.PORT_WAP_PUSH) {
+    protected void storeVoiceMailCount() {
+        String imsi = this.mPhone.getSubscriberId();
+        int mwi = this.mPhone.getVoiceMessageCount();
+        StringBuilder append = new StringBuilder().append("Storing Voice Mail Count = ").append(mwi).append(" for mVmCountKey = ");
+        PhoneBase phoneBase = this.mPhone;
+        StringBuilder append2 = append.append(PhoneBase.VM_COUNT).append(" vmId = ");
+        PhoneBase phoneBase2 = this.mPhone;
+        log(append2.append(PhoneBase.VM_ID).append(" subId = ").append(this.mPhone.getSubId()).append(" in preferences.").toString());
+        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(this.mContext).edit();
+        StringBuilder sb = new StringBuilder();
+        PhoneBase phoneBase3 = this.mPhone;
+        editor.putInt(sb.append(PhoneBase.VM_COUNT).append(this.mPhone.getSubId()).toString(), mwi);
+        StringBuilder sb2 = new StringBuilder();
+        PhoneBase phoneBase4 = this.mPhone;
+        editor.putString(sb2.append(PhoneBase.VM_ID).append(this.mPhone.getSubId()).toString(), imsi);
+        editor.commit();
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public final class SmsBroadcastReceiver extends BroadcastReceiver {
+        private long mBroadcastTimeNano = System.nanoTime();
+        private final String mDeleteWhere;
+        private final String[] mDeleteWhereArgs;
+
+        SmsBroadcastReceiver(InboundSmsTracker tracker) {
+            InboundSmsHandler.this = r3;
+            this.mDeleteWhere = tracker.getDeleteWhere();
+            this.mDeleteWhereArgs = tracker.getDeleteWhereArgs();
+        }
+
+        @Override // android.content.BroadcastReceiver
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action.equals(Telephony.Sms.Intents.SMS_DELIVER_ACTION)) {
+                intent.setAction(Telephony.Sms.Intents.SMS_RECEIVED_ACTION);
+                intent.setComponent(null);
+                InboundSmsHandler.this.dispatchIntent(intent, "android.permission.RECEIVE_SMS", 16, this, UserHandle.ALL);
+            } else if (action.equals(Telephony.Sms.Intents.WAP_PUSH_DELIVER_ACTION)) {
+                intent.setAction(Telephony.Sms.Intents.WAP_PUSH_RECEIVED_ACTION);
+                intent.setComponent(null);
+                InboundSmsHandler.this.dispatchIntent(intent, "android.permission.RECEIVE_SMS", 16, this, UserHandle.OWNER);
+            } else {
+                if (!Telephony.Sms.Intents.DATA_SMS_RECEIVED_ACTION.equals(action) && !Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(action) && !Telephony.Sms.Intents.DATA_SMS_RECEIVED_ACTION.equals(action) && !Telephony.Sms.Intents.WAP_PUSH_RECEIVED_ACTION.equals(action)) {
+                    InboundSmsHandler.this.loge("unexpected BroadcastReceiver action: " + action);
+                }
+                int rc = getResultCode();
+                if (rc == -1 || rc == 1) {
+                    InboundSmsHandler.this.log("successful broadcast, deleting from raw table.");
+                } else {
+                    InboundSmsHandler.this.loge("a broadcast receiver set the result code to " + rc + ", deleting from raw table anyway!");
+                }
+                InboundSmsHandler.this.deleteFromRawTable(this.mDeleteWhere, this.mDeleteWhereArgs);
+                InboundSmsHandler.this.sendMessage(3);
+                int durationMillis = (int) ((System.nanoTime() - this.mBroadcastTimeNano) / 1000000);
+                if (durationMillis >= 5000) {
+                    InboundSmsHandler.this.loge("Slow ordered broadcast completion time: " + durationMillis + " ms");
+                } else {
+                    InboundSmsHandler.this.log("ordered broadcast completed in: " + durationMillis + " ms");
+                }
+            }
+        }
+    }
+
+    protected boolean judSmsDuplicate(InboundSmsTracker tracker) {
+        boolean isDuplicate = false;
+        if (tracker.getDestPort() == 2948) {
             return false;
         }
         try {
             if (this.mDuplicate == null) {
                 this.mDuplicate = new SmsDuplicate(this.mContext, 1, true);
             }
-            byte[] message_NotmtiPdu = getMessage_NotmtiPdu(inboundSmsTracker.getPdu());
-            ResultJudgeDuplicate checkSmsDuplicate = this.mDuplicate.checkSmsDuplicate(inboundSmsTracker.getReferenceNumber(), message_NotmtiPdu);
-            if (!(checkSmsDuplicate != null && checkSmsDuplicate.mIsSame && checkSmsDuplicate.mIsReply)) {
-                z = false;
+            byte[] pdu = getMessage_NotmtiPdu(tracker.getPdu());
+            SmsDuplicate.ResultJudgeDuplicate info = this.mDuplicate.checkSmsDuplicate(tracker.getReferenceNumber(), pdu);
+            if (info != null && info.mIsSame && info.mIsReply) {
+                isDuplicate = true;
             }
-            try {
-                this.mDuplicate.updateSmsDuplicate(inboundSmsTracker.getReferenceNumber(), message_NotmtiPdu, this.mDuplicate.SmsAccessory(Intents.SMS_RECEIVED_ACTION, null, 0));
-            } catch (NullPointerException e) {
-                loge("Function failed to create SmsAccessory.");
-                return z;
-            }
-        } catch (NullPointerException e2) {
-            z = false;
+            this.mDuplicate.updateSmsDuplicate(tracker.getReferenceNumber(), pdu, this.mDuplicate.SmsAccessory(Telephony.Sms.Intents.SMS_RECEIVED_ACTION, null, 0));
+        } catch (NullPointerException e) {
             loge("Function failed to create SmsAccessory.");
-            return z;
         }
-        return z;
+        return isDuplicate;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void log(String str) {
-        Rlog.d(getName(), str);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void loge(String str) {
-        Rlog.e(getName(), str);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void loge(String str, Throwable th) {
-        Rlog.e(getName(), str, th);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifyAndAcknowledgeLastIncomingSms(boolean z, int i, Message message) {
-        if (!z) {
-            Intent intent = new Intent(Intents.SMS_REJECTED_ACTION);
-            intent.putExtra("result", i);
-            this.mContext.sendBroadcast(intent, "android.permission.RECEIVE_SMS");
+    private byte[] getMessage_NotmtiPdu(byte[] pdus) {
+        int maxlen = pdus.length;
+        int i = 0 + 1;
+        int cur = pdus[0] + 1;
+        if (cur >= maxlen) {
+            return pdus;
         }
-        acknowledgeLastIncomingSms(z, i, message);
+        int cur2 = cur + 1;
+        byte[] pdu = new byte[maxlen - cur2];
+        System.arraycopy(pdus, cur2, pdu, 0, maxlen - cur2);
+        return pdu;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void onQuitting() {
-        this.mWapPush.dispose();
-        while (this.mWakeLock.isHeld()) {
-            this.mWakeLock.release();
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public final class CarrierSmsFilter extends CarrierMessagingServiceManager {
+        private final int mDestPort;
+        private final byte[][] mPdus;
+        private final SmsBroadcastReceiver mSmsBroadcastReceiver;
+        private volatile CarrierSmsFilterCallback mSmsFilterCallback;
+        private final String mSmsFormat;
+
+        CarrierSmsFilter(byte[][] pdus, int destPort, String smsFormat, SmsBroadcastReceiver smsBroadcastReceiver) {
+            InboundSmsHandler.this = r1;
+            this.mPdus = pdus;
+            this.mDestPort = destPort;
+            this.mSmsFormat = smsFormat;
+            this.mSmsBroadcastReceiver = smsBroadcastReceiver;
+        }
+
+        void filterSms(String carrierPackageName, CarrierSmsFilterCallback smsFilterCallback) {
+            this.mSmsFilterCallback = smsFilterCallback;
+            if (!bindToCarrierMessagingService(InboundSmsHandler.this.mContext, carrierPackageName)) {
+                InboundSmsHandler.this.loge("bindService() for carrier messaging service failed");
+                smsFilterCallback.onFilterComplete(true);
+                return;
+            }
+            InboundSmsHandler.this.logv("bindService() for carrier messaging service succeeded");
+        }
+
+        @Override // android.telephony.CarrierMessagingServiceManager
+        protected void onServiceReady(ICarrierMessagingService carrierMessagingService) {
+            try {
+                carrierMessagingService.filterSms(new MessagePdu(Arrays.asList(this.mPdus)), this.mSmsFormat, this.mDestPort, InboundSmsHandler.this.mPhone.getSubId(), this.mSmsFilterCallback);
+            } catch (RemoteException e) {
+                InboundSmsHandler.this.loge("Exception filtering the SMS: " + e);
+                this.mSmsFilterCallback.onFilterComplete(true);
+            }
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void onUpdatePhoneObject(PhoneBase phoneBase) {
-        this.mPhone = phoneBase;
-        this.mStorageMonitor = this.mPhone.mSmsStorageMonitor;
-        log("onUpdatePhoneObject: phone=" + this.mPhone.getClass().getSimpleName());
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public final class CarrierSmsFilterCallback extends ICarrierMessagingCallback.Stub {
+        private final CarrierSmsFilter mSmsFilter;
+
+        CarrierSmsFilterCallback(CarrierSmsFilter smsFilter) {
+            InboundSmsHandler.this = r1;
+            this.mSmsFilter = smsFilter;
+        }
+
+        /* JADX WARN: Finally extract failed */
+        public void onFilterComplete(boolean keepMessage) {
+            this.mSmsFilter.disposeConnection(InboundSmsHandler.this.mContext);
+            InboundSmsHandler.this.logv("onFilterComplete: keepMessage is " + keepMessage);
+            if (keepMessage) {
+                InboundSmsHandler.this.dispatchSmsDeliveryIntent(this.mSmsFilter.mPdus, this.mSmsFilter.mSmsFormat, this.mSmsFilter.mDestPort, this.mSmsFilter.mSmsBroadcastReceiver);
+                return;
+            }
+            long token = Binder.clearCallingIdentity();
+            try {
+                InboundSmsHandler.this.deleteFromRawTable(this.mSmsFilter.mSmsBroadcastReceiver.mDeleteWhere, this.mSmsFilter.mSmsBroadcastReceiver.mDeleteWhereArgs);
+                Binder.restoreCallingIdentity(token);
+                InboundSmsHandler.this.sendMessage(3);
+            } catch (Throwable th) {
+                Binder.restoreCallingIdentity(token);
+                throw th;
+            }
+        }
+
+        public void onSendSmsComplete(int result, int messageRef) {
+            InboundSmsHandler.this.loge("Unexpected onSendSmsComplete call with result: " + result);
+        }
+
+        public void onSendMultipartSmsComplete(int result, int[] messageRefs) {
+            InboundSmsHandler.this.loge("Unexpected onSendMultipartSmsComplete call with result: " + result);
+        }
+
+        public void onSendMmsComplete(int result, byte[] sendConfPdu) {
+            InboundSmsHandler.this.loge("Unexpected onSendMmsComplete call with result: " + result);
+        }
+
+        public void onDownloadMmsComplete(int result) {
+            InboundSmsHandler.this.loge("Unexpected onDownloadMmsComplete call with result: " + result);
+        }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    /* JADX WARNING: Removed duplicated region for block: B:45:0x00db  */
-    /* JADX WARNING: Removed duplicated region for block: B:45:0x00db  */
-    public boolean processMessagePart(com.android.internal.telephony.InboundSmsTracker r14) {
-        /*
-        r13 = this;
-        r10 = r14.getMessageCount();
-        r6 = r14.getDestPort();
-        r0 = "";
-        r1 = 1;
-        if (r10 != r1) goto L_0x004f;
-    L_0x000d:
-        r1 = 1;
-        r2 = new byte[r1][];
-        r1 = 0;
-        r3 = r14.getPdu();
-        r2[r1] = r3;
-        r3 = r6;
-        r1 = r0;
-    L_0x0019:
-        r5 = new com.android.internal.telephony.InboundSmsHandler$SmsBroadcastReceiver;
-        r5.<init>(r14);
-        r0 = 2948; // 0xb84 float:4.131E-42 double:1.4565E-320;
-        if (r3 != r0) goto L_0x0124;
-    L_0x0022:
-        r4 = new java.io.ByteArrayOutputStream;
-        r4.<init>();
-        r6 = r2.length;
-        r0 = 0;
-        r3 = r0;
-    L_0x002a:
-        if (r3 >= r6) goto L_0x00e9;
-    L_0x002c:
-        r0 = r2[r3];
-        r7 = r14.is3gpp2();
-        if (r7 != 0) goto L_0x0046;
-    L_0x0034:
-        r7 = "3gpp";
-        r7 = android.telephony.SmsMessage.createFromPdu(r0, r7);
-        r0 = r7.getUserData();
-        r8 = "";
-        if (r1 != r8) goto L_0x00df;
-    L_0x0042:
-        r1 = r7.getOriginatingAddress();
-    L_0x0046:
-        r7 = 0;
-        r8 = r0.length;
-        r4.write(r0, r7, r8);
-        r0 = r3 + 1;
-        r3 = r0;
-        goto L_0x002a;
-    L_0x004f:
-        r9 = 0;
-        r8 = 0;
-        r7 = r14.getAddress();	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r0 = r14.getReferenceNumber();	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r5 = java.lang.Integer.toString(r0);	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r0 = r14.getMessageCount();	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r11 = java.lang.Integer.toString(r0);	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r0 = r13.mResolver;	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r1 = sRawUri;	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r2 = PDU_SEQUENCE_PORT_PROJECTION;	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r3 = "address=? AND reference_number=? AND count=?";
-        r4 = 3;
-        r4 = new java.lang.String[r4];	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r12 = 0;
-        r4[r12] = r7;	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r12 = 1;
-        r4[r12] = r5;	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r5 = 2;
-        r4[r5] = r11;	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r5 = 0;
-        r3 = r0.query(r1, r2, r3, r4, r5);	 Catch:{ SQLException -> 0x00c9, all -> 0x00d7 }
-        r0 = r3.getCount();	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        if (r0 >= r10) goto L_0x008b;
-    L_0x0084:
-        if (r3 == 0) goto L_0x0089;
-    L_0x0086:
-        r3.close();
-    L_0x0089:
-        r0 = 0;
-    L_0x008a:
-        return r0;
-    L_0x008b:
-        r2 = new byte[r10][];	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r0 = r6;
-    L_0x008e:
-        r1 = r3.moveToNext();	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        if (r1 == 0) goto L_0x00c0;
-    L_0x0094:
-        r1 = 1;
-        r1 = r3.getInt(r1);	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r4 = r14.getIndexOffset();	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r1 = r1 - r4;
-        r4 = 0;
-        r4 = r3.getString(r4);	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r4 = com.android.internal.util.HexDump.hexStringToByteArray(r4);	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r2[r1] = r4;	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        if (r1 != 0) goto L_0x008e;
-    L_0x00ab:
-        r1 = 2;
-        r1 = r3.isNull(r1);	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        if (r1 != 0) goto L_0x008e;
-    L_0x00b2:
-        r1 = 2;
-        r1 = r3.getInt(r1);	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r1 = com.android.internal.telephony.InboundSmsTracker.getRealDestPort(r1);	 Catch:{ SQLException -> 0x01da, all -> 0x01d3 }
-        r4 = -1;
-        if (r1 == r4) goto L_0x008e;
-    L_0x00be:
-        r0 = r1;
-        goto L_0x008e;
-    L_0x00c0:
-        if (r3 == 0) goto L_0x01de;
-    L_0x00c2:
-        r3.close();
-        r3 = r0;
-        r1 = r7;
-        goto L_0x0019;
-    L_0x00c9:
-        r0 = move-exception;
-        r1 = r8;
-    L_0x00cb:
-        r2 = "Can't access multipart SMS database";
-        r13.loge(r2, r0);	 Catch:{ all -> 0x01d6 }
-        if (r1 == 0) goto L_0x0089;
-    L_0x00d2:
-        r1.close();
-        r0 = 0;
-        goto L_0x008a;
-    L_0x00d7:
-        r0 = move-exception;
-        r3 = r9;
-    L_0x00d9:
-        if (r3 == 0) goto L_0x00de;
-    L_0x00db:
-        r3.close();
-    L_0x00de:
-        throw r0;
-    L_0x00df:
-        r7 = "";
-        if (r1 != r7) goto L_0x0046;
-    L_0x00e3:
-        r1 = r14.getAddress();
-        goto L_0x0046;
-    L_0x00e9:
-        r0 = r13.mWapPush;
-        r2 = r14.getDeleteWhere();
-        r0.setDeleteWhere(r2);
-        r0 = r13.mWapPush;
-        r2 = r14.getDeleteWhereArgs();
-        r0.setDeleteWhereArgs(r2);
-        r0 = r13.mWapPush;
-        r2 = r4.toByteArray();
-        r0 = r0.dispatchWapPdu(r2, r5, r13, r1);
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "dispatchWapPdu() returned ";
-        r1 = r1.append(r2);
-        r1 = r1.append(r0);
-        r1 = r1.toString();
-        r13.log(r1);
-        r1 = -1;
-        if (r0 != r1) goto L_0x0121;
-    L_0x011e:
-        r0 = 1;
-        goto L_0x008a;
-    L_0x0121:
-        r0 = 0;
-        goto L_0x008a;
-    L_0x0124:
-        r0 = 0;
-        r1 = com.android.internal.telephony.uicc.UiccController.getInstance();
-        r4 = r13.mPhone;
-        r4 = r4.getPhoneId();
-        r1 = r1.getUiccCard(r4);
-        if (r1 == 0) goto L_0x017c;
-    L_0x0135:
-        r0 = r13.mContext;
-        r0 = r0.getPackageManager();
-        r4 = new android.content.Intent;
-        r6 = "android.service.carrier.CarrierMessagingService";
-        r4.<init>(r6);
-        r0 = r1.getCarrierPackageNamesForIntent(r0, r4);
-        r6 = r0;
-    L_0x0147:
-        r0 = new android.content.Intent;
-        r1 = "android.service.carrier.CarrierMessagingService";
-        r0.<init>(r1);
-        r7 = r13.getSystemAppForIntent(r0);
-        if (r6 == 0) goto L_0x0183;
-    L_0x0154:
-        r0 = r6.size();
-        r1 = 1;
-        if (r0 != r1) goto L_0x0183;
-    L_0x015b:
-        r0 = "Found carrier package.";
-        r13.log(r0);
-        r0 = new com.android.internal.telephony.InboundSmsHandler$CarrierSmsFilter;
-        r4 = r14.getFormat();
-        r1 = r13;
-        r0.<init>(r2, r3, r4, r5);
-        r2 = new com.android.internal.telephony.InboundSmsHandler$CarrierSmsFilterCallback;
-        r2.<init>(r0);
-        r1 = 0;
-        r1 = r6.get(r1);
-        r1 = (java.lang.String) r1;
-        r0.filterSms(r1, r2);
-    L_0x0179:
-        r0 = 1;
-        goto L_0x008a;
-    L_0x017c:
-        r1 = "UiccCard not initialized.";
-        r13.loge(r1);
-        r6 = r0;
-        goto L_0x0147;
-    L_0x0183:
-        if (r7 == 0) goto L_0x01ab;
-    L_0x0185:
-        r0 = r7.size();
-        r1 = 1;
-        if (r0 != r1) goto L_0x01ab;
-    L_0x018c:
-        r0 = "Found system package.";
-        r13.log(r0);
-        r0 = new com.android.internal.telephony.InboundSmsHandler$CarrierSmsFilter;
-        r4 = r14.getFormat();
-        r1 = r13;
-        r0.<init>(r2, r3, r4, r5);
-        r2 = new com.android.internal.telephony.InboundSmsHandler$CarrierSmsFilterCallback;
-        r2.<init>(r0);
-        r1 = 0;
-        r1 = r7.get(r1);
-        r1 = (java.lang.String) r1;
-        r0.filterSms(r1, r2);
-        goto L_0x0179;
-    L_0x01ab:
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "Unable to find carrier package: ";
-        r0 = r0.append(r1);
-        r0 = r0.append(r6);
-        r1 = ", nor systemPackages: ";
-        r0 = r0.append(r1);
-        r0 = r0.append(r7);
-        r0 = r0.toString();
-        r13.logv(r0);
-        r0 = r14.getFormat();
-        r13.dispatchSmsDeliveryIntent(r2, r0, r3, r5);
-        goto L_0x0179;
-    L_0x01d3:
-        r0 = move-exception;
-        goto L_0x00d9;
-    L_0x01d6:
-        r0 = move-exception;
-        r3 = r1;
-        goto L_0x00d9;
-    L_0x01da:
-        r0 = move-exception;
-        r1 = r3;
-        goto L_0x00cb;
-    L_0x01de:
-        r3 = r0;
-        r1 = r7;
-        goto L_0x0019;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.InboundSmsHandler.processMessagePart(com.android.internal.telephony.InboundSmsTracker):boolean");
+    protected void log(String s) {
+        Rlog.d(getName(), s);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void storeVoiceMailCount() {
-        String subscriberId = this.mPhone.getSubscriberId();
-        int voiceMessageCount = this.mPhone.getVoiceMessageCount();
-        StringBuilder append = new StringBuilder().append("Storing Voice Mail Count = ").append(voiceMessageCount).append(" for mVmCountKey = ");
-        PhoneBase phoneBase = this.mPhone;
-        append = append.append(PhoneBase.VM_COUNT).append(" vmId = ");
-        phoneBase = this.mPhone;
-        log(append.append(PhoneBase.VM_ID).append(" subId = ").append(this.mPhone.getSubId()).append(" in preferences.").toString());
-        Editor edit = PreferenceManager.getDefaultSharedPreferences(this.mContext).edit();
-        StringBuilder stringBuilder = new StringBuilder();
-        PhoneBase phoneBase2 = this.mPhone;
-        edit.putInt(stringBuilder.append(PhoneBase.VM_COUNT).append(this.mPhone.getSubId()).toString(), voiceMessageCount);
-        StringBuilder stringBuilder2 = new StringBuilder();
-        phoneBase = this.mPhone;
-        edit.putString(stringBuilder2.append(PhoneBase.VM_ID).append(this.mPhone.getSubId()).toString(), subscriberId);
-        edit.commit();
+    protected void loge(String s) {
+        Rlog.e(getName(), s);
     }
 
-    public void updatePhoneObject(PhoneBase phoneBase) {
-        sendMessage(7, phoneBase);
+    protected void loge(String s, Throwable e) {
+        Rlog.e(getName(), s, e);
+    }
+
+    private Uri writeInboxMessage(Intent intent) {
+        Uri uri = null;
+        SmsMessage[] messages = Telephony.Sms.Intents.getMessagesFromIntent(intent);
+        if (messages == null || messages.length < 1) {
+            loge("Failed to parse SMS pdu");
+        } else {
+            for (SmsMessage sms : messages) {
+                try {
+                    sms.getDisplayMessageBody();
+                } catch (NullPointerException e) {
+                    loge("NPE inside SmsMessage");
+                }
+            }
+            ContentValues values = parseSmsMessage(messages);
+            long identity = Binder.clearCallingIdentity();
+            try {
+                uri = this.mContext.getContentResolver().insert(Telephony.Sms.Inbox.CONTENT_URI, values);
+            } catch (Exception e2) {
+                loge("Failed to persist inbox message", e2);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
+        return uri;
+    }
+
+    private static ContentValues parseSmsMessage(SmsMessage[] msgs) {
+        int i = 0;
+        SmsMessage sms = msgs[0];
+        ContentValues values = new ContentValues();
+        values.put("address", sms.getDisplayOriginatingAddress());
+        values.put("body", buildMessageBodyFromPdus(msgs));
+        values.put("date_sent", Long.valueOf(sms.getTimestampMillis()));
+        values.put("date", Long.valueOf(System.currentTimeMillis()));
+        values.put("protocol", Integer.valueOf(sms.getProtocolIdentifier()));
+        values.put("seen", (Integer) 0);
+        values.put("read", (Integer) 0);
+        String subject = sms.getPseudoSubject();
+        if (!TextUtils.isEmpty(subject)) {
+            values.put(Telephony.TextBasedSmsColumns.SUBJECT, subject);
+        }
+        if (sms.isReplyPathPresent()) {
+            i = 1;
+        }
+        values.put(Telephony.TextBasedSmsColumns.REPLY_PATH_PRESENT, Integer.valueOf(i));
+        values.put(Telephony.TextBasedSmsColumns.SERVICE_CENTER, sms.getServiceCenterAddress());
+        return values;
+    }
+
+    private static String buildMessageBodyFromPdus(SmsMessage[] msgs) {
+        if (msgs.length == 1) {
+            return replaceFormFeeds(msgs[0].getDisplayMessageBody());
+        }
+        StringBuilder body = new StringBuilder();
+        for (SmsMessage msg : msgs) {
+            body.append(msg.getDisplayMessageBody());
+        }
+        return replaceFormFeeds(body.toString());
+    }
+
+    private static String replaceFormFeeds(String s) {
+        return s == null ? "" : s.replace('\f', '\n');
     }
 }

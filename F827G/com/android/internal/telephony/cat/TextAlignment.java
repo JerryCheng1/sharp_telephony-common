@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cat;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public enum TextAlignment {
     LEFT(0),
     CENTER(1),
@@ -8,14 +9,15 @@ public enum TextAlignment {
     
     private int mValue;
 
-    private TextAlignment(int i) {
-        this.mValue = i;
+    TextAlignment(int value) {
+        this.mValue = value;
     }
 
-    public static TextAlignment fromInt(int i) {
-        for (TextAlignment textAlignment : values()) {
-            if (textAlignment.mValue == i) {
-                return textAlignment;
+    public static TextAlignment fromInt(int value) {
+        TextAlignment[] arr$ = values();
+        for (TextAlignment e : arr$) {
+            if (e.mValue == value) {
+                return e;
             }
         }
         return null;

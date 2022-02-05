@@ -2,51 +2,56 @@ package com.android.internal.telephony.uicc;
 
 import android.telephony.Rlog;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class IccServiceTable {
     protected final byte[] mServiceTable;
 
-    protected IccServiceTable(byte[] bArr) {
-        this.mServiceTable = bArr;
+    protected abstract String getTag();
+
+    protected abstract Object[] getValues();
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public IccServiceTable(byte[] table) {
+        this.mServiceTable = table;
     }
 
-    public abstract String getTag();
-
-    public abstract Object[] getValues();
-
-    /* Access modifiers changed, original: protected */
-    public boolean isAvailable(int i) {
-        int i2 = i / 8;
-        if (i2 < this.mServiceTable.length) {
-            return (this.mServiceTable[i2] & (1 << (i % 8))) != 0;
-        } else {
-            Rlog.e(getTag(), "isAvailable for service " + (i + 1) + " fails, max service is " + (this.mServiceTable.length * 8));
+    /* JADX INFO: Access modifiers changed from: protected */
+    public boolean isAvailable(int service) {
+        boolean z = true;
+        int offset = service / 8;
+        if (offset >= this.mServiceTable.length) {
+            Rlog.e(getTag(), "isAvailable for service " + (service + 1) + " fails, max service is " + (this.mServiceTable.length * 8));
             return false;
         }
+        if ((this.mServiceTable[offset] & (1 << (service % 8))) == 0) {
+            z = false;
+        }
+        return z;
     }
 
     public String toString() {
         Object[] values = getValues();
-        int length = this.mServiceTable.length;
-        StringBuilder append = new StringBuilder(getTag()).append('[').append(length * 8).append("]={ ");
-        int i = 0;
-        for (int i2 = 0; i2 < length; i2++) {
-            byte b = this.mServiceTable[i2];
-            for (int i3 = 0; i3 < 8; i3++) {
-                if (((1 << i3) & b) != 0) {
-                    if (i != 0) {
-                        append.append(", ");
+        int numBytes = this.mServiceTable.length;
+        StringBuilder builder = new StringBuilder(getTag()).append('[').append(numBytes * 8).append("]={ ");
+        boolean addComma = false;
+        for (int i = 0; i < numBytes; i++) {
+            byte currentByte = this.mServiceTable[i];
+            for (int bit = 0; bit < 8; bit++) {
+                if (((1 << bit) & currentByte) != 0) {
+                    if (addComma) {
+                        builder.append(", ");
                     } else {
-                        i = 1;
+                        addComma = true;
                     }
-                    int i4 = (i2 * 8) + i3;
-                    if (i4 < values.length) {
-                        append.append(values[i4]);
+                    int ordinal = (i * 8) + bit;
+                    if (ordinal < values.length) {
+                        builder.append(values[ordinal]);
                     } else {
-                        append.append('#').append(i4 + 1);
+                        builder.append('#').append(ordinal + 1);
                     }
                 }
             }
         }
-        return append.append(" }").toString();
+        return builder.append(" }").toString();
     }
 }

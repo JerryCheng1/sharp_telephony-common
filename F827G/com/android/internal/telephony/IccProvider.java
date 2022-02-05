@@ -13,13 +13,14 @@ import android.telephony.Rlog;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
-import com.android.internal.telephony.IIccPhoneBook.Stub;
+import com.android.internal.telephony.IIccPhoneBook;
 import com.android.internal.telephony.uicc.AdnRecord;
 import com.android.internal.telephony.uicc.IccConstants;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class IccProvider extends ContentProvider {
-    private static final String[] ADDRESS_BOOK_COLUMN_NAMES = new String[]{"name", STR_NUMBER, STR_EMAILS, STR_ANRS, "_id"};
+    private static final String[] ADDRESS_BOOK_COLUMN_NAMES = null;
     protected static final int ADN = 1;
     protected static final int ADN_ALL = 7;
     protected static final int ADN_SUB = 2;
@@ -38,253 +39,284 @@ public class IccProvider extends ContentProvider {
     public static final String STR_PIN2 = "pin2";
     public static final String STR_TAG = "tag";
     private static final String TAG = "IccProvider";
-    private static final UriMatcher URL_MATCHER = new UriMatcher(-1);
+    private static final UriMatcher URL_MATCHER = null;
     private SubscriptionManager mSubscriptionManager;
 
-    static {
-        URL_MATCHER.addURI("icc", "adn", 1);
-        URL_MATCHER.addURI("icc", "adn/subId/#", 2);
-        URL_MATCHER.addURI("icc", "fdn", 3);
-        URL_MATCHER.addURI("icc", "fdn/subId/#", 4);
-        URL_MATCHER.addURI("icc", "sdn", 5);
-        URL_MATCHER.addURI("icc", "sdn/subId/#", 6);
-        URL_MATCHER.addURI("icc", "adn/adn_all", 7);
+    /*  JADX ERROR: Failed to decode insn: 0x000F: UNKNOWN(0x20E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x000F: UNKNOWN(0x20E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0027: UNKNOWN(0x30E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0027: UNKNOWN(0x30E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0031: UNKNOWN(0x30E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0031: UNKNOWN(0x30E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0039: UNKNOWN(0x30E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0039: UNKNOWN(0x30E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0050: UNKNOWN(0x30E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0050: UNKNOWN(0x30E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x005E: UNKNOWN(0x10E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x005E: UNKNOWN(0x10E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0064: UNKNOWN(0x20E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0064: UNKNOWN(0x20E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0072: UNKNOWN(0x10E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0072: UNKNOWN(0x10E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x007A: UNKNOWN(0x30E9), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x007A: UNKNOWN(0x30E9)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    /*  JADX ERROR: Failed to decode insn: 0x0080: UNKNOWN(0x01EA), method: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]
+        jadx.core.utils.exceptions.DecodeException: Unknown instruction: '0x0080: UNKNOWN(0x01EA)'
+        	at jadx.core.dex.instructions.InsnDecoder.decode(InsnDecoder.java:494)
+        	at jadx.core.dex.instructions.InsnDecoder.lambda$process$0(InsnDecoder.java:50)
+        	at jadx.plugins.input.dex.sections.DexCodeReader.visitInstructions(DexCodeReader.java:85)
+        	at jadx.core.dex.instructions.InsnDecoder.process(InsnDecoder.java:45)
+        	at jadx.core.dex.nodes.MethodNode.load(MethodNode.java:147)
+        	at jadx.core.dex.nodes.ClassNode.load(ClassNode.java:365)
+        	at jadx.core.ProcessClass.process(ProcessClass.java:57)
+        	at jadx.core.ProcessClass.generateCode(ProcessClass.java:101)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:356)
+        	at jadx.core.dex.nodes.ClassNode.decompile(ClassNode.java:302)
+        */
+    public static java.lang.String[] splitIgnoreSinglequotString(java.lang.String r16, java.lang.String r17) {
+        /*
+            java.lang.StringBuilder r5 = new java.lang.StringBuilder
+            r0 = r16
+            r5.<init>(r0)
+            r3 = 0
+            r7 = 0
+            r8 = 0
+            r9 = 0
+            r14 = 39
+            r0 = r17
+            // decode failed: Unknown instruction: '0x000F: UNKNOWN(0x20E9)'
+            monitor-exit(r0)
+            int r0 = r10 << 14
+            r15 = -1
+            if (r14 == r15) goto L_0x0023
+            r14 = 1
+            java.lang.String[] r10 = new java.lang.String[r14]
+            r14 = 0
+            java.lang.String r15 = new java.lang.String
+            r15.<init>(r16)
+            r10[r14] = r15
+            r11 = r10
+            return r11
+            r14 = 39
+            r0 = r16
+            // decode failed: Unknown instruction: '0x0027: UNKNOWN(0x30E9)'
+            java.util.List r0 = (java.util.List) r0
+            r7 = move-result
+            int r6 = r7 + 1
+            r14 = 39
+            r0 = r16
+            // decode failed: Unknown instruction: '0x0031: UNKNOWN(0x30E9)'
+            L r0 = (L) r0
+            r8 = move-result
+            java.lang.String r14 = "''"
+            r0 = r16
+            // decode failed: Unknown instruction: '0x0039: UNKNOWN(0x30E9)'
+            int r0 = r0.length
+            int r6 = r10 << 9
+            int r6 = r8 + 2
+            r14 = -1
+            if (r8 == r14) goto L_0x0044
+            if (r8 == r9) goto L_0x002d
+            r14 = -1
+            if (r8 == r14) goto L_0x0058
+            r14 = -1
+            if (r7 == r14) goto L_0x0058
+            int r2 = r7 + 1
+            if (r2 >= r8) goto L_0x0056
+            r14 = 39
+            // decode failed: Unknown instruction: '0x0050: UNKNOWN(0x30E9)'
+            goto L_0x0e76
+            int r2 = r2 + 1
+            goto L_0x004c
+            int r3 = r8 + 1
+            r14 = -1
+            if (r8 == r14) goto L_0x005e
+            r14 = -1
+            if (r7 != r14) goto L_0x0023
+            // decode failed: Unknown instruction: '0x005E: UNKNOWN(0x10E9)'
+            r0 = r0
+            r0 = r3596
+            r0 = r17
+            // decode failed: Unknown instruction: '0x0064: UNKNOWN(0x20E9)'
+            int r0 = (r14 > r0 ? 1 : (r14 == r0 ? 0 : -1))
+            r13 = move-result
+            int r4 = r13.length
+            r12 = 0
+            r1 = 0
+            java.lang.String[] r10 = new java.lang.String[r4]
+            r2 = 0
+            if (r2 >= r4) goto L_0x0089
+            r14 = r13[r2]
+            // decode failed: Unknown instruction: '0x0072: UNKNOWN(0x10E9)'
+            goto L_0x0073
+            return
+            r14 = move-result
+            int r1 = r12 + r14
+            r0 = r16
+            // decode failed: Unknown instruction: '0x007A: UNKNOWN(0x30E9)'
+            if (r0 <= r0) goto L_0x023b
+            r14 = move-result
+            r10[r2] = r14
+            // decode failed: Unknown instruction: '0x0080: UNKNOWN(0x01EA)'
+            goto L_0x0081
+            return r0
+            r14 = move-result
+            int r12 = r1 + r14
+            int r2 = r2 + 1
+            goto L_0x006e
+            r11 = r10
+            goto L_0x0022
+        */
+        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.IccProvider.splitIgnoreSinglequotString(java.lang.String, java.lang.String):java.lang.String[]");
     }
 
-    private int getRequestSubId(Uri uri) {
-        try {
-            return Integer.parseInt(uri.getLastPathSegment());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Unknown URL " + uri);
-        }
+    @Override // android.content.ContentProvider
+    public boolean onCreate() {
+        this.mSubscriptionManager = SubscriptionManager.from(getContext());
+        return true;
     }
 
-    private Cursor loadAllSimContacts(int i) {
-        Cursor[] cursorArr;
-        List activeSubscriptionInfoList = this.mSubscriptionManager.getActiveSubscriptionInfoList();
-        if (activeSubscriptionInfoList == null || activeSubscriptionInfoList.size() == 0) {
-            cursorArr = new Cursor[0];
-        } else {
-            int size = activeSubscriptionInfoList.size();
-            Cursor[] cursorArr2 = new Cursor[size];
-            for (int i2 = 0; i2 < size; i2++) {
-                int subscriptionId = ((SubscriptionInfo) activeSubscriptionInfoList.get(i2)).getSubscriptionId();
-                cursorArr2[i2] = loadFromEf(i, subscriptionId);
-                Rlog.i(TAG, "ADN Records loaded for Subscription ::" + subscriptionId);
-            }
-            cursorArr = cursorArr2;
-        }
-        return new MergeCursor(cursorArr);
-    }
-
-    private MatrixCursor loadFromEf(int i, int i2) {
-        List adnRecordsInEfForSubscriber;
-        try {
-            IIccPhoneBook asInterface = Stub.asInterface(ServiceManager.getService("simphonebook"));
-            adnRecordsInEfForSubscriber = asInterface != null ? asInterface.getAdnRecordsInEfForSubscriber(i2, i) : null;
-        } catch (RemoteException e) {
-            adnRecordsInEfForSubscriber = null;
-        } catch (SecurityException e2) {
-            adnRecordsInEfForSubscriber = null;
-        }
-        if (adnRecordsInEfForSubscriber != null) {
-            int size = adnRecordsInEfForSubscriber.size();
-            MatrixCursor matrixCursor = new MatrixCursor(ADDRESS_BOOK_COLUMN_NAMES, size);
-            log("adnRecords.size=" + size);
-            for (int i3 = 0; i3 < size; i3++) {
-                loadRecord((AdnRecord) adnRecordsInEfForSubscriber.get(i3), matrixCursor, i3);
-            }
-            return matrixCursor;
-        }
-        Rlog.w(TAG, "Cannot load ADN records");
-        return new MatrixCursor(ADDRESS_BOOK_COLUMN_NAMES);
-    }
-
-    private void loadRecord(AdnRecord adnRecord, MatrixCursor matrixCursor, int i) {
-        int i2 = 0;
-        if (!adnRecord.isEmpty()) {
-            r2 = new Object[5];
-            String alphaTag = adnRecord.getAlphaTag();
-            String number = adnRecord.getNumber();
-            String[] additionalNumbers = adnRecord.getAdditionalNumbers();
-            r2[0] = alphaTag;
-            r2[1] = number;
-            String[] emails = adnRecord.getEmails();
-            if (emails != null) {
-                StringBuilder stringBuilder = new StringBuilder();
-                for (String append : emails) {
-                    stringBuilder.append(append);
-                    stringBuilder.append(",");
-                }
-                r2[2] = stringBuilder.toString();
-            }
-            if (additionalNumbers != null) {
-                StringBuilder stringBuilder2 = new StringBuilder();
-                int length = additionalNumbers.length;
-                while (i2 < length) {
-                    stringBuilder2.append(additionalNumbers[i2]);
-                    stringBuilder2.append(",");
-                    i2++;
-                }
-                r2[3] = stringBuilder2.toString();
-            }
-            r2[4] = Integer.valueOf(i);
-            matrixCursor.addRow(r2);
-        }
-    }
-
-    private void log(String str) {
-        Rlog.d(TAG, "[IccProvider] " + str);
-    }
-
-    private String normalizeValue(String str) {
-        int length = str.length();
-        return (length != 0 && str.charAt(0) == '\'' && str.charAt(length - 1) == '\'') ? str.substring(1, length - 1) : str;
-    }
-
-    public static String[] splitIgnoreSinglequotString(String str, String str2) {
-        StringBuilder stringBuilder = new StringBuilder(str);
-        if (str2.indexOf(39) != -1) {
-            return new String[]{new String(str)};
-        }
-        int i;
-        int indexOf;
-        int i2 = 0;
-        int indexOf2;
-        do {
-            indexOf2 = str.indexOf(39, i2);
-            i = indexOf2 + 1;
-            int indexOf3;
-            do {
-                indexOf = str.indexOf(39, i);
-                indexOf3 = str.indexOf("''", i);
-                i = indexOf + 2;
-                if (indexOf == -1) {
-                    break;
-                }
-            } while (indexOf == indexOf3);
-            if (!(indexOf == -1 || indexOf2 == -1)) {
-                for (i2 = indexOf2 + 1; i2 < indexOf; i2++) {
-                    stringBuilder.setCharAt(i2, '\'');
-                }
-                i2 = indexOf + 1;
-            }
-            if (indexOf == -1) {
-                break;
-            }
-        } while (indexOf2 != -1);
-        String[] split = stringBuilder.toString().split(str2);
-        indexOf = split.length;
-        String[] strArr = new String[indexOf];
-        i = 0;
-        int i3 = 0;
-        while (i3 < indexOf) {
-            int length = split[i3].length() + i;
-            strArr[i3] = str.substring(i, length);
-            i3++;
-            i = length + str2.length();
-        }
-        return strArr;
-    }
-
-    private boolean updateIccRecordInEf(int i, ContentValues contentValues, String str, int i2) {
-        try {
-            IIccPhoneBook asInterface = Stub.asInterface(ServiceManager.getService("simphonebook"));
-            return asInterface != null ? asInterface.updateAdnRecordsWithContentValuesInEfBySearchUsingSubId(i2, i, contentValues, str) : false;
-        } catch (RemoteException | SecurityException e) {
-            return false;
-        }
-    }
-
-    public int delete(Uri uri, String str, String[] strArr) {
-        int i;
-        int defaultSubId;
-        switch (URL_MATCHER.match(uri)) {
+    @Override // android.content.ContentProvider
+    public Cursor query(Uri url, String[] projection, String selection, String[] selectionArgs, String sort) {
+        switch (URL_MATCHER.match(url)) {
             case 1:
-                i = 28474;
-                defaultSubId = SubscriptionManager.getDefaultSubId();
-                break;
+                return loadFromEf(28474, SubscriptionManager.getDefaultSubId());
             case 2:
-                i = 28474;
-                defaultSubId = getRequestSubId(uri);
-                break;
+                return loadFromEf(28474, getRequestSubId(url));
             case 3:
-                i = IccConstants.EF_FDN;
-                defaultSubId = SubscriptionManager.getDefaultSubId();
-                break;
+                return loadFromEf(IccConstants.EF_FDN, SubscriptionManager.getDefaultSubId());
             case 4:
-                i = IccConstants.EF_FDN;
-                defaultSubId = getRequestSubId(uri);
-                break;
+                return loadFromEf(IccConstants.EF_FDN, getRequestSubId(url));
+            case 5:
+                return loadFromEf(IccConstants.EF_SDN, SubscriptionManager.getDefaultSubId());
+            case 6:
+                return loadFromEf(IccConstants.EF_SDN, getRequestSubId(url));
+            case 7:
+                return loadAllSimContacts(28474);
             default:
-                throw new UnsupportedOperationException("Cannot insert into URL: " + uri);
-        }
-        String str2 = null;
-        String str3 = null;
-        String str4 = null;
-        CharSequence charSequence = null;
-        String[] splitIgnoreSinglequotString = TelBrand.IS_SBM ? splitIgnoreSinglequotString(str, "AND") : str.split("AND");
-        int length = splitIgnoreSinglequotString.length;
-        String str5 = null;
-        while (true) {
-            int i2 = length - 1;
-            if (i2 >= 0) {
-                String str6 = splitIgnoreSinglequotString[i2];
-                String[] splitIgnoreSinglequotString2 = TelBrand.IS_SBM ? splitIgnoreSinglequotString(str6, "=") : str6.split("=", 2);
-                if (splitIgnoreSinglequotString2.length != 2) {
-                    Rlog.e(TAG, "resolve: bad whereClause parameter: " + str6);
-                    length = i2;
-                } else {
-                    str6 = splitIgnoreSinglequotString2[0].trim();
-                    String trim = splitIgnoreSinglequotString2[1].trim();
-                    if (STR_TAG.equals(str6)) {
-                        if (TelBrand.IS_SBM) {
-                            str2 = normalizeValue(trim).replaceAll("''", "'");
-                            length = i2;
-                        } else {
-                            str2 = normalizeValue(trim);
-                            length = i2;
-                        }
-                    } else if (STR_NUMBER.equals(str6)) {
-                        str3 = normalizeValue(trim);
-                        length = i2;
-                    } else if (STR_EMAILS.equals(str6)) {
-                        str4 = normalizeValue(trim);
-                        length = i2;
-                    } else if (STR_ANRS.equals(str6)) {
-                        str5 = normalizeValue(trim);
-                        length = i2;
-                    } else if (STR_PIN2.equals(str6)) {
-                        charSequence = normalizeValue(trim);
-                        length = i2;
-                    } else {
-                        length = i2;
-                    }
-                }
-            } else {
-                ContentValues contentValues = new ContentValues();
-                contentValues.put(STR_TAG, str2);
-                contentValues.put(STR_NUMBER, str3);
-                contentValues.put(STR_EMAILS, str4);
-                contentValues.put(STR_ANRS, str5);
-                contentValues.put(STR_NEW_TAG, "");
-                contentValues.put(STR_NEW_NUMBER, "");
-                contentValues.put(STR_NEW_EMAILS, "");
-                contentValues.put(STR_NEW_ANRS, "");
-                if (i == 3 && TextUtils.isEmpty(charSequence)) {
-                    return 0;
-                }
-                if (!updateIccRecordInEf(i, contentValues, charSequence, defaultSubId)) {
-                    return 0;
-                }
-                getContext().getContentResolver().notifyChange(uri, null);
-                return 1;
-            }
+                throw new IllegalArgumentException("Unknown URL " + url);
         }
     }
 
-    public String getType(Uri uri) {
-        switch (URL_MATCHER.match(uri)) {
+    private Cursor loadAllSimContacts(int efType) {
+        Cursor[] result;
+        List<SubscriptionInfo> subInfoList = this.mSubscriptionManager.getActiveSubscriptionInfoList();
+        if (subInfoList == null || subInfoList.size() == 0) {
+            result = new Cursor[0];
+        } else {
+            int subIdCount = subInfoList.size();
+            result = new Cursor[subIdCount];
+            for (int i = 0; i < subIdCount; i++) {
+                int subId = subInfoList.get(i).getSubscriptionId();
+                result[i] = loadFromEf(efType, subId);
+                Rlog.i(TAG, "ADN Records loaded for Subscription ::" + subId);
+            }
+        }
+        return new MergeCursor(result);
+    }
+
+    @Override // android.content.ContentProvider
+    public String getType(Uri url) {
+        switch (URL_MATCHER.match(url)) {
             case 1:
             case 2:
             case 3:
@@ -294,134 +326,287 @@ public class IccProvider extends ContentProvider {
             case 7:
                 return "vnd.android.cursor.dir/sim-contact";
             default:
-                throw new IllegalArgumentException("Unknown URL " + uri);
+                throw new IllegalArgumentException("Unknown URL " + url);
         }
     }
 
-    public Uri insert(Uri uri, ContentValues contentValues) {
-        int defaultSubId;
-        String str;
-        int i = 28474;
-        int match = URL_MATCHER.match(uri);
+    @Override // android.content.ContentProvider
+    public Uri insert(Uri url, ContentValues initialValues) {
+        int efType;
+        int subId;
+        String pin2 = null;
+        int match = URL_MATCHER.match(url);
         switch (match) {
             case 1:
-                defaultSubId = SubscriptionManager.getDefaultSubId();
-                str = null;
+                efType = 28474;
+                subId = SubscriptionManager.getDefaultSubId();
                 break;
             case 2:
-                defaultSubId = getRequestSubId(uri);
-                str = null;
+                efType = 28474;
+                subId = getRequestSubId(url);
                 break;
             case 3:
-                defaultSubId = SubscriptionManager.getDefaultSubId();
-                str = contentValues.getAsString(STR_PIN2);
-                i = IccConstants.EF_FDN;
+                efType = IccConstants.EF_FDN;
+                subId = SubscriptionManager.getDefaultSubId();
+                pin2 = initialValues.getAsString(STR_PIN2);
                 break;
             case 4:
-                defaultSubId = getRequestSubId(uri);
-                str = contentValues.getAsString(STR_PIN2);
-                i = IccConstants.EF_FDN;
+                efType = IccConstants.EF_FDN;
+                subId = getRequestSubId(url);
+                pin2 = initialValues.getAsString(STR_PIN2);
                 break;
             default:
-                throw new UnsupportedOperationException("Cannot insert into URL: " + uri);
+                throw new UnsupportedOperationException("Cannot insert into URL: " + url);
         }
-        String asString = contentValues.getAsString(STR_TAG);
-        String asString2 = contentValues.getAsString(STR_NUMBER);
-        String asString3 = contentValues.getAsString(STR_EMAILS);
-        String asString4 = contentValues.getAsString(STR_ANRS);
-        ContentValues contentValues2 = new ContentValues();
-        contentValues2.put(STR_TAG, "");
-        contentValues2.put(STR_NUMBER, "");
-        contentValues2.put(STR_EMAILS, "");
-        contentValues2.put(STR_ANRS, "");
-        contentValues2.put(STR_NEW_TAG, asString);
-        contentValues2.put(STR_NEW_NUMBER, asString2);
-        contentValues2.put(STR_NEW_EMAILS, asString3);
-        contentValues2.put(STR_NEW_ANRS, asString4);
-        if (!updateIccRecordInEf(i, contentValues2, str, defaultSubId)) {
+        String tag = initialValues.getAsString(STR_TAG);
+        String number = initialValues.getAsString(STR_NUMBER);
+        String emails = initialValues.getAsString(STR_EMAILS);
+        String anrs = initialValues.getAsString(STR_ANRS);
+        ContentValues mValues = new ContentValues();
+        mValues.put(STR_TAG, "");
+        mValues.put(STR_NUMBER, "");
+        mValues.put(STR_EMAILS, "");
+        mValues.put(STR_ANRS, "");
+        mValues.put(STR_NEW_TAG, tag);
+        mValues.put(STR_NEW_NUMBER, number);
+        mValues.put(STR_NEW_EMAILS, emails);
+        mValues.put(STR_NEW_ANRS, anrs);
+        if (!updateIccRecordInEf(efType, mValues, pin2, subId)) {
             return null;
         }
-        StringBuilder stringBuilder = new StringBuilder("content://icc/");
+        StringBuilder buf = new StringBuilder("content://icc/");
         switch (match) {
             case 1:
-                stringBuilder.append("adn/");
+                buf.append("adn/");
                 break;
             case 2:
-                stringBuilder.append("adn/subId/");
+                buf.append("adn/subId/");
                 break;
             case 3:
-                stringBuilder.append("fdn/");
+                buf.append("fdn/");
                 break;
             case 4:
-                stringBuilder.append("fdn/subId/");
+                buf.append("fdn/subId/");
                 break;
         }
-        stringBuilder.append(0);
-        Uri parse = Uri.parse(stringBuilder.toString());
-        getContext().getContentResolver().notifyChange(uri, null);
+        buf.append(0);
+        Uri parse = Uri.parse(buf.toString());
+        getContext().getContentResolver().notifyChange(url, null);
         return parse;
     }
 
-    public boolean onCreate() {
-        this.mSubscriptionManager = SubscriptionManager.from(getContext());
-        return true;
+    private String normalizeValue(String inVal) {
+        int len = inVal.length();
+        if (len == 0) {
+            return inVal;
+        }
+        String retVal = inVal;
+        if (inVal.charAt(0) == '\'' && inVal.charAt(len - 1) == '\'') {
+            retVal = inVal.substring(1, len - 1);
+        }
+        return retVal;
     }
 
-    public Cursor query(Uri uri, String[] strArr, String str, String[] strArr2, String str2) {
-        switch (URL_MATCHER.match(uri)) {
+    @Override // android.content.ContentProvider
+    public int delete(Uri url, String where, String[] whereArgs) {
+        int efType;
+        int subId;
+        String[] tokens;
+        String[] pair;
+        switch (URL_MATCHER.match(url)) {
             case 1:
-                return loadFromEf(28474, SubscriptionManager.getDefaultSubId());
+                efType = 28474;
+                subId = SubscriptionManager.getDefaultSubId();
+                break;
             case 2:
-                return loadFromEf(28474, getRequestSubId(uri));
+                efType = 28474;
+                subId = getRequestSubId(url);
+                break;
             case 3:
-                return loadFromEf(IccConstants.EF_FDN, SubscriptionManager.getDefaultSubId());
+                efType = IccConstants.EF_FDN;
+                subId = SubscriptionManager.getDefaultSubId();
+                break;
             case 4:
-                return loadFromEf(IccConstants.EF_FDN, getRequestSubId(uri));
-            case 5:
-                return loadFromEf(IccConstants.EF_SDN, SubscriptionManager.getDefaultSubId());
-            case 6:
-                return loadFromEf(IccConstants.EF_SDN, getRequestSubId(uri));
-            case 7:
-                return loadAllSimContacts(28474);
+                efType = IccConstants.EF_FDN;
+                subId = getRequestSubId(url);
+                break;
             default:
-                throw new IllegalArgumentException("Unknown URL " + uri);
+                throw new UnsupportedOperationException("Cannot insert into URL: " + url);
+        }
+        String tag = null;
+        String number = null;
+        String emails = null;
+        String anrs = null;
+        String pin2 = null;
+        if (TelBrand.IS_SBM) {
+            tokens = splitIgnoreSinglequotString(where, "AND");
+        } else {
+            tokens = where.split("AND");
+        }
+        int n = tokens.length;
+        while (true) {
+            n--;
+            if (n >= 0) {
+                String param = tokens[n];
+                if (TelBrand.IS_SBM) {
+                    pair = splitIgnoreSinglequotString(param, "=");
+                } else {
+                    pair = param.split("=", 2);
+                }
+                if (pair.length != 2) {
+                    Rlog.e(TAG, "resolve: bad whereClause parameter: " + param);
+                } else {
+                    String key = pair[0].trim();
+                    String val = pair[1].trim();
+                    if (STR_TAG.equals(key)) {
+                        if (TelBrand.IS_SBM) {
+                            tag = normalizeValue(val).replaceAll("''", "'");
+                        } else {
+                            tag = normalizeValue(val);
+                        }
+                    } else if (STR_NUMBER.equals(key)) {
+                        number = normalizeValue(val);
+                    } else if (STR_EMAILS.equals(key)) {
+                        emails = normalizeValue(val);
+                    } else if (STR_ANRS.equals(key)) {
+                        anrs = normalizeValue(val);
+                    } else if (STR_PIN2.equals(key)) {
+                        pin2 = normalizeValue(val);
+                    }
+                }
+            } else {
+                ContentValues mValues = new ContentValues();
+                mValues.put(STR_TAG, tag);
+                mValues.put(STR_NUMBER, number);
+                mValues.put(STR_EMAILS, emails);
+                mValues.put(STR_ANRS, anrs);
+                mValues.put(STR_NEW_TAG, "");
+                mValues.put(STR_NEW_NUMBER, "");
+                mValues.put(STR_NEW_EMAILS, "");
+                mValues.put(STR_NEW_ANRS, "");
+                if ((efType == 3 && TextUtils.isEmpty(pin2)) || !updateIccRecordInEf(efType, mValues, pin2, subId)) {
+                    return 0;
+                }
+                getContext().getContentResolver().notifyChange(url, null);
+                return 1;
+            }
         }
     }
 
-    public int update(Uri uri, ContentValues contentValues, String str, String[] strArr) {
-        int defaultSubId;
-        String str2;
-        int i = 28474;
-        switch (URL_MATCHER.match(uri)) {
+    @Override // android.content.ContentProvider
+    public int update(Uri url, ContentValues values, String where, String[] whereArgs) {
+        int efType;
+        int subId;
+        String pin2 = null;
+        switch (URL_MATCHER.match(url)) {
             case 1:
-                defaultSubId = SubscriptionManager.getDefaultSubId();
-                str2 = null;
+                efType = 28474;
+                subId = SubscriptionManager.getDefaultSubId();
                 break;
             case 2:
-                defaultSubId = getRequestSubId(uri);
-                str2 = null;
+                efType = 28474;
+                subId = getRequestSubId(url);
                 break;
             case 3:
-                defaultSubId = SubscriptionManager.getDefaultSubId();
-                str2 = contentValues.getAsString(STR_PIN2);
-                i = IccConstants.EF_FDN;
+                efType = IccConstants.EF_FDN;
+                subId = SubscriptionManager.getDefaultSubId();
+                pin2 = values.getAsString(STR_PIN2);
                 break;
             case 4:
-                defaultSubId = getRequestSubId(uri);
-                str2 = contentValues.getAsString(STR_PIN2);
-                i = IccConstants.EF_FDN;
+                efType = IccConstants.EF_FDN;
+                subId = getRequestSubId(url);
+                pin2 = values.getAsString(STR_PIN2);
                 break;
             default:
-                throw new UnsupportedOperationException("Cannot insert into URL: " + uri);
+                throw new UnsupportedOperationException("Cannot insert into URL: " + url);
         }
-        contentValues.getAsString(STR_TAG);
-        contentValues.getAsString(STR_NUMBER);
-        contentValues.getAsString(STR_NEW_TAG);
-        contentValues.getAsString(STR_NEW_NUMBER);
-        if (!updateIccRecordInEf(i, contentValues, str2, defaultSubId)) {
+        values.getAsString(STR_TAG);
+        values.getAsString(STR_NUMBER);
+        values.getAsString(STR_NEW_TAG);
+        values.getAsString(STR_NEW_NUMBER);
+        if (!updateIccRecordInEf(efType, values, pin2, subId)) {
             return 0;
         }
-        getContext().getContentResolver().notifyChange(uri, null);
+        getContext().getContentResolver().notifyChange(url, null);
         return 1;
+    }
+
+    private MatrixCursor loadFromEf(int efType, int subId) {
+        List<AdnRecord> adnRecords = null;
+        try {
+            IIccPhoneBook iccIpb = IIccPhoneBook.Stub.asInterface(ServiceManager.getService("simphonebook"));
+            if (iccIpb != null) {
+                adnRecords = iccIpb.getAdnRecordsInEfForSubscriber(subId, efType);
+            }
+        } catch (RemoteException e) {
+        } catch (SecurityException e2) {
+        }
+        if (adnRecords != null) {
+            int N = adnRecords.size();
+            MatrixCursor cursor = new MatrixCursor(ADDRESS_BOOK_COLUMN_NAMES, N);
+            log("adnRecords.size=" + N);
+            for (int i = 0; i < N; i++) {
+                loadRecord(adnRecords.get(i), cursor, i);
+            }
+            return cursor;
+        }
+        Rlog.w(TAG, "Cannot load ADN records");
+        return new MatrixCursor(ADDRESS_BOOK_COLUMN_NAMES);
+    }
+
+    private boolean updateIccRecordInEf(int efType, ContentValues values, String pin2, int subId) {
+        try {
+            IIccPhoneBook iccIpb = IIccPhoneBook.Stub.asInterface(ServiceManager.getService("simphonebook"));
+            if (iccIpb != null) {
+                return iccIpb.updateAdnRecordsWithContentValuesInEfBySearchUsingSubId(subId, efType, values, pin2);
+            }
+            return false;
+        } catch (RemoteException e) {
+            return false;
+        } catch (SecurityException e2) {
+            return false;
+        }
+    }
+
+    private void loadRecord(AdnRecord record, MatrixCursor cursor, int id) {
+        if (!record.isEmpty()) {
+            Object[] contact = new Object[5];
+            String alphaTag = record.getAlphaTag();
+            String number = record.getNumber();
+            String[] anrs = record.getAdditionalNumbers();
+            contact[0] = alphaTag;
+            contact[1] = number;
+            String[] emails = record.getEmails();
+            if (emails != null) {
+                StringBuilder emailString = new StringBuilder();
+                for (String email : emails) {
+                    emailString.append(email);
+                    emailString.append(",");
+                }
+                contact[2] = emailString.toString();
+            }
+            if (anrs != null) {
+                StringBuilder anrString = new StringBuilder();
+                for (String anr : anrs) {
+                    anrString.append(anr);
+                    anrString.append(",");
+                }
+                contact[3] = anrString.toString();
+            }
+            contact[4] = Integer.valueOf(id);
+            cursor.addRow(contact);
+        }
+    }
+
+    private void log(String msg) {
+        Rlog.d(TAG, "[IccProvider] " + msg);
+    }
+
+    private int getRequestSubId(Uri url) {
+        try {
+            return Integer.parseInt(url.getLastPathSegment());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Unknown URL " + url);
+        }
     }
 }

@@ -4,14 +4,15 @@ import android.content.Context;
 import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Message;
-import android.provider.Settings.SettingNotFoundException;
+import android.provider.Settings;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
-import com.android.internal.telephony.ModemStackController.ModemCapabilityInfo;
+import com.android.internal.telephony.ModemStackController;
 import com.android.internal.telephony.uicc.UiccController;
 import java.util.HashMap;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ModemBindingPolicyHandler extends Handler {
     private static final int EVENT_MODEM_RAT_CAPS_AVAILABLE = 1;
     private static final int EVENT_RADIO_NOT_AVAILABLE = 4;
@@ -47,36 +48,24 @@ public class ModemBindingPolicyHandler extends Handler {
     private static ModemBindingPolicyHandler sModemBindingPolicyHandler;
     private CommandsInterface[] mCi;
     private Context mContext;
-    private int[] mCurrentStackId = new int[this.mNumPhones];
-    private boolean mIsSetPrefNwModeInProgress = false;
-    private ModemCapabilityInfo[] mModemCapInfo = null;
-    private boolean mModemRatCapabilitiesAvailable = false;
+    private ModemStackController.ModemCapabilityInfo[] mModemCapInfo;
     private int mNumOfSetPrefNwModeSuccess = 0;
     private int mNumPhones = TelephonyManager.getDefault().getPhoneCount();
-    private int[] mNwModeinSubIdTable = new int[this.mNumPhones];
-    private int[] mPrefNwMode = new int[this.mNumPhones];
+    private boolean mModemRatCapabilitiesAvailable = false;
+    private boolean mIsSetPrefNwModeInProgress = false;
     private int[] mPreferredStackId = new int[this.mNumPhones];
-    private HashMap<Integer, Message> mStoredResponse = new HashMap();
+    private int[] mCurrentStackId = new int[this.mNumPhones];
+    private int[] mPrefNwMode = new int[this.mNumPhones];
+    private int[] mNwModeinSubIdTable = new int[this.mNumPhones];
+    private HashMap<Integer, Message> mStoredResponse = new HashMap<>();
 
-    private ModemBindingPolicyHandler(Context context, UiccController uiccController, CommandsInterface[] commandsInterfaceArr) {
-        int i = 0;
-        logd("Constructor - Enter");
-        this.mCi = commandsInterfaceArr;
-        this.mContext = context;
-        mModemStackController = ModemStackController.getInstance();
-        this.mModemCapInfo = new ModemCapabilityInfo[this.mNumPhones];
-        mModemStackController.registerForModemRatCapsAvailable(this, 1, null);
-        for (CommandsInterface registerForNotAvailable : this.mCi) {
-            registerForNotAvailable.registerForNotAvailable(this, 4, null);
+    public static ModemBindingPolicyHandler make(Context context, UiccController uiccMgr, CommandsInterface[] ci) {
+        Rlog.d(LOG_TAG, "getInstance");
+        if (sModemBindingPolicyHandler == null) {
+            sModemBindingPolicyHandler = new ModemBindingPolicyHandler(context, uiccMgr, ci);
+            return sModemBindingPolicyHandler;
         }
-        while (i < this.mNumPhones) {
-            this.mPreferredStackId[i] = i;
-            this.mCurrentStackId[i] = i;
-            this.mNwModeinSubIdTable[i] = 1;
-            this.mStoredResponse.put(Integer.valueOf(i), null);
-            i++;
-        }
-        logd("Constructor - Exit");
+        throw new RuntimeException("ModemBindingPolicyHandler.make() should be called once");
     }
 
     public static ModemBindingPolicyHandler getInstance() {
@@ -86,95 +75,112 @@ public class ModemBindingPolicyHandler extends Handler {
         throw new RuntimeException("ModemBindingPolicyHdlr.getInstance called before make()");
     }
 
-    private int getNumOfRatSupportedForNwMode(int i, ModemCapabilityInfo modemCapabilityInfo) {
-        int i2 = 0;
-        logd("getNumOfRATsSupportedForNwMode: nwMode[" + i + "] modemCaps = " + modemCapabilityInfo);
-        if (modemCapabilityInfo == null) {
-            loge("getNumOfRATsSupportedForNwMode: Modem Capabilites are null. Return!!");
-            return 0;
+    private ModemBindingPolicyHandler(Context context, UiccController uiccManager, CommandsInterface[] ci) {
+        this.mModemCapInfo = null;
+        logd("Constructor - Enter");
+        this.mCi = ci;
+        this.mContext = context;
+        mModemStackController = ModemStackController.getInstance();
+        this.mModemCapInfo = new ModemStackController.ModemCapabilityInfo[this.mNumPhones];
+        mModemStackController.registerForModemRatCapsAvailable(this, 1, null);
+        for (int i = 0; i < this.mCi.length; i++) {
+            this.mCi[i].registerForNotAvailable(this, 4, null);
         }
-        switch (i) {
-            case 0:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & 101902;
-                break;
-            case 1:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_GSM_ONLY;
-                break;
-            case 2:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_WCDMA_ONLY;
-                break;
-            case 3:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & 101902;
-                break;
-            case 4:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_CDMA;
-                break;
-            case 5:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_CDMA_NO_EVDO;
-                break;
-            case 6:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_EVDO_NO_CDMA;
-                break;
-            case 7:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_GLOBAL;
-                break;
-            case 8:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_LTE_CDMA_EVDO;
-                break;
-            case 9:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_LTE_GSM_WCDMA;
-                break;
-            case 10:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_LTE_CMDA_EVDO_GSM_WCDMA;
-                break;
-            case 11:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_LTE_ONLY;
-                break;
-            case 12:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_LTE_WCDMA;
-                break;
-            case 13:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_ONLY;
-                break;
-            case 14:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_WCDMA;
-                break;
-            case 15:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_LTE;
-                break;
-            case 16:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM;
-                break;
-            case 17:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM_LTE;
-                break;
-            case 18:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM_WCDMA;
-                break;
-            case 19:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_WCDMA_LTE;
-                break;
-            case 20:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM_WCDMA_LTE;
-                break;
-            case 21:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_CDMA_EVDO_GSM_WCDMA;
-                break;
-            case 22:
-                i2 = modemCapabilityInfo.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_LTE_CDMA_EVDO_GSM_WCDMA;
-                break;
+        for (int i2 = 0; i2 < this.mNumPhones; i2++) {
+            this.mPreferredStackId[i2] = i2;
+            this.mCurrentStackId[i2] = i2;
+            this.mNwModeinSubIdTable[i2] = 1;
+            this.mStoredResponse.put(Integer.valueOf(i2), null);
         }
-        logd("getNumOfRATsSupportedForNwMode: supportedRatMaskForNwMode:" + i2);
-        return getNumRatSupportedInMask(i2);
+        logd("Constructor - Exit");
     }
 
-    private int getNumRatSupportedInMask(int i) {
-        int i2 = 0;
-        while (i != 0) {
-            i &= i - 1;
-            i2++;
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case 1:
+                handleModemRatCapsAvailable();
+                return;
+            case 2:
+                handleUpdateBindingDone((AsyncResult) msg.obj);
+                return;
+            case 3:
+                handleSetPreferredNetwork(msg);
+                return;
+            case 4:
+                logd("EVENT_RADIO_NOT_AVAILABLE");
+                handleModemRatCapsUnAvailable();
+                return;
+            default:
+                return;
         }
-        return i2;
+    }
+
+    private void handleSetPreferredNetwork(Message msg) {
+        AsyncResult ar = (AsyncResult) msg.obj;
+        int index = ((Integer) ar.userObj).intValue();
+        if (ar.exception == null) {
+            this.mNumOfSetPrefNwModeSuccess++;
+            if (this.mNumOfSetPrefNwModeSuccess == this.mNumPhones) {
+                for (int i = 0; i < this.mNumPhones; i++) {
+                    logd("Updating network mode in DB for slot[" + i + "] with " + this.mNwModeinSubIdTable[i]);
+                    TelephonyManager.putIntAtIndex(this.mContext.getContentResolver(), "preferred_network_mode", i, this.mNwModeinSubIdTable[i]);
+                }
+                this.mNumOfSetPrefNwModeSuccess = 0;
+                return;
+            }
+            return;
+        }
+        logd("Failed to set preferred network mode for slot" + index);
+        this.mNumOfSetPrefNwModeSuccess = 0;
+    }
+
+    private void handleUpdateBindingDone(AsyncResult ar) {
+        this.mIsSetPrefNwModeInProgress = false;
+        for (int i = 0; i < this.mNumPhones; i++) {
+            int errorCode = 0;
+            Message resp = this.mStoredResponse.get(Integer.valueOf(i));
+            if (resp != null) {
+                if (ar.exception != null) {
+                    errorCode = 2;
+                }
+                sendResponseToTarget(resp, errorCode);
+                this.mStoredResponse.put(Integer.valueOf(i), null);
+            }
+        }
+    }
+
+    public void updatePrefNwTypeIfRequired() {
+        boolean updateRequired = false;
+        syncPreferredNwModeFromDB();
+        SubscriptionController subCtrlr = SubscriptionController.getInstance();
+        int i = 0;
+        while (true) {
+            if (i >= this.mNumPhones) {
+                break;
+            }
+            int[] subIdList = subCtrlr.getSubId(i);
+            if (subIdList != null && subIdList[0] > 0) {
+                int subId = subIdList[0];
+                if (!SubscriptionManager.isValidSubscriptionId(subId)) {
+                    this.mNwModeinSubIdTable[i] = 1;
+                } else {
+                    this.mNwModeinSubIdTable[i] = subCtrlr.getNwMode(subId);
+                }
+                if (this.mNwModeinSubIdTable[i] == -1) {
+                    updateRequired = false;
+                    break;
+                } else if (this.mNwModeinSubIdTable[i] != this.mPrefNwMode[i]) {
+                    updateRequired = true;
+                }
+            }
+            i++;
+        }
+        if (updateRequired && updateStackBindingIfRequired(false) == 0) {
+            for (int i2 = 0; i2 < this.mNumPhones; i2++) {
+                this.mCi[i2].setPreferredNetworkType(this.mNwModeinSubIdTable[i2], obtainMessage(3, Integer.valueOf(i2)));
+            }
+        }
     }
 
     private void handleModemRatCapsAvailable() {
@@ -190,203 +196,203 @@ public class ModemBindingPolicyHandler extends Handler {
         }
     }
 
-    private void handleSetPreferredNetwork(Message message) {
-        AsyncResult asyncResult = (AsyncResult) message.obj;
-        int intValue = ((Integer) asyncResult.userObj).intValue();
-        if (asyncResult.exception == null) {
-            this.mNumOfSetPrefNwModeSuccess++;
-            if (this.mNumOfSetPrefNwModeSuccess == this.mNumPhones) {
-                for (int i = 0; i < this.mNumPhones; i++) {
-                    logd("Updating network mode in DB for slot[" + i + "] with " + this.mNwModeinSubIdTable[i]);
-                    TelephonyManager.putIntAtIndex(this.mContext.getContentResolver(), "preferred_network_mode", i, this.mNwModeinSubIdTable[i]);
-                }
-                this.mNumOfSetPrefNwModeSuccess = 0;
-                return;
-            }
-            return;
-        }
-        logd("Failed to set preferred network mode for slot" + intValue);
-        this.mNumOfSetPrefNwModeSuccess = 0;
-    }
-
-    private void handleUpdateBindingDone(AsyncResult asyncResult) {
-        this.mIsSetPrefNwModeInProgress = false;
-        for (int i = 0; i < this.mNumPhones; i++) {
-            Message message = (Message) this.mStoredResponse.get(Integer.valueOf(i));
-            if (message != null) {
-                sendResponseToTarget(message, asyncResult.exception != null ? 2 : 0);
-                this.mStoredResponse.put(Integer.valueOf(i), null);
-            }
-        }
-    }
-
-    private boolean isNwModeSupportedOnStack(int i, int i2) {
-        boolean z = false;
-        int[] iArr = new int[this.mNumPhones];
-        boolean z2 = false;
-        for (int i3 = 0; i3 < this.mNumPhones; i3++) {
-            iArr[i3] = getNumOfRatSupportedForNwMode(i, this.mModemCapInfo[i3]);
-            if (z2 < iArr[i3]) {
-                z2 = iArr[i3];
-            }
-        }
-        if (iArr[i2] == z2) {
-            z = true;
-        }
-        logd("nwMode:" + i + ", on stack:" + i2 + " is " + (z ? "Supported" : "Not Supported"));
-        return z;
-    }
-
-    private void logd(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    private void loge(String str) {
-        Rlog.e(LOG_TAG, str);
-    }
-
-    public static ModemBindingPolicyHandler make(Context context, UiccController uiccController, CommandsInterface[] commandsInterfaceArr) {
-        Rlog.d(LOG_TAG, "getInstance");
-        if (sModemBindingPolicyHandler == null) {
-            sModemBindingPolicyHandler = new ModemBindingPolicyHandler(context, uiccController, commandsInterfaceArr);
-            return sModemBindingPolicyHandler;
-        }
-        throw new RuntimeException("ModemBindingPolicyHandler.make() should be called once");
-    }
-
-    private void sendResponseToTarget(Message message, int i) {
-        if (message != null) {
-            AsyncResult.forMessage(message, null, CommandException.fromRilErrno(i));
-            message.sendToTarget();
-        }
-    }
-
     private void syncCurrentStackInfo() {
-        int i = 0;
-        while (i < this.mNumPhones) {
+        for (int i = 0; i < this.mNumPhones; i++) {
             this.mCurrentStackId[i] = mModemStackController.getCurrentStackIdForPhoneId(i);
             this.mModemCapInfo[this.mCurrentStackId[i]] = mModemStackController.getModemRatCapsForPhoneId(i);
             this.mPreferredStackId[i] = this.mCurrentStackId[i] >= 0 ? this.mCurrentStackId[i] : i;
-            i++;
         }
+    }
+
+    private int updateStackBindingIfRequired(boolean isBootUp) {
+        boolean isUpdateStackBindingRequired = false;
+        updatePreferredStackIds();
+        int i = 0;
+        while (true) {
+            if (i >= this.mNumPhones) {
+                break;
+            } else if (this.mPreferredStackId[i] != this.mCurrentStackId[i]) {
+                isUpdateStackBindingRequired = true;
+                break;
+            } else {
+                i++;
+            }
+        }
+        if (!isBootUp && !isUpdateStackBindingRequired) {
+            return 0;
+        }
+        return mModemStackController.updateStackBinding(this.mPreferredStackId, isBootUp, Message.obtain(this, 2, null));
+    }
+
+    private void updatePreferredStackIds() {
+        if (!this.mModemRatCapabilitiesAvailable) {
+            loge("updatePreferredStackIds: Modem Capabilites are not Available. Return!!");
+            return;
+        }
+        syncPreferredNwModeFromDB();
+        syncCurrentStackInfo();
+        for (int curPhoneId = 0; curPhoneId < this.mNumPhones; curPhoneId++) {
+            if (isNwModeSupportedOnStack(this.mPrefNwMode[curPhoneId], this.mCurrentStackId[curPhoneId])) {
+                logd("updatePreferredStackIds: current stack[" + this.mCurrentStackId[curPhoneId] + "]supports NwMode[" + this.mPrefNwMode[curPhoneId] + "] on phoneId[" + curPhoneId + "]");
+            } else {
+                for (int otherPhoneId = 0; otherPhoneId < this.mNumPhones; otherPhoneId++) {
+                    if (otherPhoneId != curPhoneId && isNwModeSupportedOnStack(this.mPrefNwMode[curPhoneId], this.mCurrentStackId[otherPhoneId]) && isNwModeSupportedOnStack(this.mPrefNwMode[otherPhoneId], this.mCurrentStackId[curPhoneId])) {
+                        logd("updatePreferredStackIds: Cross Binding is possible between phoneId[" + curPhoneId + "] and phoneId[" + otherPhoneId + "]");
+                        this.mPreferredStackId[curPhoneId] = this.mCurrentStackId[otherPhoneId];
+                        this.mPreferredStackId[otherPhoneId] = this.mCurrentStackId[curPhoneId];
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean isNwModeSupportedOnStack(int nwMode, int stackId) {
+        int[] numRatSupported = new int[this.mNumPhones];
+        int maxNumRatSupported = 0;
+        boolean isSupported = false;
+        for (int i = 0; i < this.mNumPhones; i++) {
+            numRatSupported[i] = getNumOfRatSupportedForNwMode(nwMode, this.mModemCapInfo[i]);
+            if (maxNumRatSupported < numRatSupported[i]) {
+                maxNumRatSupported = numRatSupported[i];
+            }
+        }
+        if (numRatSupported[stackId] == maxNumRatSupported) {
+            isSupported = true;
+        }
+        logd("nwMode:" + nwMode + ", on stack:" + stackId + " is " + (isSupported ? "Supported" : "Not Supported"));
+        return isSupported;
     }
 
     private void syncPreferredNwModeFromDB() {
         for (int i = 0; i < this.mNumPhones; i++) {
             try {
                 this.mPrefNwMode[i] = TelephonyManager.getIntAtIndex(this.mContext.getContentResolver(), "preferred_network_mode", i);
-            } catch (SettingNotFoundException e) {
+            } catch (Settings.SettingNotFoundException e) {
                 loge("getPreferredNetworkMode: Could not find PREFERRED_NETWORK_MODE!!!");
                 this.mPrefNwMode[i] = Phone.PREFERRED_NT_MODE;
             }
         }
     }
 
-    private void updatePreferredStackIds() {
-        if (this.mModemRatCapabilitiesAvailable) {
-            syncPreferredNwModeFromDB();
-            syncCurrentStackInfo();
-            int i = 0;
-            while (i < this.mNumPhones) {
-                if (isNwModeSupportedOnStack(this.mPrefNwMode[i], this.mCurrentStackId[i])) {
-                    logd("updatePreferredStackIds: current stack[" + this.mCurrentStackId[i] + "]supports NwMode[" + this.mPrefNwMode[i] + "] on phoneId[" + i + "]");
-                } else {
-                    int i2 = 0;
-                    while (i2 < this.mNumPhones) {
-                        if (i2 != i && isNwModeSupportedOnStack(this.mPrefNwMode[i], this.mCurrentStackId[i2]) && isNwModeSupportedOnStack(this.mPrefNwMode[i2], this.mCurrentStackId[i])) {
-                            logd("updatePreferredStackIds: Cross Binding is possible between phoneId[" + i + "] and phoneId[" + i2 + "]");
-                            this.mPreferredStackId[i] = this.mCurrentStackId[i2];
-                            this.mPreferredStackId[i2] = this.mCurrentStackId[i];
-                        }
-                        i2++;
-                    }
-                }
-                i++;
-            }
-            return;
-        }
-        loge("updatePreferredStackIds: Modem Capabilites are not Available. Return!!");
-    }
-
-    private int updateStackBindingIfRequired(boolean z) {
-        int i;
-        updatePreferredStackIds();
-        for (i = 0; i < this.mNumPhones; i++) {
-            if (this.mPreferredStackId[i] != this.mCurrentStackId[i]) {
-                i = 1;
-                break;
-            }
-        }
-        i = 0;
-        if (!z && r0 == 0) {
-            return 0;
-        }
-        return mModemStackController.updateStackBinding(this.mPreferredStackId, z, Message.obtain(this, 2, null));
-    }
-
-    public void handleMessage(Message message) {
-        switch (message.what) {
-            case 1:
-                handleModemRatCapsAvailable();
-                return;
-            case 2:
-                handleUpdateBindingDone((AsyncResult) message.obj);
-                return;
-            case 3:
-                handleSetPreferredNetwork(message);
-                return;
-            case 4:
-                logd("EVENT_RADIO_NOT_AVAILABLE");
-                handleModemRatCapsUnAvailable();
-                return;
-            default:
-                return;
-        }
-    }
-
-    public void setPreferredNetworkType(int i, int i2, Message message) {
+    public void setPreferredNetworkType(int networkType, int phoneId, Message response) {
         if (this.mIsSetPrefNwModeInProgress) {
             loge("setPreferredNetworkType: In Progress:");
-            sendResponseToTarget(message, 2);
+            sendResponseToTarget(response, 2);
             return;
         }
-        logd("setPreferredNetworkType: nwMode:" + i + ", on phoneId:" + i2);
+        logd("setPreferredNetworkType: nwMode:" + networkType + ", on phoneId:" + phoneId);
         this.mIsSetPrefNwModeInProgress = true;
         if (updateStackBindingIfRequired(false) == 1) {
-            this.mStoredResponse.put(Integer.valueOf(i2), message);
+            this.mStoredResponse.put(Integer.valueOf(phoneId), response);
             return;
         }
-        this.mCi[i2].setPreferredNetworkType(i, message);
+        this.mCi[phoneId].setPreferredNetworkType(networkType, response);
         this.mIsSetPrefNwModeInProgress = false;
     }
 
-    public void updatePrefNwTypeIfRequired() {
-        int i = 0;
-        syncPreferredNwModeFromDB();
-        SubscriptionController instance = SubscriptionController.getInstance();
-        int i2 = 0;
-        for (int i3 = 0; i3 < this.mNumPhones; i3++) {
-            int[] subId = instance.getSubId(i3);
-            if (subId != null && subId[0] > 0) {
-                int i4 = subId[0];
-                if (SubscriptionManager.isValidSubscriptionId(i4)) {
-                    this.mNwModeinSubIdTable[i3] = instance.getNwMode(i4);
-                } else {
-                    this.mNwModeinSubIdTable[i3] = 1;
-                }
-                if (this.mNwModeinSubIdTable[i3] == -1) {
-                    i2 = 0;
-                    break;
-                } else if (this.mNwModeinSubIdTable[i3] != this.mPrefNwMode[i3]) {
-                    i2 = 1;
-                }
-            }
+    private void sendResponseToTarget(Message response, int responseCode) {
+        if (response != null) {
+            AsyncResult.forMessage(response, (Object) null, CommandException.fromRilErrno(responseCode));
+            response.sendToTarget();
         }
-        if (i2 != 0 && updateStackBindingIfRequired(false) == 0) {
-            while (i < this.mNumPhones) {
-                this.mCi[i].setPreferredNetworkType(this.mNwModeinSubIdTable[i], obtainMessage(3, Integer.valueOf(i)));
-                i++;
-            }
+    }
+
+    private int getNumOfRatSupportedForNwMode(int nwMode, ModemStackController.ModemCapabilityInfo modemCaps) {
+        int supportedRatMaskForNwMode = 0;
+        logd("getNumOfRATsSupportedForNwMode: nwMode[" + nwMode + "] modemCaps = " + modemCaps);
+        if (modemCaps == null) {
+            loge("getNumOfRATsSupportedForNwMode: Modem Capabilites are null. Return!!");
+            return 0;
         }
+        switch (nwMode) {
+            case 0:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & 101902;
+                break;
+            case 1:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_GSM_ONLY;
+                break;
+            case 2:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_WCDMA_ONLY;
+                break;
+            case 3:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & 101902;
+                break;
+            case 4:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_CDMA;
+                break;
+            case 5:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_CDMA_NO_EVDO;
+                break;
+            case 6:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_EVDO_NO_CDMA;
+                break;
+            case 7:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_GLOBAL;
+                break;
+            case 8:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_LTE_CDMA_EVDO;
+                break;
+            case 9:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_LTE_GSM_WCDMA;
+                break;
+            case 10:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_LTE_CMDA_EVDO_GSM_WCDMA;
+                break;
+            case 11:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_LTE_ONLY;
+                break;
+            case 12:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_LTE_WCDMA;
+                break;
+            case 13:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_ONLY;
+                break;
+            case 14:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_WCDMA;
+                break;
+            case 15:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_LTE;
+                break;
+            case 16:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM;
+                break;
+            case 17:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM_LTE;
+                break;
+            case 18:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM_WCDMA;
+                break;
+            case 19:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_WCDMA_LTE;
+                break;
+            case 20:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_GSM_WCDMA_LTE;
+                break;
+            case 21:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_CDMA_EVDO_GSM_WCDMA;
+                break;
+            case 22:
+                supportedRatMaskForNwMode = modemCaps.getSupportedRatBitMask() & NETWORK_MASK_TD_SCDMA_LTE_CDMA_EVDO_GSM_WCDMA;
+                break;
+        }
+        logd("getNumOfRATsSupportedForNwMode: supportedRatMaskForNwMode:" + supportedRatMaskForNwMode);
+        return getNumRatSupportedInMask(supportedRatMaskForNwMode);
+    }
+
+    private int getNumRatSupportedInMask(int mask) {
+        int noOfOnes = 0;
+        while (mask != 0) {
+            mask &= mask - 1;
+            noOfOnes++;
+        }
+        return noOfOnes;
+    }
+
+    private void logd(String string) {
+        Rlog.d(LOG_TAG, string);
+    }
+
+    private void loge(String string) {
+        Rlog.e(LOG_TAG, string);
     }
 }

@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Vector;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class PduBody {
     private Map<String, PduPart> mPartMapByContentId;
     private Map<String, PduPart> mPartMapByContentLocation;
@@ -17,81 +18,81 @@ public class PduBody {
         this.mPartMapByContentLocation = null;
         this.mPartMapByName = null;
         this.mPartMapByFileName = null;
-        this.mParts = new Vector();
+        this.mParts = new Vector<>();
         this.mPartMapByContentId = new HashMap();
         this.mPartMapByContentLocation = new HashMap();
         this.mPartMapByName = new HashMap();
         this.mPartMapByFileName = new HashMap();
     }
 
-    private void putPartToMaps(PduPart pduPart) {
-        byte[] contentId = pduPart.getContentId();
+    private void putPartToMaps(PduPart part) {
+        byte[] contentId = part.getContentId();
         if (contentId != null) {
-            this.mPartMapByContentId.put(new String(contentId), pduPart);
+            this.mPartMapByContentId.put(new String(contentId), part);
         }
-        contentId = pduPart.getContentLocation();
-        if (contentId != null) {
-            this.mPartMapByContentLocation.put(new String(contentId), pduPart);
+        byte[] contentLocation = part.getContentLocation();
+        if (contentLocation != null) {
+            this.mPartMapByContentLocation.put(new String(contentLocation), part);
         }
-        contentId = pduPart.getName();
-        if (contentId != null) {
-            this.mPartMapByName.put(new String(contentId), pduPart);
+        byte[] name = part.getName();
+        if (name != null) {
+            this.mPartMapByName.put(new String(name), part);
         }
-        contentId = pduPart.getFilename();
-        if (contentId != null) {
-            this.mPartMapByFileName.put(new String(contentId), pduPart);
+        byte[] fileName = part.getFilename();
+        if (fileName != null) {
+            this.mPartMapByFileName.put(new String(fileName), part);
         }
     }
 
-    public void addPart(int i, PduPart pduPart) {
-        if (pduPart == null) {
+    public boolean addPart(PduPart part) {
+        if (part == null) {
             throw new NullPointerException();
         }
-        putPartToMaps(pduPart);
-        this.mParts.add(i, pduPart);
+        putPartToMaps(part);
+        return this.mParts.add(part);
     }
 
-    public boolean addPart(PduPart pduPart) {
-        if (pduPart == null) {
+    public void addPart(int index, PduPart part) {
+        if (part == null) {
             throw new NullPointerException();
         }
-        putPartToMaps(pduPart);
-        return this.mParts.add(pduPart);
+        putPartToMaps(part);
+        this.mParts.add(index, part);
     }
 
-    public PduPart getPart(int i) {
-        return (PduPart) this.mParts.get(i);
-    }
-
-    public PduPart getPartByContentId(String str) {
-        return (PduPart) this.mPartMapByContentId.get(str);
-    }
-
-    public PduPart getPartByContentLocation(String str) {
-        return (PduPart) this.mPartMapByContentLocation.get(str);
-    }
-
-    public PduPart getPartByFileName(String str) {
-        return (PduPart) this.mPartMapByFileName.get(str);
-    }
-
-    public PduPart getPartByName(String str) {
-        return (PduPart) this.mPartMapByName.get(str);
-    }
-
-    public int getPartIndex(PduPart pduPart) {
-        return this.mParts.indexOf(pduPart);
-    }
-
-    public int getPartsNum() {
-        return this.mParts.size();
+    public PduPart removePart(int index) {
+        return this.mParts.remove(index);
     }
 
     public void removeAll() {
         this.mParts.clear();
     }
 
-    public PduPart removePart(int i) {
-        return (PduPart) this.mParts.remove(i);
+    public PduPart getPart(int index) {
+        return this.mParts.get(index);
+    }
+
+    public int getPartIndex(PduPart part) {
+        return this.mParts.indexOf(part);
+    }
+
+    public int getPartsNum() {
+        return this.mParts.size();
+    }
+
+    public PduPart getPartByContentId(String cid) {
+        return this.mPartMapByContentId.get(cid);
+    }
+
+    public PduPart getPartByContentLocation(String contentLocation) {
+        return this.mPartMapByContentLocation.get(contentLocation);
+    }
+
+    public PduPart getPartByName(String name) {
+        return this.mPartMapByName.get(name);
+    }
+
+    public PduPart getPartByFileName(String filename) {
+        return this.mPartMapByFileName.get(filename);
     }
 }

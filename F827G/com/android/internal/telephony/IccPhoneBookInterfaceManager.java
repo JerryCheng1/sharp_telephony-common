@@ -8,13 +8,14 @@ import android.os.Message;
 import android.text.TextUtils;
 import com.android.internal.telephony.uicc.AdnRecord;
 import com.android.internal.telephony.uicc.AdnRecordCache;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppType;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.IccConstants;
 import com.android.internal.telephony.uicc.UiccCard;
 import com.android.internal.telephony.uicc.UiccCardApplication;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class IccPhoneBookInterfaceManager {
     protected static final boolean ALLOW_SIM_OP_IN_UI_THREAD = false;
     protected static final boolean DBG = true;
@@ -22,68 +23,74 @@ public abstract class IccPhoneBookInterfaceManager {
     protected static final int EVENT_LOAD_DONE = 2;
     protected static final int EVENT_UPDATE_DONE = 3;
     protected AdnRecordCache mAdnCache;
-    protected Handler mBaseHandler = new Handler() {
-        private void notifyPending(AsyncResult asyncResult) {
-            if (asyncResult.userObj != null) {
-                ((AtomicBoolean) asyncResult.userObj).set(true);
-            }
-            IccPhoneBookInterfaceManager.this.mLock.notifyAll();
-        }
-
-        public void handleMessage(Message message) {
-            boolean z = false;
-            AsyncResult asyncResult;
-            switch (message.what) {
+    protected PhoneBase mPhone;
+    protected int[] mRecordSize;
+    protected List<AdnRecord> mRecords;
+    protected boolean mSuccess;
+    private UiccCardApplication mCurrentApp = null;
+    protected final Object mLock = new Object();
+    private boolean mIs3gCard = false;
+    protected Handler mBaseHandler = new Handler() { // from class: com.android.internal.telephony.IccPhoneBookInterfaceManager.1
+        @Override // android.os.Handler
+        public void handleMessage(Message msg) {
+            boolean z = true;
+            z = false;
+            switch (msg.what) {
                 case 1:
-                    asyncResult = (AsyncResult) message.obj;
+                    AsyncResult ar = (AsyncResult) msg.obj;
                     synchronized (IccPhoneBookInterfaceManager.this.mLock) {
-                        if (asyncResult.exception == null) {
-                            IccPhoneBookInterfaceManager.this.mRecordSize = (int[]) asyncResult.result;
+                        if (ar.exception == null) {
+                            IccPhoneBookInterfaceManager.this.mRecordSize = (int[]) ar.result;
                             IccPhoneBookInterfaceManager.this.logd("GET_RECORD_SIZE Size " + IccPhoneBookInterfaceManager.this.mRecordSize[0] + " total " + IccPhoneBookInterfaceManager.this.mRecordSize[1] + " #record " + IccPhoneBookInterfaceManager.this.mRecordSize[2]);
                         }
-                        notifyPending(asyncResult);
+                        notifyPending(ar);
                     }
                     return;
                 case 2:
-                    asyncResult = (AsyncResult) message.obj;
+                    AsyncResult ar2 = (AsyncResult) msg.obj;
                     synchronized (IccPhoneBookInterfaceManager.this.mLock) {
-                        if (asyncResult.exception == null) {
-                            IccPhoneBookInterfaceManager.this.mRecords = (List) asyncResult.result;
+                        if (ar2.exception == null) {
+                            IccPhoneBookInterfaceManager.this.mRecords = (List) ar2.result;
                         } else {
                             IccPhoneBookInterfaceManager.this.logd("Cannot load ADN records");
                             if (IccPhoneBookInterfaceManager.this.mRecords != null) {
                                 IccPhoneBookInterfaceManager.this.mRecords = null;
                             }
                         }
-                        notifyPending(asyncResult);
+                        notifyPending(ar2);
                     }
                     return;
                 case 3:
-                    asyncResult = (AsyncResult) message.obj;
+                    AsyncResult ar3 = (AsyncResult) msg.obj;
                     synchronized (IccPhoneBookInterfaceManager.this.mLock) {
                         IccPhoneBookInterfaceManager iccPhoneBookInterfaceManager = IccPhoneBookInterfaceManager.this;
-                        if (asyncResult.exception == null) {
-                            z = true;
+                        if (ar3.exception != null) {
                         }
                         iccPhoneBookInterfaceManager.mSuccess = z;
-                        notifyPending(asyncResult);
+                        notifyPending(ar3);
                     }
                     return;
                 default:
                     return;
             }
         }
-    };
-    private UiccCardApplication mCurrentApp = null;
-    private boolean mIs3gCard = false;
-    protected final Object mLock = new Object();
-    protected PhoneBase mPhone;
-    protected int[] mRecordSize;
-    protected List<AdnRecord> mRecords;
-    protected boolean mSuccess;
 
-    public IccPhoneBookInterfaceManager(PhoneBase phoneBase) {
-        this.mPhone = phoneBase;
+        private void notifyPending(AsyncResult ar) {
+            if (ar.userObj != null) {
+                ((AtomicBoolean) ar.userObj).set(true);
+            }
+            IccPhoneBookInterfaceManager.this.mLock.notifyAll();
+        }
+    };
+
+    public abstract int[] getAdnRecordsSize(int i);
+
+    protected abstract void logd(String str);
+
+    protected abstract void loge(String str);
+
+    public IccPhoneBookInterfaceManager(PhoneBase phone) {
+        this.mPhone = phone;
     }
 
     private void cleanUp() {
@@ -95,26 +102,6 @@ public abstract class IccPhoneBookInterfaceManager {
         this.mCurrentApp = null;
     }
 
-    private String[] getStringArray(String str) {
-        return str != null ? str.split(",") : null;
-    }
-
-    private int updateEfForIccType(int i) {
-        if (i != 28474 || !this.mIs3gCard) {
-            return i;
-        }
-        logd("Translate EF_ADN to EF_PBR");
-        return IccConstants.EF_PBR;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void checkThread() {
-        if (this.mBaseHandler.getLooper().equals(Looper.myLooper())) {
-            loge("query() called on the main UI thread!");
-            throw new IllegalStateException("You cannot call query on this provder from the main UI thread.");
-        }
-    }
-
     public void dispose() {
         if (this.mRecords != null) {
             this.mRecords.clear();
@@ -122,28 +109,138 @@ public abstract class IccPhoneBookInterfaceManager {
         cleanUp();
     }
 
-    public int getAdnCount() {
-        if (this.mAdnCache != null) {
-            return this.mPhone.getCurrentUiccAppType() == AppType.APPTYPE_USIM ? this.mAdnCache.getUsimAdnCount() : this.mAdnCache.getAdnCount();
-        } else {
-            loge("mAdnCache is NULL when getAdnCount.");
-            return 0;
+    public void setIccCard(UiccCard card) {
+        logd("Card update received: " + card);
+        if (card == null) {
+            logd("Card is null. Cleanup");
+            cleanUp();
+            return;
+        }
+        UiccCardApplication validApp = null;
+        int numApps = card.getNumApplications();
+        boolean isCurrentAppFound = false;
+        this.mIs3gCard = false;
+        for (int i = 0; i < numApps; i++) {
+            UiccCardApplication app = card.getApplicationIndex(i);
+            if (app != null) {
+                IccCardApplicationStatus.AppType type = app.getType();
+                if (type == IccCardApplicationStatus.AppType.APPTYPE_CSIM || type == IccCardApplicationStatus.AppType.APPTYPE_USIM || type == IccCardApplicationStatus.AppType.APPTYPE_ISIM) {
+                    logd("Card is 3G");
+                    this.mIs3gCard = true;
+                }
+                if (!isCurrentAppFound) {
+                    if (validApp == null && type != IccCardApplicationStatus.AppType.APPTYPE_UNKNOWN) {
+                        validApp = app;
+                    }
+                    if (this.mCurrentApp == app) {
+                        logd("Existing app found");
+                        isCurrentAppFound = true;
+                    }
+                }
+                if (this.mIs3gCard && isCurrentAppFound) {
+                    break;
+                }
+            }
+        }
+        if ((this.mCurrentApp == null || !isCurrentAppFound) && validApp != null) {
+            logd("Setting currentApp: " + validApp);
+            this.mCurrentApp = validApp;
+            this.mAdnCache = this.mCurrentApp.getIccRecords().getAdnCache();
         }
     }
 
-    public List<AdnRecord> getAdnRecordsInEf(int i) {
+    public boolean updateAdnRecordsInEfBySearch(int efid, String oldTag, String oldPhoneNumber, String newTag, String newPhoneNumber, String pin2) {
+        if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.WRITE_CONTACTS") != 0) {
+            throw new SecurityException("Requires android.permission.WRITE_CONTACTS permission");
+        }
+        logd("updateAdnRecordsInEfBySearch: efid=" + efid + " (" + oldTag + "," + oldPhoneNumber + ")==> (" + newTag + "," + newPhoneNumber + ") pin2=" + pin2);
+        int efid2 = updateEfForIccType(efid);
+        synchronized (this.mLock) {
+            checkThread();
+            this.mSuccess = false;
+            AtomicBoolean status = new AtomicBoolean(false);
+            Message response = this.mBaseHandler.obtainMessage(3, status);
+            AdnRecord oldAdn = new AdnRecord(oldTag, oldPhoneNumber);
+            AdnRecord newAdn = new AdnRecord(newTag, newPhoneNumber);
+            if (this.mAdnCache != null) {
+                this.mAdnCache.updateAdnBySearch(efid2, oldAdn, newAdn, pin2, response);
+                waitForResult(status);
+            } else {
+                loge("Failure while trying to update by search due to uninitialised adncache");
+            }
+        }
+        return this.mSuccess;
+    }
+
+    public boolean updateAdnRecordsWithContentValuesInEfBySearch(int efid, ContentValues values, String pin2) {
+        if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.WRITE_CONTACTS") != 0) {
+            throw new SecurityException("Requires android.permission.WRITE_CONTACTS permission");
+        }
+        String oldTag = values.getAsString(IccProvider.STR_TAG);
+        String newTag = values.getAsString(IccProvider.STR_NEW_TAG);
+        String oldPhoneNumber = values.getAsString(IccProvider.STR_NUMBER);
+        String newPhoneNumber = values.getAsString(IccProvider.STR_NEW_NUMBER);
+        String oldEmail = values.getAsString(IccProvider.STR_EMAILS);
+        String newEmail = values.getAsString(IccProvider.STR_NEW_EMAILS);
+        String oldAnr = values.getAsString(IccProvider.STR_ANRS);
+        String newAnr = values.getAsString(IccProvider.STR_NEW_ANRS);
+        String[] oldEmailArray = TextUtils.isEmpty(oldEmail) ? null : getStringArray(oldEmail);
+        String[] newEmailArray = TextUtils.isEmpty(newEmail) ? null : getStringArray(newEmail);
+        String[] oldAnrArray = TextUtils.isEmpty(oldAnr) ? null : getStringArray(oldAnr);
+        String[] newAnrArray = TextUtils.isEmpty(newAnr) ? null : getStringArray(newAnr);
+        int efid2 = updateEfForIccType(efid);
+        logd("updateAdnRecordsInEfBySearch: efid=" + efid2 + ", values = " + values + ", pin2=" + pin2);
+        synchronized (this.mLock) {
+            checkThread();
+            this.mSuccess = false;
+            AtomicBoolean status = new AtomicBoolean(false);
+            Message response = this.mBaseHandler.obtainMessage(3, status);
+            AdnRecord oldAdn = new AdnRecord(oldTag, oldPhoneNumber, oldEmailArray, oldAnrArray);
+            AdnRecord newAdn = new AdnRecord(newTag, newPhoneNumber, newEmailArray, newAnrArray);
+            if (this.mAdnCache != null) {
+                this.mAdnCache.updateAdnBySearch(efid2, oldAdn, newAdn, pin2, response);
+                waitForResult(status);
+            } else {
+                loge("Failure while trying to update by search due to uninitialised adncache");
+            }
+        }
+        return this.mSuccess;
+    }
+
+    public boolean updateAdnRecordsInEfByIndex(int efid, String newTag, String newPhoneNumber, int index, String pin2) {
+        if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.WRITE_CONTACTS") != 0) {
+            throw new SecurityException("Requires android.permission.WRITE_CONTACTS permission");
+        }
+        logd("updateAdnRecordsInEfByIndex: efid=" + efid + " Index=" + index + " ==> (" + newTag + "," + newPhoneNumber + ") pin2=" + pin2);
+        synchronized (this.mLock) {
+            checkThread();
+            this.mSuccess = false;
+            AtomicBoolean status = new AtomicBoolean(false);
+            Message response = this.mBaseHandler.obtainMessage(3, status);
+            AdnRecord newAdn = new AdnRecord(newTag, newPhoneNumber);
+            if (this.mAdnCache != null) {
+                this.mAdnCache.updateAdnByIndex(efid, newAdn, index, pin2, response);
+                waitForResult(status);
+            } else {
+                loge("Failure while trying to update by index due to uninitialised adncache");
+            }
+        }
+        return this.mSuccess;
+    }
+
+    public List<AdnRecord> getAdnRecordsInEf(int efid) {
         if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.READ_CONTACTS") != 0) {
             throw new SecurityException("Requires android.permission.READ_CONTACTS permission");
         }
-        int updateEfForIccType = updateEfForIccType(i);
-        logd("getAdnRecordsInEF: efid=" + updateEfForIccType);
+        int efid2 = updateEfForIccType(efid);
+        logd("getAdnRecordsInEF: efid=" + efid2);
         synchronized (this.mLock) {
             checkThread();
-            AtomicBoolean atomicBoolean = new AtomicBoolean(false);
-            Message obtainMessage = this.mBaseHandler.obtainMessage(2, atomicBoolean);
+            AtomicBoolean status = new AtomicBoolean(false);
+            Message response = this.mBaseHandler.obtainMessage(2, status);
             if (this.mAdnCache != null) {
-                this.mAdnCache.requestLoadAllAdnLike(updateEfForIccType, this.mAdnCache.extensionEfForEf(updateEfForIccType), null, obtainMessage);
-                waitForResult(atomicBoolean);
+                this.mAdnCache.requestLoadAllAdnLike(efid2, this.mAdnCache.extensionEfForEf(efid2), null, response);
+                waitForResult(status);
             } else {
                 loge("Failure while trying to load from SIM due to uninitialised adncache");
             }
@@ -151,7 +248,48 @@ public abstract class IccPhoneBookInterfaceManager {
         return this.mRecords;
     }
 
-    public abstract int[] getAdnRecordsSize(int i);
+    protected void checkThread() {
+        if (this.mBaseHandler.getLooper().equals(Looper.myLooper())) {
+            loge("query() called on the main UI thread!");
+            throw new IllegalStateException("You cannot call query on this provder from the main UI thread.");
+        }
+    }
+
+    private String[] getStringArray(String str) {
+        if (str != null) {
+            return str.split(",");
+        }
+        return null;
+    }
+
+    protected void waitForResult(AtomicBoolean status) {
+        while (!status.get()) {
+            try {
+                this.mLock.wait();
+            } catch (InterruptedException e) {
+                logd("interrupted while trying to update by search");
+            }
+        }
+    }
+
+    private int updateEfForIccType(int efid) {
+        if (efid != 28474 || !this.mIs3gCard) {
+            return efid;
+        }
+        logd("Translate EF_ADN to EF_PBR");
+        return IccConstants.EF_PBR;
+    }
+
+    public int getAdnCount() {
+        if (this.mAdnCache == null) {
+            loge("mAdnCache is NULL when getAdnCount.");
+            return 0;
+        } else if (this.mPhone.getCurrentUiccAppType() == IccCardApplicationStatus.AppType.APPTYPE_USIM) {
+            return this.mAdnCache.getUsimAdnCount();
+        } else {
+            return this.mAdnCache.getAdnCount();
+        }
+    }
 
     public int getAnrCount() {
         if (this.mAdnCache != null) {
@@ -183,147 +321,5 @@ public abstract class IccPhoneBookInterfaceManager {
         }
         loge("mAdnCache is NULL when getSpareEmailCount.");
         return 0;
-    }
-
-    public abstract void logd(String str);
-
-    public abstract void loge(String str);
-
-    public void setIccCard(UiccCard uiccCard) {
-        logd("Card update received: " + uiccCard);
-        if (uiccCard == null) {
-            logd("Card is null. Cleanup");
-            cleanUp();
-            return;
-        }
-        boolean z;
-        Object obj = null;
-        int numApplications = uiccCard.getNumApplications();
-        this.mIs3gCard = false;
-        int i = 0;
-        boolean z2 = false;
-        while (i < numApplications) {
-            UiccCardApplication applicationIndex = uiccCard.getApplicationIndex(i);
-            if (applicationIndex != null) {
-                AppType type = applicationIndex.getType();
-                if (type == AppType.APPTYPE_CSIM || type == AppType.APPTYPE_USIM || type == AppType.APPTYPE_ISIM) {
-                    logd("Card is 3G");
-                    this.mIs3gCard = true;
-                }
-                if (!z2) {
-                    if (obj == null && type != AppType.APPTYPE_UNKNOWN) {
-                        obj = applicationIndex;
-                    }
-                    if (this.mCurrentApp == applicationIndex) {
-                        logd("Existing app found");
-                        z = true;
-                        if (this.mIs3gCard && r1) {
-                            break;
-                        }
-                    }
-                }
-                z = z2;
-                break;
-            }
-            z = z2;
-            i++;
-            z2 = z;
-        }
-        z = z2;
-        if ((this.mCurrentApp == null || !r1) && obj != null) {
-            logd("Setting currentApp: " + obj);
-            this.mCurrentApp = obj;
-            this.mAdnCache = this.mCurrentApp.getIccRecords().getAdnCache();
-        }
-    }
-
-    public boolean updateAdnRecordsInEfByIndex(int i, String str, String str2, int i2, String str3) {
-        if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.WRITE_CONTACTS") != 0) {
-            throw new SecurityException("Requires android.permission.WRITE_CONTACTS permission");
-        }
-        logd("updateAdnRecordsInEfByIndex: efid=" + i + " Index=" + i2 + " ==> " + "(" + str + "," + str2 + ")" + " pin2=" + str3);
-        synchronized (this.mLock) {
-            checkThread();
-            this.mSuccess = false;
-            AtomicBoolean atomicBoolean = new AtomicBoolean(false);
-            Message obtainMessage = this.mBaseHandler.obtainMessage(3, atomicBoolean);
-            AdnRecord adnRecord = new AdnRecord(str, str2);
-            if (this.mAdnCache != null) {
-                this.mAdnCache.updateAdnByIndex(i, adnRecord, i2, str3, obtainMessage);
-                waitForResult(atomicBoolean);
-            } else {
-                loge("Failure while trying to update by index due to uninitialised adncache");
-            }
-        }
-        return this.mSuccess;
-    }
-
-    public boolean updateAdnRecordsInEfBySearch(int i, String str, String str2, String str3, String str4, String str5) {
-        if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.WRITE_CONTACTS") != 0) {
-            throw new SecurityException("Requires android.permission.WRITE_CONTACTS permission");
-        }
-        logd("updateAdnRecordsInEfBySearch: efid=" + i + " (" + str + "," + str2 + ")" + "==>" + " (" + str3 + "," + str4 + ")" + " pin2=" + str5);
-        int updateEfForIccType = updateEfForIccType(i);
-        synchronized (this.mLock) {
-            checkThread();
-            this.mSuccess = false;
-            AtomicBoolean atomicBoolean = new AtomicBoolean(false);
-            Message obtainMessage = this.mBaseHandler.obtainMessage(3, atomicBoolean);
-            AdnRecord adnRecord = new AdnRecord(str, str2);
-            AdnRecord adnRecord2 = new AdnRecord(str3, str4);
-            if (this.mAdnCache != null) {
-                this.mAdnCache.updateAdnBySearch(updateEfForIccType, adnRecord, adnRecord2, str5, obtainMessage);
-                waitForResult(atomicBoolean);
-            } else {
-                loge("Failure while trying to update by search due to uninitialised adncache");
-            }
-        }
-        return this.mSuccess;
-    }
-
-    public boolean updateAdnRecordsWithContentValuesInEfBySearch(int i, ContentValues contentValues, String str) {
-        if (this.mPhone.getContext().checkCallingOrSelfPermission("android.permission.WRITE_CONTACTS") != 0) {
-            throw new SecurityException("Requires android.permission.WRITE_CONTACTS permission");
-        }
-        String asString = contentValues.getAsString(IccProvider.STR_TAG);
-        String asString2 = contentValues.getAsString(IccProvider.STR_NEW_TAG);
-        String asString3 = contentValues.getAsString(IccProvider.STR_NUMBER);
-        String asString4 = contentValues.getAsString(IccProvider.STR_NEW_NUMBER);
-        String asString5 = contentValues.getAsString(IccProvider.STR_EMAILS);
-        String asString6 = contentValues.getAsString(IccProvider.STR_NEW_EMAILS);
-        String asString7 = contentValues.getAsString(IccProvider.STR_ANRS);
-        String asString8 = contentValues.getAsString(IccProvider.STR_NEW_ANRS);
-        String[] stringArray = TextUtils.isEmpty(asString5) ? null : getStringArray(asString5);
-        String[] stringArray2 = TextUtils.isEmpty(asString6) ? null : getStringArray(asString6);
-        String[] stringArray3 = TextUtils.isEmpty(asString7) ? null : getStringArray(asString7);
-        String[] stringArray4 = TextUtils.isEmpty(asString8) ? null : getStringArray(asString8);
-        int updateEfForIccType = updateEfForIccType(i);
-        logd("updateAdnRecordsInEfBySearch: efid=" + updateEfForIccType + ", values = " + contentValues + ", pin2=" + str);
-        synchronized (this.mLock) {
-            checkThread();
-            this.mSuccess = false;
-            AtomicBoolean atomicBoolean = new AtomicBoolean(false);
-            Message obtainMessage = this.mBaseHandler.obtainMessage(3, atomicBoolean);
-            AdnRecord adnRecord = new AdnRecord(asString, asString3, stringArray, stringArray3);
-            AdnRecord adnRecord2 = new AdnRecord(asString2, asString4, stringArray2, stringArray4);
-            if (this.mAdnCache != null) {
-                this.mAdnCache.updateAdnBySearch(updateEfForIccType, adnRecord, adnRecord2, str, obtainMessage);
-                waitForResult(atomicBoolean);
-            } else {
-                loge("Failure while trying to update by search due to uninitialised adncache");
-            }
-        }
-        return this.mSuccess;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void waitForResult(AtomicBoolean atomicBoolean) {
-        while (!atomicBoolean.get()) {
-            try {
-                this.mLock.wait();
-            } catch (InterruptedException e) {
-                logd("interrupted while trying to update by search");
-            }
-        }
     }
 }

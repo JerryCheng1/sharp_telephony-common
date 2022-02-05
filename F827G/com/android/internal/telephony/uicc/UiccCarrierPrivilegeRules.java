@@ -3,7 +3,6 @@ package com.android.internal.telephony.uicc;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.content.pm.Signature;
 import android.os.AsyncResult;
@@ -21,10 +20,12 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class UiccCarrierPrivilegeRules extends Handler {
     private static final String AID = "A00000015141434C00";
     private static final int CLA = 128;
@@ -51,25 +52,26 @@ public class UiccCarrierPrivilegeRules extends Handler {
     private List<AccessRule> mAccessRules;
     private int mChannelId;
     private Message mLoadedCallback;
-    private String mRules;
+    private UiccCard mUiccCard;
     private AtomicInteger mState = new AtomicInteger(0);
     private String mStatusMessage = "Not loaded.";
-    private UiccCard mUiccCard;
+    private String mRules = DATA;
 
-    private static class AccessRule {
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class AccessRule {
         public long accessType;
         public byte[] certificateHash;
         public String packageName;
 
-        AccessRule(byte[] bArr, String str, long j) {
-            this.certificateHash = bArr;
-            this.packageName = str;
-            this.accessType = j;
+        AccessRule(byte[] certificateHash, String packageName, long accessType) {
+            this.certificateHash = certificateHash;
+            this.packageName = packageName;
+            this.accessType = accessType;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean matches(byte[] bArr, String str) {
-            return bArr != null && Arrays.equals(this.certificateHash, bArr) && (this.packageName == null || this.packageName.equals(str));
+        boolean matches(byte[] certHash, String packageName) {
+            return certHash != null && Arrays.equals(this.certificateHash, certHash) && (this.packageName == null || this.packageName.equals(packageName));
         }
 
         public String toString() {
@@ -77,298 +79,180 @@ public class UiccCarrierPrivilegeRules extends Handler {
         }
     }
 
-    private static class TLV {
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class TLV {
         private static final int SINGLE_BYTE_MAX_LENGTH = 128;
         private Integer length;
         private String lengthBytes;
         private String tag;
         private String value;
 
-        public TLV(String str) {
-            this.tag = str;
+        public TLV(String tag) {
+            this.tag = tag;
         }
 
-        public String parse(String str, boolean z) {
-            Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "Parse TLV: " + this.tag);
-            if (str.startsWith(this.tag)) {
-                int length = this.tag.length();
-                if (length + 2 > str.length()) {
-                    throw new IllegalArgumentException("No length.");
-                }
-                parseLength(str);
-                length += this.lengthBytes.length();
-                Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "index=" + length + " length=" + this.length + "data.length=" + str.length());
-                int length2 = str.length() - (this.length.intValue() + length);
-                if (length2 < 0) {
-                    throw new IllegalArgumentException("Not enough data.");
-                } else if (!z || length2 == 0) {
-                    this.value = str.substring(length, this.length.intValue() + length);
-                    Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "Got TLV: " + this.tag + "," + this.length + "," + this.value);
-                    return str.substring(length + this.length.intValue());
-                } else {
-                    throw new IllegalArgumentException("Did not consume all.");
-                }
-            }
-            throw new IllegalArgumentException("Tags don't match.");
-        }
-
-        public String parseLength(String str) {
-            int length = this.tag.length();
-            int parseInt = Integer.parseInt(str.substring(length, length + 2), 16);
-            if (parseInt < 128) {
-                this.length = Integer.valueOf(parseInt * 2);
-                this.lengthBytes = str.substring(length, length + 2);
+        public String parseLength(String data) {
+            int offset = this.tag.length();
+            int firstByte = Integer.parseInt(data.substring(offset, offset + 2), 16);
+            if (firstByte < 128) {
+                this.length = Integer.valueOf(firstByte * 2);
+                this.lengthBytes = data.substring(offset, offset + 2);
             } else {
-                parseInt -= 128;
-                this.length = Integer.valueOf(Integer.parseInt(str.substring(length + 2, (length + 2) + (parseInt * 2)), 16) * 2);
-                this.lengthBytes = str.substring(length, (parseInt * 2) + (length + 2));
+                int numBytes = firstByte - 128;
+                this.length = Integer.valueOf(Integer.parseInt(data.substring(offset + 2, offset + 2 + (numBytes * 2)), 16) * 2);
+                this.lengthBytes = data.substring(offset, offset + 2 + (numBytes * 2));
             }
             Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "TLV parseLength length=" + this.length + "lenghtBytes: " + this.lengthBytes);
             return this.lengthBytes;
         }
+
+        public String parse(String data, boolean shouldConsumeAll) {
+            Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "Parse TLV: " + this.tag);
+            if (!data.startsWith(this.tag)) {
+                throw new IllegalArgumentException("Tags don't match.");
+            }
+            int index = this.tag.length();
+            if (index + 2 > data.length()) {
+                throw new IllegalArgumentException("No length.");
+            }
+            parseLength(data);
+            int index2 = index + this.lengthBytes.length();
+            Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "index=" + index2 + " length=" + this.length + "data.length=" + data.length());
+            int remainingLength = data.length() - (this.length.intValue() + index2);
+            if (remainingLength < 0) {
+                throw new IllegalArgumentException("Not enough data.");
+            } else if (!shouldConsumeAll || remainingLength == 0) {
+                this.value = data.substring(index2, this.length.intValue() + index2);
+                Rlog.d(UiccCarrierPrivilegeRules.LOG_TAG, "Got TLV: " + this.tag + "," + this.length + "," + this.value);
+                return data.substring(this.length.intValue() + index2);
+            } else {
+                throw new IllegalArgumentException("Did not consume all.");
+            }
+        }
     }
 
-    public UiccCarrierPrivilegeRules(UiccCard uiccCard, Message message) {
+    public UiccCarrierPrivilegeRules(UiccCard uiccCard, Message loadedCallback) {
         Rlog.d(LOG_TAG, "Creating UiccCarrierPrivilegeRules");
         this.mUiccCard = uiccCard;
-        this.mLoadedCallback = message;
-        this.mRules = DATA;
+        this.mLoadedCallback = loadedCallback;
         this.mUiccCard.iccOpenLogicalChannel(AID, obtainMessage(1, null));
-    }
-
-    private static byte[] getCertHash(Signature signature) {
-        try {
-            return MessageDigest.getInstance("SHA").digest(((X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(signature.toByteArray()))).getEncoded());
-        } catch (CertificateException e) {
-            Rlog.e(LOG_TAG, "CertificateException: " + e);
-        } catch (NoSuchAlgorithmException e2) {
-            Rlog.e(LOG_TAG, "NoSuchAlgorithmException: " + e2);
-        }
-        Rlog.e(LOG_TAG, "Cannot compute cert hash");
-        return null;
-    }
-
-    private String getPackageName(ResolveInfo resolveInfo) {
-        return resolveInfo.activityInfo != null ? resolveInfo.activityInfo.packageName : resolveInfo.serviceInfo != null ? resolveInfo.serviceInfo.packageName : resolveInfo.providerInfo != null ? resolveInfo.providerInfo.packageName : null;
-    }
-
-    private String getStateString(int i) {
-        switch (i) {
-            case 0:
-                return "STATE_LOADING";
-            case 1:
-                return "STATE_LOADED";
-            case 2:
-                return "STATE_ERROR";
-            default:
-                return "UNKNOWN";
-        }
-    }
-
-    private boolean isDataComplete() {
-        Rlog.d(LOG_TAG, "isDataComplete mRules:" + this.mRules);
-        if (this.mRules.startsWith(TAG_ALL_REF_AR_DO)) {
-            TLV tlv = new TLV(TAG_ALL_REF_AR_DO);
-            String parseLength = tlv.parseLength(this.mRules);
-            Rlog.d(LOG_TAG, "isDataComplete lengthBytes: " + parseLength);
-            if (this.mRules.length() == tlv.length.intValue() + (parseLength.length() + TAG_ALL_REF_AR_DO.length())) {
-                Rlog.d(LOG_TAG, "isDataComplete yes");
-                return true;
-            }
-            Rlog.d(LOG_TAG, "isDataComplete no");
-            return false;
-        }
-        throw new IllegalArgumentException("Tags don't match.");
-    }
-
-    private static AccessRule parseRefArdo(String str) {
-        Rlog.d(LOG_TAG, "Got rule: " + str);
-        String str2 = null;
-        String str3 = null;
-        while (!str.isEmpty()) {
-            TLV tlv;
-            if (str.startsWith(TAG_REF_DO)) {
-                TLV tlv2 = new TLV(TAG_REF_DO);
-                str = tlv2.parse(str, false);
-                if (!tlv2.value.startsWith(TAG_DEVICE_APP_ID_REF_DO)) {
-                    return null;
-                }
-                TLV tlv3 = new TLV(TAG_DEVICE_APP_ID_REF_DO);
-                String parse = tlv3.parse(tlv2.value, false);
-                str2 = tlv3.value;
-                if (parse.isEmpty()) {
-                    str3 = null;
-                } else if (!parse.startsWith(TAG_PKG_REF_DO)) {
-                    return null;
-                } else {
-                    tlv = new TLV(TAG_PKG_REF_DO);
-                    tlv.parse(parse, true);
-                    str3 = new String(IccUtils.hexStringToBytes(tlv.value));
-                }
-            } else if (str.startsWith(TAG_AR_DO)) {
-                TLV tlv4 = new TLV(TAG_AR_DO);
-                str = tlv4.parse(str, false);
-                if (!tlv4.value.startsWith(TAG_PERM_AR_DO)) {
-                    return null;
-                }
-                tlv = new TLV(TAG_PERM_AR_DO);
-                tlv.parse(tlv4.value, true);
-                Rlog.e(LOG_TAG, tlv.value);
-            } else {
-                throw new RuntimeException("Invalid Rule type");
-            }
-        }
-        Rlog.e(LOG_TAG, "Adding: " + str2 + " : " + str3 + " : " + 0);
-        AccessRule accessRule = new AccessRule(IccUtils.hexStringToBytes(str2), str3, 0);
-        Rlog.e(LOG_TAG, "Parsed rule: " + accessRule);
-        return accessRule;
-    }
-
-    private static List<AccessRule> parseRules(String str) {
-        Rlog.d(LOG_TAG, "Got rules: " + str);
-        TLV tlv = new TLV(TAG_ALL_REF_AR_DO);
-        tlv.parse(str, true);
-        String access$100 = tlv.value;
-        ArrayList arrayList = new ArrayList();
-        while (!access$100.isEmpty()) {
-            TLV tlv2 = new TLV(TAG_REF_AR_DO);
-            access$100 = tlv2.parse(access$100, false);
-            AccessRule parseRefArdo = parseRefArdo(tlv2.value);
-            if (parseRefArdo != null) {
-                arrayList.add(parseRefArdo);
-            } else {
-                Rlog.e(LOG_TAG, "Skip unrecognized rule." + tlv2.value);
-            }
-        }
-        return arrayList;
-    }
-
-    private void updateState(int i, String str) {
-        this.mState.set(i);
-        if (this.mLoadedCallback != null) {
-            this.mLoadedCallback.sendToTarget();
-        }
-        this.mStatusMessage = str;
-        Rlog.e(LOG_TAG, this.mStatusMessage);
     }
 
     public boolean areCarrierPriviligeRulesLoaded() {
         return this.mState.get() != 0;
     }
 
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        printWriter.println("UiccCarrierPrivilegeRules: " + this);
-        printWriter.println(" mState=" + getStateString(this.mState.get()));
-        printWriter.println(" mStatusMessage='" + this.mStatusMessage + "'");
-        if (this.mAccessRules != null) {
-            printWriter.println(" mAccessRules: ");
-            for (AccessRule accessRule : this.mAccessRules) {
-                printWriter.println("  rule='" + accessRule + "'");
-            }
-        } else {
-            printWriter.println(" mAccessRules: null");
-        }
-        printWriter.flush();
-    }
-
-    public List<String> getCarrierPackageNamesForIntent(PackageManager packageManager, Intent intent) {
-        ArrayList arrayList = new ArrayList();
-        ArrayList<ResolveInfo> arrayList2 = new ArrayList();
-        arrayList2.addAll(packageManager.queryBroadcastReceivers(intent, 0));
-        arrayList2.addAll(packageManager.queryIntentContentProviders(intent, 0));
-        arrayList2.addAll(packageManager.queryIntentActivities(intent, 0));
-        arrayList2.addAll(packageManager.queryIntentServices(intent, 0));
-        for (ResolveInfo packageName : arrayList2) {
-            String packageName2 = getPackageName(packageName);
-            if (packageName2 != null) {
-                int carrierPrivilegeStatus = getCarrierPrivilegeStatus(packageManager, packageName2);
-                if (carrierPrivilegeStatus == 1) {
-                    arrayList.add(packageName2);
-                } else if (carrierPrivilegeStatus != 0) {
-                    return null;
-                }
-            }
-        }
-        return arrayList;
-    }
-
-    public int getCarrierPrivilegeStatus(PackageManager packageManager, String str) {
-        try {
-            PackageInfo packageInfo = packageManager.getPackageInfo(str, 64);
-            for (Signature carrierPrivilegeStatus : packageInfo.signatures) {
-                int carrierPrivilegeStatus2 = getCarrierPrivilegeStatus(carrierPrivilegeStatus, packageInfo.packageName);
-                if (carrierPrivilegeStatus2 != 0) {
-                    return carrierPrivilegeStatus2;
-                }
-            }
-        } catch (NameNotFoundException e) {
-            Rlog.e(LOG_TAG, "NameNotFoundException", e);
-        }
-        return 0;
-    }
-
-    public int getCarrierPrivilegeStatus(Signature signature, String str) {
-        Rlog.d(LOG_TAG, "hasCarrierPrivileges: " + signature + " : " + str);
-        int i = this.mState.get();
-        if (i == 0) {
+    public int getCarrierPrivilegeStatus(Signature signature, String packageName) {
+        Rlog.d(LOG_TAG, "hasCarrierPrivileges: " + signature + " : " + packageName);
+        int state = this.mState.get();
+        if (state == 0) {
             Rlog.d(LOG_TAG, "Rules not loaded.");
-            i = -1;
-        } else if (i == 2) {
+            return -1;
+        } else if (state == 2) {
             Rlog.d(LOG_TAG, "Error loading rules.");
             return -2;
         } else {
             byte[] certHash = getCertHash(signature);
-            if (certHash != null) {
-                Rlog.e(LOG_TAG, "Checking: " + IccUtils.bytesToHexString(certHash) + " : " + str);
-                for (AccessRule matches : this.mAccessRules) {
-                    if (matches.matches(certHash, str)) {
-                        Rlog.d(LOG_TAG, "Match found!");
-                        return 1;
-                    }
-                }
-                Rlog.d(LOG_TAG, "No matching rule found. Returning false.");
+            if (certHash == null) {
                 return 0;
             }
-            i = 0;
+            Rlog.e(LOG_TAG, "Checking: " + IccUtils.bytesToHexString(certHash) + " : " + packageName);
+            for (AccessRule ar : this.mAccessRules) {
+                if (ar.matches(certHash, packageName)) {
+                    Rlog.d(LOG_TAG, "Match found!");
+                    return 1;
+                }
+            }
+            Rlog.d(LOG_TAG, "No matching rule found. Returning false.");
+            return 0;
         }
-        return i;
+    }
+
+    public int getCarrierPrivilegeStatus(PackageManager packageManager, String packageName) {
+        try {
+            PackageInfo pInfo = packageManager.getPackageInfo(packageName, 64);
+            for (Signature sig : pInfo.signatures) {
+                int accessStatus = getCarrierPrivilegeStatus(sig, pInfo.packageName);
+                if (accessStatus != 0) {
+                    return accessStatus;
+                }
+            }
+        } catch (PackageManager.NameNotFoundException ex) {
+            Rlog.e(LOG_TAG, "NameNotFoundException", ex);
+        }
+        return 0;
     }
 
     public int getCarrierPrivilegeStatusForCurrentTransaction(PackageManager packageManager) {
-        for (String carrierPrivilegeStatus : packageManager.getPackagesForUid(Binder.getCallingUid())) {
-            int carrierPrivilegeStatus2 = getCarrierPrivilegeStatus(packageManager, carrierPrivilegeStatus);
-            if (carrierPrivilegeStatus2 != 0) {
-                return carrierPrivilegeStatus2;
+        for (String pkg : packageManager.getPackagesForUid(Binder.getCallingUid())) {
+            int accessStatus = getCarrierPrivilegeStatus(packageManager, pkg);
+            if (accessStatus != 0) {
+                return accessStatus;
             }
         }
         return 0;
     }
 
-    public void handleMessage(Message message) {
-        AsyncResult asyncResult;
-        switch (message.what) {
+    public List<String> getCarrierPackageNamesForIntent(PackageManager packageManager, Intent intent) {
+        List<String> packages = new ArrayList<>();
+        List<ResolveInfo> receivers = new ArrayList<>();
+        receivers.addAll(packageManager.queryBroadcastReceivers(intent, 0));
+        receivers.addAll(packageManager.queryIntentContentProviders(intent, 0));
+        receivers.addAll(packageManager.queryIntentActivities(intent, 0));
+        receivers.addAll(packageManager.queryIntentServices(intent, 0));
+        for (ResolveInfo resolveInfo : receivers) {
+            String packageName = getPackageName(resolveInfo);
+            if (packageName != null) {
+                int status = getCarrierPrivilegeStatus(packageManager, packageName);
+                if (status == 1) {
+                    packages.add(packageName);
+                } else if (status != 0) {
+                    return null;
+                }
+            }
+        }
+        return packages;
+    }
+
+    private String getPackageName(ResolveInfo resolveInfo) {
+        if (resolveInfo.activityInfo != null) {
+            return resolveInfo.activityInfo.packageName;
+        }
+        if (resolveInfo.serviceInfo != null) {
+            return resolveInfo.serviceInfo.packageName;
+        }
+        if (resolveInfo.providerInfo != null) {
+            return resolveInfo.providerInfo.packageName;
+        }
+        return null;
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
             case 1:
                 Rlog.d(LOG_TAG, "EVENT_OPEN_LOGICAL_CHANNEL_DONE");
-                asyncResult = (AsyncResult) message.obj;
-                if (asyncResult.exception != null || asyncResult.result == null) {
+                AsyncResult ar = (AsyncResult) msg.obj;
+                if (ar.exception != null || ar.result == null) {
                     updateState(2, "Error opening channel");
                     return;
                 }
-                this.mChannelId = ((int[]) asyncResult.result)[0];
+                this.mChannelId = ((int[]) ar.result)[0];
                 this.mUiccCard.iccTransmitApduLogicalChannel(this.mChannelId, 128, COMMAND, 255, 64, 0, DATA, obtainMessage(2, new Integer(this.mChannelId)));
                 return;
             case 2:
                 Rlog.d(LOG_TAG, "EVENT_TRANSMIT_LOGICAL_CHANNEL_DONE");
-                asyncResult = (AsyncResult) message.obj;
-                if (asyncResult.exception != null || asyncResult.result == null) {
+                AsyncResult ar2 = (AsyncResult) msg.obj;
+                if (ar2.exception != null || ar2.result == null) {
                     updateState(2, "Error reading value from SIM.");
                 } else {
-                    IccIoResult iccIoResult = (IccIoResult) asyncResult.result;
-                    if (iccIoResult.sw1 != 144 || iccIoResult.sw2 != 0 || iccIoResult.payload == null || iccIoResult.payload.length <= 0) {
-                        updateState(2, "Invalid response: payload=" + iccIoResult.payload + " sw1=" + iccIoResult.sw1 + " sw2=" + iccIoResult.sw2);
+                    IccIoResult response = (IccIoResult) ar2.result;
+                    if (response.sw1 != 144 || response.sw2 != 0 || response.payload == null || response.payload.length <= 0) {
+                        updateState(2, "Invalid response: payload=" + response.payload + " sw1=" + response.sw1 + " sw2=" + response.sw2);
                     } else {
                         try {
-                            this.mRules += IccUtils.bytesToHexString(iccIoResult.payload).toUpperCase(Locale.US);
+                            this.mRules += IccUtils.bytesToHexString(response.payload).toUpperCase(Locale.US);
                             if (isDataComplete()) {
                                 this.mAccessRules = parseRules(this.mRules);
                                 updateState(1, "Success!");
@@ -376,10 +260,10 @@ public class UiccCarrierPrivilegeRules extends Handler {
                                 this.mUiccCard.iccTransmitApduLogicalChannel(this.mChannelId, 128, COMMAND, 255, 96, 0, DATA, obtainMessage(2, new Integer(this.mChannelId)));
                                 return;
                             }
-                        } catch (IllegalArgumentException e) {
-                            updateState(2, "Error parsing rules: " + e);
-                        } catch (IndexOutOfBoundsException e2) {
-                            updateState(2, "Error parsing rules: " + e2);
+                        } catch (IllegalArgumentException ex) {
+                            updateState(2, "Error parsing rules: " + ex);
+                        } catch (IndexOutOfBoundsException ex2) {
+                            updateState(2, "Error parsing rules: " + ex2);
                         }
                     }
                 }
@@ -390,8 +274,137 @@ public class UiccCarrierPrivilegeRules extends Handler {
                 Rlog.d(LOG_TAG, "EVENT_CLOSE_LOGICAL_CHANNEL_DONE");
                 return;
             default:
-                Rlog.e(LOG_TAG, "Unknown event " + message.what);
+                Rlog.e(LOG_TAG, "Unknown event " + msg.what);
                 return;
+        }
+    }
+
+    private boolean isDataComplete() {
+        Rlog.d(LOG_TAG, "isDataComplete mRules:" + this.mRules);
+        if (this.mRules.startsWith(TAG_ALL_REF_AR_DO)) {
+            TLV allRules = new TLV(TAG_ALL_REF_AR_DO);
+            String lengthBytes = allRules.parseLength(this.mRules);
+            Rlog.d(LOG_TAG, "isDataComplete lengthBytes: " + lengthBytes);
+            if (this.mRules.length() == TAG_ALL_REF_AR_DO.length() + lengthBytes.length() + allRules.length.intValue()) {
+                Rlog.d(LOG_TAG, "isDataComplete yes");
+                return true;
+            }
+            Rlog.d(LOG_TAG, "isDataComplete no");
+            return false;
+        }
+        throw new IllegalArgumentException("Tags don't match.");
+    }
+
+    private static List<AccessRule> parseRules(String rules) {
+        Rlog.d(LOG_TAG, "Got rules: " + rules);
+        TLV allRefArDo = new TLV(TAG_ALL_REF_AR_DO);
+        allRefArDo.parse(rules, true);
+        String arDos = allRefArDo.value;
+        List<AccessRule> accessRules = new ArrayList<>();
+        while (!arDos.isEmpty()) {
+            TLV refArDo = new TLV(TAG_REF_AR_DO);
+            arDos = refArDo.parse(arDos, false);
+            AccessRule accessRule = parseRefArdo(refArDo.value);
+            if (accessRule != null) {
+                accessRules.add(accessRule);
+            } else {
+                Rlog.e(LOG_TAG, "Skip unrecognized rule." + refArDo.value);
+            }
+        }
+        return accessRules;
+    }
+
+    private static AccessRule parseRefArdo(String rule) {
+        Rlog.d(LOG_TAG, "Got rule: " + rule);
+        String certificateHash = null;
+        String packageName = null;
+        while (!rule.isEmpty()) {
+            if (rule.startsWith(TAG_REF_DO)) {
+                TLV refDo = new TLV(TAG_REF_DO);
+                rule = refDo.parse(rule, false);
+                if (!refDo.value.startsWith(TAG_DEVICE_APP_ID_REF_DO)) {
+                    return null;
+                }
+                TLV deviceDo = new TLV(TAG_DEVICE_APP_ID_REF_DO);
+                String tmp = deviceDo.parse(refDo.value, false);
+                certificateHash = deviceDo.value;
+                if (tmp.isEmpty()) {
+                    packageName = null;
+                } else if (!tmp.startsWith(TAG_PKG_REF_DO)) {
+                    return null;
+                } else {
+                    TLV pkgDo = new TLV(TAG_PKG_REF_DO);
+                    pkgDo.parse(tmp, true);
+                    packageName = new String(IccUtils.hexStringToBytes(pkgDo.value));
+                }
+            } else if (rule.startsWith(TAG_AR_DO)) {
+                TLV arDo = new TLV(TAG_AR_DO);
+                rule = arDo.parse(rule, false);
+                if (!arDo.value.startsWith(TAG_PERM_AR_DO)) {
+                    return null;
+                }
+                TLV permDo = new TLV(TAG_PERM_AR_DO);
+                permDo.parse(arDo.value, true);
+                Rlog.e(LOG_TAG, permDo.value);
+            } else {
+                throw new RuntimeException("Invalid Rule type");
+            }
+        }
+        Rlog.e(LOG_TAG, "Adding: " + certificateHash + " : " + packageName + " : 0");
+        AccessRule accessRule = new AccessRule(IccUtils.hexStringToBytes(certificateHash), packageName, 0L);
+        Rlog.e(LOG_TAG, "Parsed rule: " + accessRule);
+        return accessRule;
+    }
+
+    private static byte[] getCertHash(Signature signature) {
+        try {
+            return MessageDigest.getInstance("SHA").digest(((X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(signature.toByteArray()))).getEncoded());
+        } catch (NoSuchAlgorithmException ex) {
+            Rlog.e(LOG_TAG, "NoSuchAlgorithmException: " + ex);
+            Rlog.e(LOG_TAG, "Cannot compute cert hash");
+            return null;
+        } catch (CertificateException ex2) {
+            Rlog.e(LOG_TAG, "CertificateException: " + ex2);
+            Rlog.e(LOG_TAG, "Cannot compute cert hash");
+            return null;
+        }
+    }
+
+    private void updateState(int newState, String statusMessage) {
+        this.mState.set(newState);
+        if (this.mLoadedCallback != null) {
+            this.mLoadedCallback.sendToTarget();
+        }
+        this.mStatusMessage = statusMessage;
+        Rlog.e(LOG_TAG, this.mStatusMessage);
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("UiccCarrierPrivilegeRules: " + this);
+        pw.println(" mState=" + getStateString(this.mState.get()));
+        pw.println(" mStatusMessage='" + this.mStatusMessage + "'");
+        if (this.mAccessRules != null) {
+            pw.println(" mAccessRules: ");
+            Iterator i$ = this.mAccessRules.iterator();
+            while (i$.hasNext()) {
+                pw.println("  rule='" + i$.next() + "'");
+            }
+        } else {
+            pw.println(" mAccessRules: null");
+        }
+        pw.flush();
+    }
+
+    private String getStateString(int state) {
+        switch (state) {
+            case 0:
+                return "STATE_LOADING";
+            case 1:
+                return "STATE_LOADED";
+            case 2:
+                return "STATE_ERROR";
+            default:
+                return "UNKNOWN";
         }
     }
 }

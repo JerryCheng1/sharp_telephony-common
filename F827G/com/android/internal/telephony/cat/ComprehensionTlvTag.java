@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cat;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public enum ComprehensionTlvTag {
     COMMAND_DETAILS(1),
     DEVICE_IDENTITIES(2),
@@ -29,20 +30,21 @@ public enum ComprehensionTlvTag {
     
     private int mValue;
 
-    private ComprehensionTlvTag(int i) {
-        this.mValue = i;
-    }
-
-    public static ComprehensionTlvTag fromInt(int i) {
-        for (ComprehensionTlvTag comprehensionTlvTag : values()) {
-            if (comprehensionTlvTag.mValue == i) {
-                return comprehensionTlvTag;
-            }
-        }
-        return null;
+    ComprehensionTlvTag(int value) {
+        this.mValue = value;
     }
 
     public int value() {
         return this.mValue;
+    }
+
+    public static ComprehensionTlvTag fromInt(int value) {
+        ComprehensionTlvTag[] arr$ = values();
+        for (ComprehensionTlvTag e : arr$) {
+            if (e.mValue == value) {
+                return e;
+            }
+        }
+        return null;
     }
 }

@@ -2,16 +2,18 @@ package com.android.internal.telephony.cat;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
-class CommandDetails extends ValueObject implements Parcelable {
-    public static final Creator<CommandDetails> CREATOR = new Creator<CommandDetails>() {
-        public CommandDetails createFromParcel(Parcel parcel) {
-            return new CommandDetails(parcel);
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class CommandDetails extends ValueObject implements Parcelable {
+    public static final Parcelable.Creator<CommandDetails> CREATOR = new Parcelable.Creator<CommandDetails>() { // from class: com.android.internal.telephony.cat.CommandDetails.1
+        @Override // android.os.Parcelable.Creator
+        public CommandDetails createFromParcel(Parcel in) {
+            return new CommandDetails(in);
         }
 
-        public CommandDetails[] newArray(int i) {
-            return new CommandDetails[i];
+        @Override // android.os.Parcelable.Creator
+        public CommandDetails[] newArray(int size) {
+            return new CommandDetails[size];
         }
     };
     public int commandNumber;
@@ -19,36 +21,39 @@ class CommandDetails extends ValueObject implements Parcelable {
     public boolean compRequired;
     public int typeOfCommand;
 
-    CommandDetails() {
-    }
-
-    public CommandDetails(Parcel parcel) {
-        this.compRequired = parcel.readInt() != 0;
-        this.commandNumber = parcel.readInt();
-        this.typeOfCommand = parcel.readInt();
-        this.commandQualifier = parcel.readInt();
-    }
-
-    public boolean compareTo(CommandDetails commandDetails) {
-        return this.compRequired == commandDetails.compRequired && this.commandNumber == commandDetails.commandNumber && this.commandQualifier == commandDetails.commandQualifier && this.typeOfCommand == commandDetails.typeOfCommand;
-    }
-
-    public int describeContents() {
-        return 0;
-    }
-
+    @Override // com.android.internal.telephony.cat.ValueObject
     public ComprehensionTlvTag getTag() {
         return ComprehensionTlvTag.COMMAND_DETAILS;
     }
 
-    public String toString() {
-        return "CmdDetails: compRequired=" + this.compRequired + " commandNumber=" + this.commandNumber + " typeOfCommand=" + this.typeOfCommand + " commandQualifier=" + this.commandQualifier;
+    public CommandDetails() {
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeInt(this.compRequired ? 1 : 0);
-        parcel.writeInt(this.commandNumber);
-        parcel.writeInt(this.typeOfCommand);
-        parcel.writeInt(this.commandQualifier);
+    public boolean compareTo(CommandDetails other) {
+        return this.compRequired == other.compRequired && this.commandNumber == other.commandNumber && this.commandQualifier == other.commandQualifier && this.typeOfCommand == other.typeOfCommand;
+    }
+
+    public CommandDetails(Parcel in) {
+        this.compRequired = in.readInt() != 0;
+        this.commandNumber = in.readInt();
+        this.typeOfCommand = in.readInt();
+        this.commandQualifier = in.readInt();
+    }
+
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.compRequired ? 1 : 0);
+        dest.writeInt(this.commandNumber);
+        dest.writeInt(this.typeOfCommand);
+        dest.writeInt(this.commandQualifier);
+    }
+
+    @Override // android.os.Parcelable
+    public int describeContents() {
+        return 0;
+    }
+
+    public String toString() {
+        return "CmdDetails: compRequired=" + this.compRequired + " commandNumber=" + this.commandNumber + " typeOfCommand=" + this.typeOfCommand + " commandQualifier=" + this.commandQualifier;
     }
 }

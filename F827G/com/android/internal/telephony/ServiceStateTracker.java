@@ -4,7 +4,6 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
 import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Message;
@@ -12,18 +11,18 @@ import android.os.Registrant;
 import android.os.RegistrantList;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
-import android.provider.Telephony.BaseMmsColumns;
+import android.provider.Telephony;
 import android.telephony.CellInfo;
 import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
 import android.telephony.SubscriptionManager;
-import android.telephony.SubscriptionManager.OnSubscriptionsChangedListener;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Pair;
 import android.util.TimeUtils;
-import com.android.internal.telephony.CommandsInterface.RadioState;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppState;
+import com.android.internal.telephony.CommandsInterface;
+import com.android.internal.telephony.dataconnection.DcTrackerBase;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.IccRecords;
 import com.android.internal.telephony.uicc.UiccCardApplication;
 import com.android.internal.telephony.uicc.UiccController;
@@ -31,6 +30,7 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class ServiceStateTracker extends Handler {
     protected static final String ACTION_RADIO_OFF = "android.intent.action.ACTION_RADIO_OFF";
     protected static final boolean DBG = true;
@@ -84,7 +84,7 @@ public abstract class ServiceStateTracker extends Handler {
     protected static final int EVENT_SIM_RECORDS_LOADED = 16;
     protected static final int EVENT_SPEECH_CODEC = 10003;
     protected static final int EVENT_UNSOL_CELL_INFO_LIST = 44;
-    protected static final String[] GMT_COUNTRY_CODES = new String[]{"bf", "ci", "eh", "fo", "gb", "gh", "gm", "gn", "gw", "ie", "is", "lr", "ma", "ml", "mr", "pt", "sl", "sn", BaseMmsColumns.STATUS, "tg"};
+    protected static final String[] GMT_COUNTRY_CODES = {"bf", "ci", "eh", "fo", "gb", "gh", "gm", "gn", "gw", "ie", "is", "lr", "ma", "ml", "mr", "pt", "sl", "sn", Telephony.BaseMmsColumns.STATUS, "tg"};
     private static final long LAST_CELL_INFO_LIST_MAX_AGE_MS = 2000;
     public static final int OTASP_NEEDED = 2;
     public static final int OTASP_NOT_NEEDED = 3;
@@ -96,87 +96,113 @@ public abstract class ServiceStateTracker extends Handler {
     protected static final String REGISTRATION_DENIED_GEN = "General";
     protected static final String TIMEZONE_PROPERTY = "persist.sys.timezone";
     protected static final boolean VDBG = false;
-    protected boolean mAlarmSwitch = false;
-    protected RegistrantList mAttachedRegistrants = new RegistrantList();
     protected final CellInfo mCellInfo;
     protected CommandsInterface mCi;
-    protected RegistrantList mDataRegStateOrRatChangedRegistrants = new RegistrantList();
-    protected RegistrantList mDataRoamingOffRegistrants = new RegistrantList();
-    protected RegistrantList mDataRoamingOnRegistrants = new RegistrantList();
     protected boolean mDesiredPowerState;
-    protected RegistrantList mDetachedRegistrants = new RegistrantList();
-    protected boolean mDeviceShuttingDown = false;
-    protected boolean mDontPollSignalStrength = false;
-    protected IccRecords mIccRecords = null;
-    private boolean mImsRegistered = false;
-    protected boolean mImsRegistrationOnOff = false;
-    protected IntentFilter mIntentFilter = null;
-    protected boolean mIwlanRatAvailable = false;
-    protected List<CellInfo> mLastCellInfoList = null;
     protected long mLastCellInfoListTime;
-    private SignalStrength mLastSignalStrength = null;
-    protected RegistrantList mNetworkAttachedRegistrants = new RegistrantList();
+    protected PhoneBase mPhoneBase;
+    protected int[] mPollingContext;
+    protected SubscriptionManager mSubscriptionManager;
+    private TelephonyManager mTelephonyManager;
+    protected UiccController mUiccController;
+    protected boolean mVoiceCapable;
+    private boolean mWantContinuousLocationUpdates;
+    private boolean mWantSingleLocationUpdate;
+    protected UiccCardApplication mUiccApplcation = null;
+    protected IccRecords mIccRecords = null;
+    public ServiceState mSS = new ServiceState();
     protected ServiceState mNewSS = new ServiceState();
-    protected final OnSubscriptionsChangedListener mOnSubscriptionsChangedListener = new OnSubscriptionsChangedListener() {
+    protected List<CellInfo> mLastCellInfoList = null;
+    protected SignalStrength mSignalStrength = new SignalStrength();
+    public RestrictedState mRestrictedState = new RestrictedState();
+    protected boolean mDontPollSignalStrength = false;
+    protected RegistrantList mVoiceRoamingOnRegistrants = new RegistrantList();
+    protected RegistrantList mVoiceRoamingOffRegistrants = new RegistrantList();
+    protected RegistrantList mDataRoamingOnRegistrants = new RegistrantList();
+    protected RegistrantList mDataRoamingOffRegistrants = new RegistrantList();
+    protected RegistrantList mAttachedRegistrants = new RegistrantList();
+    protected RegistrantList mDetachedRegistrants = new RegistrantList();
+    protected RegistrantList mDataRegStateOrRatChangedRegistrants = new RegistrantList();
+    protected RegistrantList mNetworkAttachedRegistrants = new RegistrantList();
+    protected RegistrantList mPsRestrictEnabledRegistrants = new RegistrantList();
+    protected RegistrantList mPsRestrictDisabledRegistrants = new RegistrantList();
+    protected boolean mPendingRadioPowerOffAfterDataOff = false;
+    protected int mPendingRadioPowerOffAfterDataOffTag = 0;
+    protected boolean mIwlanRatAvailable = false;
+    protected boolean mImsRegistrationOnOff = false;
+    protected boolean mAlarmSwitch = false;
+    protected IntentFilter mIntentFilter = null;
+    protected PendingIntent mRadioOffIntent = null;
+    protected boolean mPowerOffDelayNeed = true;
+    protected boolean mDeviceShuttingDown = false;
+    private boolean mImsRegistered = false;
+    protected final SubscriptionManager.OnSubscriptionsChangedListener mOnSubscriptionsChangedListener = new SubscriptionManager.OnSubscriptionsChangedListener() { // from class: com.android.internal.telephony.ServiceStateTracker.1
         private int previousSubId = -1;
 
+        @Override // android.telephony.SubscriptionManager.OnSubscriptionsChangedListener
         public void onSubscriptionsChanged() {
             ServiceStateTracker.this.log("SubscriptionListener.onSubscriptionInfoChanged");
             int subId = ServiceStateTracker.this.mPhoneBase.getSubId();
             if (ServiceStateTracker.this.mPhoneBase.getSubId() != subId && SubscriptionManager.isValidSubscriptionId(subId)) {
                 ServiceStateTracker.this.mPhoneBase.notifyCallForwardingIndicator();
-                SharedPreferences defaultSharedPreferences = PreferenceManager.getDefaultSharedPreferences(ServiceStateTracker.this.mPhoneBase.getContext());
-                String string = defaultSharedPreferences.getString(PhoneBase.NETWORK_SELECTION_NAME_KEY, "");
-                String string2 = defaultSharedPreferences.getString(PhoneBase.NETWORK_SELECTION_KEY, "");
-                if (!TextUtils.isEmpty(string) || !TextUtils.isEmpty(string2)) {
-                    Editor edit = defaultSharedPreferences.edit();
-                    edit.putString(PhoneBase.NETWORK_SELECTION_NAME_KEY + subId, string);
-                    edit.putString(PhoneBase.NETWORK_SELECTION_KEY + subId, string2);
-                    edit.remove(PhoneBase.NETWORK_SELECTION_NAME_KEY);
-                    edit.remove(PhoneBase.NETWORK_SELECTION_KEY);
-                    edit.commit();
+                SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(ServiceStateTracker.this.mPhoneBase.getContext());
+                String oldNetworkSelectionName = sp.getString(PhoneBase.NETWORK_SELECTION_NAME_KEY, "");
+                String oldNetworkSelection = sp.getString(PhoneBase.NETWORK_SELECTION_KEY, "");
+                if (!TextUtils.isEmpty(oldNetworkSelectionName) || !TextUtils.isEmpty(oldNetworkSelection)) {
+                    SharedPreferences.Editor editor = sp.edit();
+                    editor.putString(PhoneBase.NETWORK_SELECTION_NAME_KEY + subId, oldNetworkSelectionName);
+                    editor.putString(PhoneBase.NETWORK_SELECTION_KEY + subId, oldNetworkSelection);
+                    editor.remove(PhoneBase.NETWORK_SELECTION_NAME_KEY);
+                    editor.remove(PhoneBase.NETWORK_SELECTION_KEY);
+                    editor.commit();
                 }
             }
         }
     };
-    protected boolean mPendingRadioPowerOffAfterDataOff = false;
-    protected int mPendingRadioPowerOffAfterDataOffTag = 0;
-    protected PhoneBase mPhoneBase;
-    protected int[] mPollingContext;
-    protected boolean mPowerOffDelayNeed = true;
-    protected RegistrantList mPsRestrictDisabledRegistrants = new RegistrantList();
-    protected RegistrantList mPsRestrictEnabledRegistrants = new RegistrantList();
-    protected PendingIntent mRadioOffIntent = null;
-    public RestrictedState mRestrictedState = new RestrictedState();
-    public ServiceState mSS = new ServiceState();
-    protected SignalStrength mSignalStrength = new SignalStrength();
-    protected SubscriptionManager mSubscriptionManager;
-    private TelephonyManager mTelephonyManager;
-    protected UiccCardApplication mUiccApplcation = null;
-    protected UiccController mUiccController = null;
-    protected boolean mVoiceCapable;
-    protected RegistrantList mVoiceRoamingOffRegistrants = new RegistrantList();
-    protected RegistrantList mVoiceRoamingOnRegistrants = new RegistrantList();
-    private boolean mWantContinuousLocationUpdates;
-    private boolean mWantSingleLocationUpdate;
+    private SignalStrength mLastSignalStrength = null;
 
-    private class CellInfoResult {
+    public abstract int getCurrentDataConnectionState();
+
+    protected abstract Phone getPhone();
+
+    protected abstract void handlePollStateResult(int i, AsyncResult asyncResult);
+
+    protected abstract void hangupAndPowerOff();
+
+    public abstract boolean isConcurrentVoiceAndDataAllowed();
+
+    protected abstract void log(String str);
+
+    protected abstract void loge(String str);
+
+    protected abstract void onUpdateIccAvailability();
+
+    public abstract void pollState();
+
+    public abstract void setImsRegistrationState(boolean z);
+
+    protected abstract void setPowerStateToDesired();
+
+    protected abstract void setRoamingType(ServiceState serviceState);
+
+    protected abstract void updateSpnDisplay();
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class CellInfoResult {
         List<CellInfo> list;
         Object lockObj;
 
         private CellInfoResult() {
+            ServiceStateTracker.this = r2;
             this.lockObj = new Object();
-        }
-
-        /* synthetic */ CellInfoResult(ServiceStateTracker serviceStateTracker, AnonymousClass1 anonymousClass1) {
-            this();
         }
     }
 
-    protected ServiceStateTracker(PhoneBase phoneBase, CommandsInterface commandsInterface, CellInfo cellInfo) {
+    public ServiceStateTracker(PhoneBase phoneBase, CommandsInterface ci, CellInfo cellInfo) {
+        this.mUiccController = null;
         this.mPhoneBase = phoneBase;
         this.mCellInfo = cellInfo;
-        this.mCi = commandsInterface;
+        this.mCi = ci;
         this.mVoiceCapable = this.mPhoneBase.getContext().getResources().getBoolean(17956947);
         this.mUiccController = UiccController.getInstance();
         this.mUiccController.registerForIccChanged(this, 42, null);
@@ -189,30 +215,11 @@ public abstract class ServiceStateTracker extends Handler {
         this.mCi.registerForImsNetworkStateChanged(this, 46, null);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void cancelPollState() {
-        this.mPollingContext = new int[1];
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void checkCorrectThread() {
-        if (Thread.currentThread() != getLooper().getThread()) {
-            throw new RuntimeException("ServiceStateTracker must be used from within one thread");
-        }
-    }
-
-    public void disableLocationUpdates() {
-        this.mWantContinuousLocationUpdates = false;
-        if (!this.mWantSingleLocationUpdate && !this.mWantContinuousLocationUpdates) {
-            this.mCi.setLocationUpdates(false, null);
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void disableSingleLocationUpdate() {
-        this.mWantSingleLocationUpdate = false;
-        if (!this.mWantSingleLocationUpdate && !this.mWantContinuousLocationUpdates) {
-            this.mCi.setLocationUpdates(false, null);
+    public void requestShutdown() {
+        if (!this.mDeviceShuttingDown) {
+            this.mDeviceShuttingDown = true;
+            this.mDesiredPowerState = false;
+            setPowerStateToDesired();
         }
     }
 
@@ -223,25 +230,101 @@ public abstract class ServiceStateTracker extends Handler {
         this.mSubscriptionManager.removeOnSubscriptionsChangedListener(this.mOnSubscriptionsChangedListener);
     }
 
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        printWriter.println("ServiceStateTracker:");
-        printWriter.println(" mSS=" + this.mSS);
-        printWriter.println(" mNewSS=" + this.mNewSS);
-        printWriter.println(" mCellInfo=" + this.mCellInfo);
-        printWriter.println(" mRestrictedState=" + this.mRestrictedState);
-        printWriter.println(" mPollingContext=" + this.mPollingContext);
-        printWriter.println(" mDesiredPowerState=" + this.mDesiredPowerState);
-        printWriter.println(" mDontPollSignalStrength=" + this.mDontPollSignalStrength);
-        printWriter.println(" mPendingRadioPowerOffAfterDataOff=" + this.mPendingRadioPowerOffAfterDataOff);
-        printWriter.println(" mPendingRadioPowerOffAfterDataOffTag=" + this.mPendingRadioPowerOffAfterDataOffTag);
-        printWriter.flush();
+    public boolean getDesiredPowerState() {
+        return this.mDesiredPowerState;
     }
 
-    public void enableLocationUpdates() {
-        if (!this.mWantSingleLocationUpdate && !this.mWantContinuousLocationUpdates) {
-            this.mWantContinuousLocationUpdates = true;
-            this.mCi.setLocationUpdates(true, obtainMessage(18));
+    protected boolean notifySignalStrength() {
+        boolean notified = false;
+        synchronized (this.mCellInfo) {
+            if (!this.mSignalStrength.equals(this.mLastSignalStrength)) {
+                try {
+                    this.mPhoneBase.notifySignalStrength();
+                    notified = true;
+                } catch (NullPointerException ex) {
+                    loge("updateSignalStrength() Phone already destroyed: " + ex + "SignalStrength not notified");
+                }
+            }
         }
+        return notified;
+    }
+
+    protected void notifyDataRegStateRilRadioTechnologyChanged() {
+        int rat = this.mSS.getRilDataRadioTechnology();
+        int drs = this.mSS.getDataRegState();
+        log("notifyDataRegStateRilRadioTechnologyChanged: drs=" + drs + " rat=" + rat);
+        this.mTelephonyManager.setDataNetworkTypeForPhone(this.mPhoneBase.getPhoneId(), rat);
+        this.mDataRegStateOrRatChangedRegistrants.notifyResult(new Pair(Integer.valueOf(drs), Integer.valueOf(rat)));
+    }
+
+    protected void useDataRegStateForDataOnlyDevices() {
+        if (!this.mVoiceCapable) {
+            log("useDataRegStateForDataOnlyDevice: VoiceRegState=" + this.mNewSS.getVoiceRegState() + " DataRegState=" + this.mNewSS.getDataRegState());
+            this.mNewSS.setVoiceRegState(this.mNewSS.getDataRegState());
+        }
+    }
+
+    protected void updatePhoneObject() {
+        if (this.mPhoneBase.getContext().getResources().getBoolean(17957009)) {
+            this.mPhoneBase.updatePhoneObject(this.mSS.getRilVoiceRadioTechnology());
+        }
+    }
+
+    public void registerForVoiceRoamingOn(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mVoiceRoamingOnRegistrants.add(r);
+        if (this.mSS.getVoiceRoaming()) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForVoiceRoamingOn(Handler h) {
+        this.mVoiceRoamingOnRegistrants.remove(h);
+    }
+
+    public void registerForVoiceRoamingOff(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mVoiceRoamingOffRegistrants.add(r);
+        if (!this.mSS.getVoiceRoaming()) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForVoiceRoamingOff(Handler h) {
+        this.mVoiceRoamingOffRegistrants.remove(h);
+    }
+
+    public void registerForDataRoamingOn(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mDataRoamingOnRegistrants.add(r);
+        if (this.mSS.getDataRoaming()) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForDataRoamingOn(Handler h) {
+        this.mDataRoamingOnRegistrants.remove(h);
+    }
+
+    public void registerForDataRoamingOff(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mDataRoamingOffRegistrants.add(r);
+        if (!this.mSS.getDataRoaming()) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForDataRoamingOff(Handler h) {
+        this.mDataRoamingOffRegistrants.remove(h);
+    }
+
+    public void reRegisterNetwork(Message onComplete) {
+        this.mCi.getPreferredNetworkType(obtainMessage(19, onComplete));
+    }
+
+    public void setRadioPower(boolean power) {
+        this.mDesiredPowerState = power;
+        setPowerStateToDesired();
     }
 
     public void enableSingleLocationUpdate() {
@@ -251,57 +334,292 @@ public abstract class ServiceStateTracker extends Handler {
         }
     }
 
+    public void enableLocationUpdates() {
+        if (!this.mWantSingleLocationUpdate && !this.mWantContinuousLocationUpdates) {
+            this.mWantContinuousLocationUpdates = true;
+            this.mCi.setLocationUpdates(true, obtainMessage(18));
+        }
+    }
+
+    protected void disableSingleLocationUpdate() {
+        this.mWantSingleLocationUpdate = false;
+        if (!this.mWantSingleLocationUpdate && !this.mWantContinuousLocationUpdates) {
+            this.mCi.setLocationUpdates(false, null);
+        }
+    }
+
+    public void disableLocationUpdates() {
+        this.mWantContinuousLocationUpdates = false;
+        if (!this.mWantSingleLocationUpdate && !this.mWantContinuousLocationUpdates) {
+            this.mCi.setLocationUpdates(false, null);
+        }
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case 38:
+                synchronized (this) {
+                    if (!this.mPendingRadioPowerOffAfterDataOff || msg.arg1 != this.mPendingRadioPowerOffAfterDataOffTag) {
+                        log("EVENT_SET_RADIO_OFF is stale arg1=" + msg.arg1 + "!= tag=" + this.mPendingRadioPowerOffAfterDataOffTag);
+                    } else {
+                        log("EVENT_SET_RADIO_OFF, turn radio off now.");
+                        hangupAndPowerOff();
+                        this.mPendingRadioPowerOffAfterDataOffTag++;
+                        this.mPendingRadioPowerOffAfterDataOff = false;
+                    }
+                }
+                return;
+            case 39:
+            case 40:
+            case 41:
+            case 45:
+            default:
+                log("Unhandled message with number: " + msg.what);
+                return;
+            case 42:
+                onUpdateIccAvailability();
+                return;
+            case 43:
+                AsyncResult ar = (AsyncResult) msg.obj;
+                CellInfoResult result = (CellInfoResult) ar.userObj;
+                synchronized (result.lockObj) {
+                    if (ar.exception != null) {
+                        log("EVENT_GET_CELL_INFO_LIST: error ret null, e=" + ar.exception);
+                        result.list = null;
+                    } else {
+                        result.list = (List) ar.result;
+                    }
+                    this.mLastCellInfoListTime = SystemClock.elapsedRealtime();
+                    this.mLastCellInfoList = result.list;
+                    result.lockObj.notify();
+                }
+                return;
+            case 44:
+                AsyncResult ar2 = (AsyncResult) msg.obj;
+                if (ar2.exception != null) {
+                    log("EVENT_UNSOL_CELL_INFO_LIST: error ignoring, e=" + ar2.exception);
+                    return;
+                }
+                List<CellInfo> list = (List) ar2.result;
+                log("EVENT_UNSOL_CELL_INFO_LIST: size=" + list.size() + " list=" + list);
+                this.mLastCellInfoListTime = SystemClock.elapsedRealtime();
+                this.mLastCellInfoList = list;
+                this.mPhoneBase.notifyCellInfo(list);
+                return;
+            case 46:
+                this.mCi.getImsRegistrationState(obtainMessage(47));
+                return;
+            case 47:
+                AsyncResult ar3 = (AsyncResult) msg.obj;
+                if (ar3.exception == null) {
+                    this.mImsRegistered = ((int[]) ar3.result)[0] == 1;
+                    return;
+                }
+                return;
+        }
+    }
+
+    public void registerForDataConnectionAttached(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mAttachedRegistrants.add(r);
+        if (getCurrentDataConnectionState() == 0) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForDataConnectionAttached(Handler h) {
+        this.mAttachedRegistrants.remove(h);
+    }
+
+    public void registerForDataConnectionDetached(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mDetachedRegistrants.add(r);
+        if (getCurrentDataConnectionState() != 0) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForDataConnectionDetached(Handler h) {
+        this.mDetachedRegistrants.remove(h);
+    }
+
+    public void registerForDataRegStateOrRatChanged(Handler h, int what, Object obj) {
+        this.mDataRegStateOrRatChangedRegistrants.add(new Registrant(h, what, obj));
+        notifyDataRegStateRilRadioTechnologyChanged();
+    }
+
+    public void unregisterForDataRegStateOrRatChanged(Handler h) {
+        this.mDataRegStateOrRatChangedRegistrants.remove(h);
+    }
+
+    public void registerForNetworkAttached(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mNetworkAttachedRegistrants.add(r);
+        if (this.mSS.getVoiceRegState() == 0) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForNetworkAttached(Handler h) {
+        this.mNetworkAttachedRegistrants.remove(h);
+    }
+
+    public void registerForPsRestrictedEnabled(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mPsRestrictEnabledRegistrants.add(r);
+        if (this.mRestrictedState.isPsRestricted()) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForPsRestrictedEnabled(Handler h) {
+        this.mPsRestrictEnabledRegistrants.remove(h);
+    }
+
+    public void registerForPsRestrictedDisabled(Handler h, int what, Object obj) {
+        Registrant r = new Registrant(h, what, obj);
+        this.mPsRestrictDisabledRegistrants.add(r);
+        if (this.mRestrictedState.isPsRestricted()) {
+            r.notifyRegistrant();
+        }
+    }
+
+    public void unregisterForPsRestrictedDisabled(Handler h) {
+        this.mPsRestrictDisabledRegistrants.remove(h);
+    }
+
+    public void powerOffRadioSafely(DcTrackerBase dcTracker) {
+        synchronized (this) {
+            if (!this.mPendingRadioPowerOffAfterDataOff) {
+                String[] networkNotClearData = this.mPhoneBase.getContext().getResources().getStringArray(17236030);
+                String currentNetwork = this.mSS.getOperatorNumeric();
+                if (!(networkNotClearData == null || currentNetwork == null)) {
+                    for (String str : networkNotClearData) {
+                        if (currentNetwork.equals(str)) {
+                            log("Not disconnecting data for " + currentNetwork);
+                            hangupAndPowerOff();
+                            return;
+                        }
+                    }
+                }
+                if (dcTracker.isDisconnected()) {
+                    dcTracker.cleanUpAllConnections(Phone.REASON_RADIO_TURNED_OFF);
+                    log("Data disconnected, turn off radio right away.");
+                    hangupAndPowerOff();
+                } else {
+                    dcTracker.cleanUpAllConnections(Phone.REASON_RADIO_TURNED_OFF);
+                    Message msg = Message.obtain(this);
+                    msg.what = 38;
+                    int i = this.mPendingRadioPowerOffAfterDataOffTag + 1;
+                    this.mPendingRadioPowerOffAfterDataOffTag = i;
+                    msg.arg1 = i;
+                    if (sendMessageDelayed(msg, 30000L)) {
+                        log("Wait upto 30s for data to disconnect, then turn off radio.");
+                        this.mPendingRadioPowerOffAfterDataOff = true;
+                    } else {
+                        log("Cannot send delayed Msg, turn off radio right away.");
+                        hangupAndPowerOff();
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean processPendingRadioPowerOffAfterDataOff() {
+        boolean z = false;
+        synchronized (this) {
+            if (this.mPendingRadioPowerOffAfterDataOff) {
+                log("Process pending request to turn radio off.");
+                this.mPendingRadioPowerOffAfterDataOffTag++;
+                hangupAndPowerOff();
+                this.mPendingRadioPowerOffAfterDataOff = false;
+                z = true;
+            }
+        }
+        return z;
+    }
+
+    protected boolean onSignalStrengthResult(AsyncResult ar, boolean isGsm) {
+        SignalStrength signalStrength = this.mSignalStrength;
+        if (ar.exception != null || ar.result == null) {
+            log("onSignalStrengthResult() Exception from RIL : " + ar.exception);
+            this.mSignalStrength = new SignalStrength(isGsm);
+        } else {
+            this.mSignalStrength = (SignalStrength) ar.result;
+            this.mSignalStrength.validateInput();
+            this.mSignalStrength.setGsm(isGsm);
+        }
+        return notifySignalStrength();
+    }
+
+    protected void cancelPollState() {
+        this.mPollingContext = new int[1];
+    }
+
+    protected boolean shouldFixTimeZoneNow(PhoneBase phoneBase, String operatorNumeric, String prevOperatorNumeric, boolean needToFixTimeZone) {
+        int prevMcc;
+        try {
+            int mcc = Integer.parseInt(operatorNumeric.substring(0, 3));
+            try {
+                prevMcc = Integer.parseInt(prevOperatorNumeric.substring(0, 3));
+            } catch (Exception e) {
+                prevMcc = mcc + 1;
+            }
+            boolean iccCardExist = false;
+            if (this.mUiccApplcation != null) {
+                if (this.mUiccApplcation.getState() != IccCardApplicationStatus.AppState.APPSTATE_UNKNOWN) {
+                    iccCardExist = true;
+                } else {
+                    iccCardExist = false;
+                }
+            }
+            boolean retVal = (iccCardExist && mcc != prevMcc) || needToFixTimeZone;
+            log("shouldFixTimeZoneNow: retVal=" + retVal + " iccCardExist=" + iccCardExist + " operatorNumeric=" + operatorNumeric + " mcc=" + mcc + " prevOperatorNumeric=" + prevOperatorNumeric + " prevMcc=" + prevMcc + " needToFixTimeZone=" + needToFixTimeZone + " ltod=" + TimeUtils.logTimeOfDay(System.currentTimeMillis()));
+            return retVal;
+        } catch (Exception e2) {
+            log("shouldFixTimeZoneNow: no mcc, operatorNumeric=" + operatorNumeric + " retVal=false");
+            return false;
+        }
+    }
+
+    public String getSystemProperty(String property, String defValue) {
+        return TelephonyManager.getTelephonyProperty(this.mPhoneBase.getPhoneId(), property, defValue);
+    }
+
     public List<CellInfo> getAllCellInfo() {
         List<CellInfo> list = null;
-        CellInfoResult cellInfoResult = new CellInfoResult(this, null);
+        CellInfoResult result = new CellInfoResult();
         if (this.mCi.getRilVersion() < 8) {
             log("SST.getAllCellInfo(): not implemented");
-            cellInfoResult.list = null;
+            result.list = null;
         } else if (!isCallerOnDifferentThread()) {
             log("SST.getAllCellInfo(): return last, same thread can't block");
-            cellInfoResult.list = this.mLastCellInfoList;
+            result.list = this.mLastCellInfoList;
         } else if (SystemClock.elapsedRealtime() - this.mLastCellInfoListTime > LAST_CELL_INFO_LIST_MAX_AGE_MS) {
-            Message obtainMessage = obtainMessage(43, cellInfoResult);
-            synchronized (cellInfoResult.lockObj) {
-                cellInfoResult.list = null;
-                this.mCi.getCellInfoList(obtainMessage);
+            Message msg = obtainMessage(43, result);
+            synchronized (result.lockObj) {
+                result.list = null;
+                this.mCi.getCellInfoList(msg);
                 try {
-                    cellInfoResult.lockObj.wait(5000);
+                    result.lockObj.wait(5000L);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
         } else {
             log("SST.getAllCellInfo(): return last, back to back calls");
-            cellInfoResult.list = this.mLastCellInfoList;
+            result.list = this.mLastCellInfoList;
         }
-        synchronized (cellInfoResult.lockObj) {
-            if (cellInfoResult.list != null) {
-                log("SST.getAllCellInfo(): X size=" + cellInfoResult.list.size() + " list=" + cellInfoResult.list);
-                list = cellInfoResult.list;
+        synchronized (result.lockObj) {
+            if (result.list != null) {
+                log("SST.getAllCellInfo(): X size=" + result.list.size() + " list=" + result.list);
+                list = result.list;
             } else {
                 log("SST.getAllCellInfo(): X size=0 list=null");
             }
         }
         return list;
-    }
-
-    public abstract int getCurrentDataConnectionState();
-
-    public boolean getDesiredPowerState() {
-        return this.mDesiredPowerState;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public String getHomeOperatorNumeric() {
-        return ((TelephonyManager) this.mPhoneBase.getContext().getSystemService("phone")).getSimOperatorNumericForPhone(this.mPhoneBase.getPhoneId());
-    }
-
-    public abstract Phone getPhone();
-
-    /* Access modifiers changed, original: protected */
-    public int getPhoneId() {
-        return this.mPhoneBase.getPhoneId();
     }
 
     public SignalStrength getSignalStrength() {
@@ -312,380 +630,65 @@ public abstract class ServiceStateTracker extends Handler {
         return signalStrength;
     }
 
-    public String getSystemProperty(String str, String str2) {
-        return TelephonyManager.getTelephonyProperty(this.mPhoneBase.getPhoneId(), str, str2);
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("ServiceStateTracker:");
+        pw.println(" mSS=" + this.mSS);
+        pw.println(" mNewSS=" + this.mNewSS);
+        pw.println(" mCellInfo=" + this.mCellInfo);
+        pw.println(" mRestrictedState=" + this.mRestrictedState);
+        pw.println(" mPollingContext=" + this.mPollingContext);
+        pw.println(" mDesiredPowerState=" + this.mDesiredPowerState);
+        pw.println(" mDontPollSignalStrength=" + this.mDontPollSignalStrength);
+        pw.println(" mPendingRadioPowerOffAfterDataOff=" + this.mPendingRadioPowerOffAfterDataOff);
+        pw.println(" mPendingRadioPowerOffAfterDataOffTag=" + this.mPendingRadioPowerOffAfterDataOffTag);
+        pw.flush();
     }
-
-    public void handleMessage(Message message) {
-        AsyncResult asyncResult;
-        switch (message.what) {
-            case 38:
-                synchronized (this) {
-                    if (this.mPendingRadioPowerOffAfterDataOff && message.arg1 == this.mPendingRadioPowerOffAfterDataOffTag) {
-                        log("EVENT_SET_RADIO_OFF, turn radio off now.");
-                        hangupAndPowerOff();
-                        this.mPendingRadioPowerOffAfterDataOffTag++;
-                        this.mPendingRadioPowerOffAfterDataOff = false;
-                    } else {
-                        log("EVENT_SET_RADIO_OFF is stale arg1=" + message.arg1 + "!= tag=" + this.mPendingRadioPowerOffAfterDataOffTag);
-                    }
-                }
-                return;
-            case 42:
-                onUpdateIccAvailability();
-                return;
-            case 43:
-                asyncResult = (AsyncResult) message.obj;
-                CellInfoResult cellInfoResult = (CellInfoResult) asyncResult.userObj;
-                synchronized (cellInfoResult.lockObj) {
-                    if (asyncResult.exception != null) {
-                        log("EVENT_GET_CELL_INFO_LIST: error ret null, e=" + asyncResult.exception);
-                        cellInfoResult.list = null;
-                    } else {
-                        cellInfoResult.list = (List) asyncResult.result;
-                    }
-                    this.mLastCellInfoListTime = SystemClock.elapsedRealtime();
-                    this.mLastCellInfoList = cellInfoResult.list;
-                    cellInfoResult.lockObj.notify();
-                }
-                return;
-            case 44:
-                asyncResult = (AsyncResult) message.obj;
-                if (asyncResult.exception != null) {
-                    log("EVENT_UNSOL_CELL_INFO_LIST: error ignoring, e=" + asyncResult.exception);
-                    return;
-                }
-                List list = (List) asyncResult.result;
-                log("EVENT_UNSOL_CELL_INFO_LIST: size=" + list.size() + " list=" + list);
-                this.mLastCellInfoListTime = SystemClock.elapsedRealtime();
-                this.mLastCellInfoList = list;
-                this.mPhoneBase.notifyCellInfo(list);
-                return;
-            case 46:
-                this.mCi.getImsRegistrationState(obtainMessage(47));
-                return;
-            case 47:
-                asyncResult = (AsyncResult) message.obj;
-                if (asyncResult.exception == null) {
-                    this.mImsRegistered = ((int[]) ((int[]) asyncResult.result))[0] == 1;
-                    return;
-                }
-                return;
-            default:
-                log("Unhandled message with number: " + message.what);
-                return;
-        }
-    }
-
-    public abstract void handlePollStateResult(int i, AsyncResult asyncResult);
-
-    public abstract void hangupAndPowerOff();
-
-    /* Access modifiers changed, original: protected */
-    public boolean inSameCountry(String str) {
-        if (TextUtils.isEmpty(str) || str.length() < 5) {
-            return false;
-        }
-        String homeOperatorNumeric = getHomeOperatorNumeric();
-        if (TextUtils.isEmpty(homeOperatorNumeric) || homeOperatorNumeric.length() < 5) {
-            return false;
-        }
-        String substring = str.substring(0, 3);
-        homeOperatorNumeric = homeOperatorNumeric.substring(0, 3);
-        substring = MccTable.countryCodeForMcc(Integer.parseInt(substring));
-        homeOperatorNumeric = MccTable.countryCodeForMcc(Integer.parseInt(homeOperatorNumeric));
-        if (substring.isEmpty() || homeOperatorNumeric.isEmpty()) {
-            return false;
-        }
-        boolean equals = homeOperatorNumeric.equals(substring);
-        return !equals ? ("us".equals(homeOperatorNumeric) && "vi".equals(substring)) ? true : ("vi".equals(homeOperatorNumeric) && "us".equals(substring)) ? true : equals : equals;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public boolean isCallerOnDifferentThread() {
-        return Thread.currentThread() != getLooper().getThread();
-    }
-
-    public abstract boolean isConcurrentVoiceAndDataAllowed();
 
     public boolean isImsRegistered() {
         return this.mImsRegistered;
     }
 
-    /* Access modifiers changed, original: protected */
-    public boolean isIwlanFeatureAvailable() {
-        boolean z = this.mPhoneBase.getContext().getResources().getBoolean(17957029);
-        log("Iwlan feature available = " + z);
-        return z;
-    }
-
-    public boolean isRatLte(int i) {
-        return i == 14 || i == 19;
-    }
-
-    public abstract void log(String str);
-
-    public abstract void loge(String str);
-
-    /* Access modifiers changed, original: protected */
-    public void notifyDataRegStateRilRadioTechnologyChanged() {
-        int rilDataRadioTechnology = this.mSS.getRilDataRadioTechnology();
-        int dataRegState = this.mSS.getDataRegState();
-        log("notifyDataRegStateRilRadioTechnologyChanged: drs=" + dataRegState + " rat=" + rilDataRadioTechnology);
-        this.mTelephonyManager.setDataNetworkTypeForPhone(this.mPhoneBase.getPhoneId(), rilDataRadioTechnology);
-        this.mDataRegStateOrRatChangedRegistrants.notifyResult(new Pair(Integer.valueOf(dataRegState), Integer.valueOf(rilDataRadioTechnology)));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public boolean notifySignalStrength() {
-        boolean z;
-        synchronized (this.mCellInfo) {
-            if (this.mSignalStrength.equals(this.mLastSignalStrength)) {
-                z = false;
-            } else {
-                try {
-                    this.mPhoneBase.notifySignalStrength();
-                    z = true;
-                } catch (NullPointerException e) {
-                    loge("updateSignalStrength() Phone already destroyed: " + e + "SignalStrength not notified");
-                    z = false;
-                }
-            }
+    protected void checkCorrectThread() {
+        if (Thread.currentThread() != getLooper().getThread()) {
+            throw new RuntimeException("ServiceStateTracker must be used from within one thread");
         }
-        return z;
     }
 
-    /* Access modifiers changed, original: protected */
-    public boolean onSignalStrengthResult(AsyncResult asyncResult, boolean z) {
-        SignalStrength signalStrength = this.mSignalStrength;
-        if (asyncResult.exception != null || asyncResult.result == null) {
-            log("onSignalStrengthResult() Exception from RIL : " + asyncResult.exception);
-            this.mSignalStrength = new SignalStrength(z);
-        } else {
-            this.mSignalStrength = (SignalStrength) asyncResult.result;
-            this.mSignalStrength.validateInput();
-            this.mSignalStrength.setGsm(z);
+    protected boolean isCallerOnDifferentThread() {
+        return Thread.currentThread() != getLooper().getThread();
+    }
+
+    protected void updateCarrierMccMncConfiguration(String newOp, String oldOp, Context context) {
+        if ((newOp == null && !TextUtils.isEmpty(oldOp)) || (newOp != null && !newOp.equals(oldOp))) {
+            log("update mccmnc=" + newOp + " fromServiceState=true");
+            MccTable.updateMccMncConfiguration(context, newOp, true);
         }
-        return notifySignalStrength();
     }
 
-    public abstract void onUpdateIccAvailability();
-
-    public abstract void pollState();
-
-    /* JADX WARNING: Missing block: B:31:?, code skipped:
-            return;
-     */
-    public void powerOffRadioSafely(com.android.internal.telephony.dataconnection.DcTrackerBase r5) {
-        /*
-        r4 = this;
-        monitor-enter(r4);
-        r0 = r4.mPendingRadioPowerOffAfterDataOff;	 Catch:{ all -> 0x005c }
-        if (r0 != 0) goto L_0x005a;
-    L_0x0005:
-        r0 = r4.mPhoneBase;	 Catch:{ all -> 0x005c }
-        r0 = r0.getContext();	 Catch:{ all -> 0x005c }
-        r0 = r0.getResources();	 Catch:{ all -> 0x005c }
-        r1 = 17236030; // 0x107003e float:2.4795758E-38 double:8.5157303E-317;
-        r1 = r0.getStringArray(r1);	 Catch:{ all -> 0x005c }
-        r0 = r4.mSS;	 Catch:{ all -> 0x005c }
-        r2 = r0.getOperatorNumeric();	 Catch:{ all -> 0x005c }
-        if (r1 == 0) goto L_0x0047;
-    L_0x001e:
-        if (r2 == 0) goto L_0x0047;
-    L_0x0020:
-        r0 = 0;
-    L_0x0021:
-        r3 = r1.length;	 Catch:{ all -> 0x005c }
-        if (r0 >= r3) goto L_0x0047;
-    L_0x0024:
-        r3 = r1[r0];	 Catch:{ all -> 0x005c }
-        r3 = r2.equals(r3);	 Catch:{ all -> 0x005c }
-        if (r3 == 0) goto L_0x008e;
-    L_0x002c:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005c }
-        r0.<init>();	 Catch:{ all -> 0x005c }
-        r1 = "Not disconnecting data for ";
-        r0 = r0.append(r1);	 Catch:{ all -> 0x005c }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x005c }
-        r0 = r0.toString();	 Catch:{ all -> 0x005c }
-        r4.log(r0);	 Catch:{ all -> 0x005c }
-        r4.hangupAndPowerOff();	 Catch:{ all -> 0x005c }
-        monitor-exit(r4);	 Catch:{ all -> 0x005c }
-    L_0x0046:
-        return;
-    L_0x0047:
-        r0 = r5.isDisconnected();	 Catch:{ all -> 0x005c }
-        if (r0 == 0) goto L_0x005f;
-    L_0x004d:
-        r0 = "radioTurnedOff";
-        r5.cleanUpAllConnections(r0);	 Catch:{ all -> 0x005c }
-        r0 = "Data disconnected, turn off radio right away.";
-        r4.log(r0);	 Catch:{ all -> 0x005c }
-        r4.hangupAndPowerOff();	 Catch:{ all -> 0x005c }
-    L_0x005a:
-        monitor-exit(r4);	 Catch:{ all -> 0x005c }
-        goto L_0x0046;
-    L_0x005c:
-        r0 = move-exception;
-        monitor-exit(r4);	 Catch:{ all -> 0x005c }
-        throw r0;
-    L_0x005f:
-        r0 = "radioTurnedOff";
-        r5.cleanUpAllConnections(r0);	 Catch:{ all -> 0x005c }
-        r0 = android.os.Message.obtain(r4);	 Catch:{ all -> 0x005c }
-        r1 = 38;
-        r0.what = r1;	 Catch:{ all -> 0x005c }
-        r1 = r4.mPendingRadioPowerOffAfterDataOffTag;	 Catch:{ all -> 0x005c }
-        r1 = r1 + 1;
-        r4.mPendingRadioPowerOffAfterDataOffTag = r1;	 Catch:{ all -> 0x005c }
-        r0.arg1 = r1;	 Catch:{ all -> 0x005c }
-        r2 = 30000; // 0x7530 float:4.2039E-41 double:1.4822E-319;
-        r0 = r4.sendMessageDelayed(r0, r2);	 Catch:{ all -> 0x005c }
-        if (r0 == 0) goto L_0x0085;
-    L_0x007c:
-        r0 = "Wait upto 30s for data to disconnect, then turn off radio.";
-        r4.log(r0);	 Catch:{ all -> 0x005c }
-        r0 = 1;
-        r4.mPendingRadioPowerOffAfterDataOff = r0;	 Catch:{ all -> 0x005c }
-        goto L_0x005a;
-    L_0x0085:
-        r0 = "Cannot send delayed Msg, turn off radio right away.";
-        r4.log(r0);	 Catch:{ all -> 0x005c }
-        r4.hangupAndPowerOff();	 Catch:{ all -> 0x005c }
-        goto L_0x005a;
-    L_0x008e:
-        r0 = r0 + 1;
-        goto L_0x0021;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.ServiceStateTracker.powerOffRadioSafely(com.android.internal.telephony.dataconnection.DcTrackerBase):void");
+    protected boolean isIwlanFeatureAvailable() {
+        boolean iwlanAvailable = this.mPhoneBase.getContext().getResources().getBoolean(17957029);
+        log("Iwlan feature available = " + iwlanAvailable);
+        return iwlanAvailable;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void processIwlanToWwanTransition(ServiceState serviceState) {
-        if (isIwlanFeatureAvailable() && serviceState.getRilDataRadioTechnology() != 18 && serviceState.getRilDataRadioTechnology() != 0 && serviceState.getDataRegState() == 0 && this.mIwlanRatAvailable) {
+    protected void processIwlanToWwanTransition(ServiceState ss) {
+        if (isIwlanFeatureAvailable() && ss.getRilDataRadioTechnology() != 18 && ss.getRilDataRadioTechnology() != 0 && ss.getDataRegState() == 0 && this.mIwlanRatAvailable) {
             log("pollStateDone: Wifi connected and moved out of iwlan and wwan is attached.");
             this.mAttachedRegistrants.notifyRegistrants();
         }
     }
 
-    public boolean processPendingRadioPowerOffAfterDataOff() {
-        synchronized (this) {
-            if (this.mPendingRadioPowerOffAfterDataOff) {
-                log("Process pending request to turn radio off.");
-                this.mPendingRadioPowerOffAfterDataOffTag++;
-                hangupAndPowerOff();
-                this.mPendingRadioPowerOffAfterDataOff = false;
-                return true;
-            }
-            return false;
-        }
-    }
-
-    public void reRegisterNetwork(Message message) {
-        this.mCi.getPreferredNetworkType(obtainMessage(19, message));
-    }
-
-    public void registerForDataConnectionAttached(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mAttachedRegistrants.add(registrant);
-        if (getCurrentDataConnectionState() == 0) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForDataConnectionDetached(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mDetachedRegistrants.add(registrant);
-        if (getCurrentDataConnectionState() != 0) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForDataRegStateOrRatChanged(Handler handler, int i, Object obj) {
-        this.mDataRegStateOrRatChangedRegistrants.add(new Registrant(handler, i, obj));
-        notifyDataRegStateRilRadioTechnologyChanged();
-    }
-
-    public void registerForDataRoamingOff(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mDataRoamingOffRegistrants.add(registrant);
-        if (!this.mSS.getDataRoaming()) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForDataRoamingOn(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mDataRoamingOnRegistrants.add(registrant);
-        if (this.mSS.getDataRoaming()) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForNetworkAttached(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mNetworkAttachedRegistrants.add(registrant);
-        if (this.mSS.getVoiceRegState() == 0) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForPsRestrictedDisabled(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mPsRestrictDisabledRegistrants.add(registrant);
-        if (this.mRestrictedState.isPsRestricted()) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForPsRestrictedEnabled(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mPsRestrictEnabledRegistrants.add(registrant);
-        if (this.mRestrictedState.isPsRestricted()) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForVoiceRoamingOff(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mVoiceRoamingOffRegistrants.add(registrant);
-        if (!this.mSS.getVoiceRoaming()) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    public void registerForVoiceRoamingOn(Handler handler, int i, Object obj) {
-        Registrant registrant = new Registrant(handler, i, obj);
-        this.mVoiceRoamingOnRegistrants.add(registrant);
-        if (this.mSS.getVoiceRoaming()) {
-            registrant.notifyRegistrant();
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void requestShutdown() {
-        if (!this.mDeviceShuttingDown) {
-            this.mDeviceShuttingDown = true;
-            this.mDesiredPowerState = false;
-            setPowerStateToDesired();
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void resetServiceStateInIwlanMode() {
-        if (this.mCi.getRadioState() == RadioState.RADIO_OFF) {
-            int i;
+    protected void resetServiceStateInIwlanMode() {
+        if (this.mCi.getRadioState() == CommandsInterface.RadioState.RADIO_OFF) {
+            boolean resetIwlanRatVal = false;
             log("set service state as POWER_OFF");
             if (isIwlanFeatureAvailable() && 18 == this.mNewSS.getRilDataRadioTechnology()) {
                 log("pollStateDone: mNewSS = " + this.mNewSS);
                 log("pollStateDone: reset iwlan RAT value");
-                i = 1;
-            } else {
-                i = 0;
+                resetIwlanRatVal = true;
             }
             this.mNewSS.setStateOff();
-            if (i != 0) {
+            if (resetIwlanRatVal) {
                 this.mNewSS.setRilDataRadioTechnology(18);
                 this.mNewSS.setDataRegState(0);
                 log("pollStateDone: mNewSS = " + this.mNewSS);
@@ -693,102 +696,43 @@ public abstract class ServiceStateTracker extends Handler {
         }
     }
 
-    public abstract void setImsRegistrationState(boolean z);
-
-    public abstract void setPowerStateToDesired();
-
-    public void setRadioPower(boolean z) {
-        this.mDesiredPowerState = z;
-        setPowerStateToDesired();
-    }
-
-    public abstract void setRoamingType(ServiceState serviceState);
-
-    /* Access modifiers changed, original: protected */
-    public boolean shouldFixTimeZoneNow(PhoneBase phoneBase, String str, String str2, boolean z) {
-        boolean z2 = true;
-        try {
-            int parseInt;
-            int parseInt2 = Integer.parseInt(str.substring(0, 3));
-            try {
-                parseInt = Integer.parseInt(str2.substring(0, 3));
-            } catch (Exception e) {
-                parseInt = parseInt2 + 1;
-            }
-            boolean z3 = this.mUiccApplcation != null ? this.mUiccApplcation.getState() != AppState.APPSTATE_UNKNOWN : false;
-            if ((!z3 || parseInt2 == parseInt) && !z) {
-                z2 = false;
-            }
-            log("shouldFixTimeZoneNow: retVal=" + z2 + " iccCardExist=" + z3 + " operatorNumeric=" + str + " mcc=" + parseInt2 + " prevOperatorNumeric=" + str2 + " prevMcc=" + parseInt + " needToFixTimeZone=" + z + " ltod=" + TimeUtils.logTimeOfDay(System.currentTimeMillis()));
-            return z2;
-        } catch (Exception e2) {
-            log("shouldFixTimeZoneNow: no mcc, operatorNumeric=" + str + " retVal=false");
+    protected boolean inSameCountry(String operatorNumeric) {
+        if (TextUtils.isEmpty(operatorNumeric) || operatorNumeric.length() < 5) {
             return false;
         }
-    }
-
-    public void unregisterForDataConnectionAttached(Handler handler) {
-        this.mAttachedRegistrants.remove(handler);
-    }
-
-    public void unregisterForDataConnectionDetached(Handler handler) {
-        this.mDetachedRegistrants.remove(handler);
-    }
-
-    public void unregisterForDataRegStateOrRatChanged(Handler handler) {
-        this.mDataRegStateOrRatChangedRegistrants.remove(handler);
-    }
-
-    public void unregisterForDataRoamingOff(Handler handler) {
-        this.mDataRoamingOffRegistrants.remove(handler);
-    }
-
-    public void unregisterForDataRoamingOn(Handler handler) {
-        this.mDataRoamingOnRegistrants.remove(handler);
-    }
-
-    public void unregisterForNetworkAttached(Handler handler) {
-        this.mNetworkAttachedRegistrants.remove(handler);
-    }
-
-    public void unregisterForPsRestrictedDisabled(Handler handler) {
-        this.mPsRestrictDisabledRegistrants.remove(handler);
-    }
-
-    public void unregisterForPsRestrictedEnabled(Handler handler) {
-        this.mPsRestrictEnabledRegistrants.remove(handler);
-    }
-
-    public void unregisterForVoiceRoamingOff(Handler handler) {
-        this.mVoiceRoamingOffRegistrants.remove(handler);
-    }
-
-    public void unregisterForVoiceRoamingOn(Handler handler) {
-        this.mVoiceRoamingOnRegistrants.remove(handler);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void updateCarrierMccMncConfiguration(String str, String str2, Context context) {
-        if ((str == null && !TextUtils.isEmpty(str2)) || (str != null && !str.equals(str2))) {
-            log("update mccmnc=" + str + " fromServiceState=true");
-            MccTable.updateMccMncConfiguration(context, str, true);
+        String homeNumeric = getHomeOperatorNumeric();
+        if (TextUtils.isEmpty(homeNumeric) || homeNumeric.length() < 5) {
+            return false;
         }
+        String networkMCC = operatorNumeric.substring(0, 3);
+        String homeMCC = homeNumeric.substring(0, 3);
+        String networkCountry = MccTable.countryCodeForMcc(Integer.parseInt(networkMCC));
+        String homeCountry = MccTable.countryCodeForMcc(Integer.parseInt(homeMCC));
+        if (networkCountry.isEmpty() || homeCountry.isEmpty()) {
+            return false;
+        }
+        boolean inSameCountry = homeCountry.equals(networkCountry);
+        if (inSameCountry) {
+            return inSameCountry;
+        }
+        if ("us".equals(homeCountry) && "vi".equals(networkCountry)) {
+            return true;
+        }
+        if (!"vi".equals(homeCountry) || !"us".equals(networkCountry)) {
+            return inSameCountry;
+        }
+        return true;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void updatePhoneObject() {
-        if (this.mPhoneBase.getContext().getResources().getBoolean(17957009)) {
-            this.mPhoneBase.updatePhoneObject(this.mSS.getRilVoiceRadioTechnology());
-        }
+    protected String getHomeOperatorNumeric() {
+        return ((TelephonyManager) this.mPhoneBase.getContext().getSystemService("phone")).getSimOperatorNumericForPhone(this.mPhoneBase.getPhoneId());
     }
 
-    public abstract void updateSpnDisplay();
+    protected int getPhoneId() {
+        return this.mPhoneBase.getPhoneId();
+    }
 
-    /* Access modifiers changed, original: protected */
-    public void useDataRegStateForDataOnlyDevices() {
-        if (!this.mVoiceCapable) {
-            log("useDataRegStateForDataOnlyDevice: VoiceRegState=" + this.mNewSS.getVoiceRegState() + " DataRegState=" + this.mNewSS.getDataRegState());
-            this.mNewSS.setVoiceRegState(this.mNewSS.getDataRegState());
-        }
+    public boolean isRatLte(int rat) {
+        return rat == 14 || rat == 19;
     }
 }

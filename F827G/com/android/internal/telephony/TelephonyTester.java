@@ -15,12 +15,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class TelephonyTester {
     private static final String ACTION_TEST_CONFERENCE_EVENT_PACKAGE = "com.android.internal.telephony.TestConferenceEventPackage";
     private static final boolean DBG = true;
     private static final String EXTRA_FILENAME = "filename";
     private static final String LOG_TAG = "TelephonyTester";
-    protected BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
+    protected BroadcastReceiver mIntentReceiver = new BroadcastReceiver() { // from class: com.android.internal.telephony.TelephonyTester.1
+        @Override // android.content.BroadcastReceiver
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             TelephonyTester.log("sIntentReceiver.onReceive: action=" + action);
@@ -40,51 +42,50 @@ public class TelephonyTester {
     };
     private PhoneBase mPhone;
 
-    TelephonyTester(PhoneBase phoneBase) {
-        this.mPhone = phoneBase;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public TelephonyTester(PhoneBase phone) {
+        this.mPhone = phone;
         if (Build.IS_DEBUGGABLE) {
-            IntentFilter intentFilter = new IntentFilter();
-            intentFilter.addAction(this.mPhone.getActionDetached());
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(this.mPhone.getActionDetached());
             log("register for intent action=" + this.mPhone.getActionDetached());
-            intentFilter.addAction(this.mPhone.getActionAttached());
+            filter.addAction(this.mPhone.getActionAttached());
             log("register for intent action=" + this.mPhone.getActionAttached());
             if (this.mPhone.getPhoneType() == 5) {
                 log("register for intent action=com.android.internal.telephony.TestConferenceEventPackage");
-                intentFilter.addAction(ACTION_TEST_CONFERENCE_EVENT_PACKAGE);
+                filter.addAction(ACTION_TEST_CONFERENCE_EVENT_PACKAGE);
             }
-            phoneBase.getContext().registerReceiver(this.mIntentReceiver, intentFilter, null, this.mPhone.getHandler());
+            phone.getContext().registerReceiver(this.mIntentReceiver, filter, null, this.mPhone.getHandler());
         }
     }
 
-    private void handleTestConferenceEventPackage(Context context, String str) {
-        ImsPhone imsPhone = (ImsPhone) this.mPhone;
-        if (imsPhone != null) {
-            ImsPhoneCall foregroundCall = imsPhone.getForegroundCall();
-            if (foregroundCall != null) {
-                ImsCall imsCall = foregroundCall.getImsCall();
-                if (imsCall != null) {
-                    File file = new File(context.getFilesDir(), str);
-                    try {
-                        ImsConferenceState parse = new TestConferenceEventPackageParser(new FileInputStream(file)).parse();
-                        if (parse != null) {
-                            imsCall.conferenceStateUpdated(parse);
-                        }
-                    } catch (FileNotFoundException e) {
-                        log("Test conference event package file not found: " + file.getAbsolutePath());
-                    }
-                }
-            }
-        }
-    }
-
-    private static void log(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public void dispose() {
         if (Build.IS_DEBUGGABLE) {
             this.mPhone.getContext().unregisterReceiver(this.mIntentReceiver);
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public static void log(String s) {
+        Rlog.d(LOG_TAG, s);
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public void handleTestConferenceEventPackage(Context context, String fileName) {
+        ImsPhoneCall imsPhoneCall;
+        ImsCall imsCall;
+        ImsPhone imsPhone = (ImsPhone) this.mPhone;
+        if (imsPhone != null && (imsPhoneCall = imsPhone.getForegroundCall()) != null && (imsCall = imsPhoneCall.getImsCall()) != null) {
+            File packageFile = new File(context.getFilesDir(), fileName);
+            try {
+                ImsConferenceState imsConferenceState = new TestConferenceEventPackageParser(new FileInputStream(packageFile)).parse();
+                if (imsConferenceState != null) {
+                    imsCall.conferenceStateUpdated(imsConferenceState);
+                }
+            } catch (FileNotFoundException e) {
+                log("Test conference event package file not found: " + packageFile.getAbsolutePath());
+            }
         }
     }
 }

@@ -6,401 +6,10 @@ import android.os.IInterface;
 import android.os.Message;
 import android.os.Parcel;
 import android.os.RemoteException;
+import org.codeaurora.ims.csvt.ICsvtServiceListener;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface ICsvtService extends IInterface {
-
-    public static abstract class Stub extends Binder implements ICsvtService {
-        private static final String DESCRIPTOR = "org.codeaurora.ims.csvt.ICsvtService";
-        static final int TRANSACTION_acceptCall = 3;
-        static final int TRANSACTION_dial = 1;
-        static final int TRANSACTION_fallBack = 5;
-        static final int TRANSACTION_getCallForwardingOption = 9;
-        static final int TRANSACTION_getCallWaiting = 11;
-        static final int TRANSACTION_hangup = 2;
-        static final int TRANSACTION_isActive = 7;
-        static final int TRANSACTION_isIdle = 6;
-        static final int TRANSACTION_isNonCsvtIdle = 8;
-        static final int TRANSACTION_registerListener = 13;
-        static final int TRANSACTION_rejectCall = 4;
-        static final int TRANSACTION_setCallForwardingOption = 10;
-        static final int TRANSACTION_setCallWaiting = 12;
-        static final int TRANSACTION_unregisterListener = 14;
-
-        private static class Proxy implements ICsvtService {
-            private IBinder mRemote;
-
-            Proxy(IBinder iBinder) {
-                this.mRemote = iBinder;
-            }
-
-            public void acceptCall() throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(3, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public IBinder asBinder() {
-                return this.mRemote;
-            }
-
-            public void dial(String str) throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    obtain.writeString(str);
-                    this.mRemote.transact(1, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void fallBack() throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(5, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void getCallForwardingOption(int i, Message message) throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    obtain.writeInt(i);
-                    if (message != null) {
-                        obtain.writeInt(1);
-                        message.writeToParcel(obtain, 0);
-                    } else {
-                        obtain.writeInt(0);
-                    }
-                    this.mRemote.transact(9, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void getCallWaiting(Message message) throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    if (message != null) {
-                        obtain.writeInt(1);
-                        message.writeToParcel(obtain, 0);
-                    } else {
-                        obtain.writeInt(0);
-                    }
-                    this.mRemote.transact(11, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public String getInterfaceDescriptor() {
-                return Stub.DESCRIPTOR;
-            }
-
-            public void hangup() throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(2, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public boolean isActive() throws RemoteException {
-                boolean z = false;
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(7, obtain, obtain2, 0);
-                    obtain2.readException();
-                    if (obtain2.readInt() != 0) {
-                        z = true;
-                    }
-                    obtain2.recycle();
-                    obtain.recycle();
-                    return z;
-                } catch (Throwable th) {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public boolean isIdle() throws RemoteException {
-                boolean z = false;
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(6, obtain, obtain2, 0);
-                    obtain2.readException();
-                    if (obtain2.readInt() != 0) {
-                        z = true;
-                    }
-                    obtain2.recycle();
-                    obtain.recycle();
-                    return z;
-                } catch (Throwable th) {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public boolean isNonCsvtIdle() throws RemoteException {
-                boolean z = false;
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(8, obtain, obtain2, 0);
-                    obtain2.readException();
-                    if (obtain2.readInt() != 0) {
-                        z = true;
-                    }
-                    obtain2.recycle();
-                    obtain.recycle();
-                    return z;
-                } catch (Throwable th) {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void registerListener(ICsvtServiceListener iCsvtServiceListener) throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    obtain.writeStrongBinder(iCsvtServiceListener != null ? iCsvtServiceListener.asBinder() : null);
-                    this.mRemote.transact(13, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void rejectCall() throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    this.mRemote.transact(4, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void setCallForwardingOption(int i, int i2, String str, int i3, Message message) throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    obtain.writeInt(i);
-                    obtain.writeInt(i2);
-                    obtain.writeString(str);
-                    obtain.writeInt(i3);
-                    if (message != null) {
-                        obtain.writeInt(1);
-                        message.writeToParcel(obtain, 0);
-                    } else {
-                        obtain.writeInt(0);
-                    }
-                    this.mRemote.transact(10, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void setCallWaiting(boolean z, Message message) throws RemoteException {
-                int i = 0;
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    if (z) {
-                        i = 1;
-                    }
-                    obtain.writeInt(i);
-                    if (message != null) {
-                        obtain.writeInt(1);
-                        message.writeToParcel(obtain, 0);
-                    } else {
-                        obtain.writeInt(0);
-                    }
-                    this.mRemote.transact(12, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-
-            public void unregisterListener(ICsvtServiceListener iCsvtServiceListener) throws RemoteException {
-                Parcel obtain = Parcel.obtain();
-                Parcel obtain2 = Parcel.obtain();
-                try {
-                    obtain.writeInterfaceToken(Stub.DESCRIPTOR);
-                    obtain.writeStrongBinder(iCsvtServiceListener != null ? iCsvtServiceListener.asBinder() : null);
-                    this.mRemote.transact(14, obtain, obtain2, 0);
-                    obtain2.readException();
-                } finally {
-                    obtain2.recycle();
-                    obtain.recycle();
-                }
-            }
-        }
-
-        public Stub() {
-            attachInterface(this, DESCRIPTOR);
-        }
-
-        public static ICsvtService asInterface(IBinder iBinder) {
-            if (iBinder == null) {
-                return null;
-            }
-            IInterface queryLocalInterface = iBinder.queryLocalInterface(DESCRIPTOR);
-            return (queryLocalInterface == null || !(queryLocalInterface instanceof ICsvtService)) ? new Proxy(iBinder) : (ICsvtService) queryLocalInterface;
-        }
-
-        public IBinder asBinder() {
-            return this;
-        }
-
-        public boolean onTransact(int i, Parcel parcel, Parcel parcel2, int i2) throws RemoteException {
-            Message message = null;
-            int i3 = 0;
-            boolean isIdle;
-            switch (i) {
-                case 1:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    dial(parcel.readString());
-                    parcel2.writeNoException();
-                    return true;
-                case 2:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    hangup();
-                    parcel2.writeNoException();
-                    return true;
-                case 3:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    acceptCall();
-                    parcel2.writeNoException();
-                    return true;
-                case 4:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    rejectCall();
-                    parcel2.writeNoException();
-                    return true;
-                case 5:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    fallBack();
-                    parcel2.writeNoException();
-                    return true;
-                case 6:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    isIdle = isIdle();
-                    parcel2.writeNoException();
-                    if (isIdle) {
-                        i3 = 1;
-                    }
-                    parcel2.writeInt(i3);
-                    return true;
-                case 7:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    isIdle = isActive();
-                    parcel2.writeNoException();
-                    if (isIdle) {
-                        i3 = 1;
-                    }
-                    parcel2.writeInt(i3);
-                    return true;
-                case 8:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    isIdle = isNonCsvtIdle();
-                    parcel2.writeNoException();
-                    if (isIdle) {
-                        i3 = 1;
-                    }
-                    parcel2.writeInt(i3);
-                    return true;
-                case 9:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    getCallForwardingOption(parcel.readInt(), parcel.readInt() != 0 ? (Message) Message.CREATOR.createFromParcel(parcel) : null);
-                    parcel2.writeNoException();
-                    return true;
-                case 10:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    int readInt = parcel.readInt();
-                    int readInt2 = parcel.readInt();
-                    String readString = parcel.readString();
-                    int readInt3 = parcel.readInt();
-                    if (parcel.readInt() != 0) {
-                        message = (Message) Message.CREATOR.createFromParcel(parcel);
-                    }
-                    setCallForwardingOption(readInt, readInt2, readString, readInt3, message);
-                    parcel2.writeNoException();
-                    return true;
-                case 11:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    getCallWaiting(parcel.readInt() != 0 ? (Message) Message.CREATOR.createFromParcel(parcel) : null);
-                    parcel2.writeNoException();
-                    return true;
-                case 12:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    setCallWaiting(parcel.readInt() != 0, parcel.readInt() != 0 ? (Message) Message.CREATOR.createFromParcel(parcel) : null);
-                    parcel2.writeNoException();
-                    return true;
-                case 13:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    registerListener(org.codeaurora.ims.csvt.ICsvtServiceListener.Stub.asInterface(parcel.readStrongBinder()));
-                    parcel2.writeNoException();
-                    return true;
-                case 14:
-                    parcel.enforceInterface(DESCRIPTOR);
-                    unregisterListener(org.codeaurora.ims.csvt.ICsvtServiceListener.Stub.asInterface(parcel.readStrongBinder()));
-                    parcel2.writeNoException();
-                    return true;
-                case 1598968902:
-                    parcel2.writeString(DESCRIPTOR);
-                    return true;
-                default:
-                    return super.onTransact(i, parcel, parcel2, i2);
-            }
-        }
-    }
-
     void acceptCall() throws RemoteException;
 
     void dial(String str) throws RemoteException;
@@ -428,4 +37,433 @@ public interface ICsvtService extends IInterface {
     void setCallWaiting(boolean z, Message message) throws RemoteException;
 
     void unregisterListener(ICsvtServiceListener iCsvtServiceListener) throws RemoteException;
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static abstract class Stub extends Binder implements ICsvtService {
+        private static final String DESCRIPTOR = "org.codeaurora.ims.csvt.ICsvtService";
+        static final int TRANSACTION_acceptCall = 3;
+        static final int TRANSACTION_dial = 1;
+        static final int TRANSACTION_fallBack = 5;
+        static final int TRANSACTION_getCallForwardingOption = 9;
+        static final int TRANSACTION_getCallWaiting = 11;
+        static final int TRANSACTION_hangup = 2;
+        static final int TRANSACTION_isActive = 7;
+        static final int TRANSACTION_isIdle = 6;
+        static final int TRANSACTION_isNonCsvtIdle = 8;
+        static final int TRANSACTION_registerListener = 13;
+        static final int TRANSACTION_rejectCall = 4;
+        static final int TRANSACTION_setCallForwardingOption = 10;
+        static final int TRANSACTION_setCallWaiting = 12;
+        static final int TRANSACTION_unregisterListener = 14;
+
+        public Stub() {
+            attachInterface(this, DESCRIPTOR);
+        }
+
+        public static ICsvtService asInterface(IBinder obj) {
+            if (obj == null) {
+                return null;
+            }
+            IInterface iin = obj.queryLocalInterface(DESCRIPTOR);
+            if (iin == null || !(iin instanceof ICsvtService)) {
+                return new Proxy(obj);
+            }
+            return (ICsvtService) iin;
+        }
+
+        @Override // android.os.IInterface
+        public IBinder asBinder() {
+            return this;
+        }
+
+        @Override // android.os.Binder
+        public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+            Message _arg1;
+            Message _arg0;
+            Message _arg4;
+            Message _arg12;
+            int i = 0;
+            switch (code) {
+                case 1:
+                    data.enforceInterface(DESCRIPTOR);
+                    dial(data.readString());
+                    reply.writeNoException();
+                    return true;
+                case 2:
+                    data.enforceInterface(DESCRIPTOR);
+                    hangup();
+                    reply.writeNoException();
+                    return true;
+                case 3:
+                    data.enforceInterface(DESCRIPTOR);
+                    acceptCall();
+                    reply.writeNoException();
+                    return true;
+                case 4:
+                    data.enforceInterface(DESCRIPTOR);
+                    rejectCall();
+                    reply.writeNoException();
+                    return true;
+                case 5:
+                    data.enforceInterface(DESCRIPTOR);
+                    fallBack();
+                    reply.writeNoException();
+                    return true;
+                case 6:
+                    data.enforceInterface(DESCRIPTOR);
+                    boolean _result = isIdle();
+                    reply.writeNoException();
+                    if (_result) {
+                        i = 1;
+                    }
+                    reply.writeInt(i);
+                    return true;
+                case 7:
+                    data.enforceInterface(DESCRIPTOR);
+                    boolean _result2 = isActive();
+                    reply.writeNoException();
+                    if (_result2) {
+                        i = 1;
+                    }
+                    reply.writeInt(i);
+                    return true;
+                case 8:
+                    data.enforceInterface(DESCRIPTOR);
+                    boolean _result3 = isNonCsvtIdle();
+                    reply.writeNoException();
+                    if (_result3) {
+                        i = 1;
+                    }
+                    reply.writeInt(i);
+                    return true;
+                case 9:
+                    data.enforceInterface(DESCRIPTOR);
+                    int _arg02 = data.readInt();
+                    if (data.readInt() != 0) {
+                        _arg12 = (Message) Message.CREATOR.createFromParcel(data);
+                    } else {
+                        _arg12 = null;
+                    }
+                    getCallForwardingOption(_arg02, _arg12);
+                    reply.writeNoException();
+                    return true;
+                case 10:
+                    data.enforceInterface(DESCRIPTOR);
+                    int _arg03 = data.readInt();
+                    int _arg13 = data.readInt();
+                    String _arg2 = data.readString();
+                    int _arg3 = data.readInt();
+                    if (data.readInt() != 0) {
+                        _arg4 = (Message) Message.CREATOR.createFromParcel(data);
+                    } else {
+                        _arg4 = null;
+                    }
+                    setCallForwardingOption(_arg03, _arg13, _arg2, _arg3, _arg4);
+                    reply.writeNoException();
+                    return true;
+                case 11:
+                    data.enforceInterface(DESCRIPTOR);
+                    if (data.readInt() != 0) {
+                        _arg0 = (Message) Message.CREATOR.createFromParcel(data);
+                    } else {
+                        _arg0 = null;
+                    }
+                    getCallWaiting(_arg0);
+                    reply.writeNoException();
+                    return true;
+                case 12:
+                    data.enforceInterface(DESCRIPTOR);
+                    boolean _arg04 = data.readInt() != 0;
+                    if (data.readInt() != 0) {
+                        _arg1 = (Message) Message.CREATOR.createFromParcel(data);
+                    } else {
+                        _arg1 = null;
+                    }
+                    setCallWaiting(_arg04, _arg1);
+                    reply.writeNoException();
+                    return true;
+                case 13:
+                    data.enforceInterface(DESCRIPTOR);
+                    registerListener(ICsvtServiceListener.Stub.asInterface(data.readStrongBinder()));
+                    reply.writeNoException();
+                    return true;
+                case 14:
+                    data.enforceInterface(DESCRIPTOR);
+                    unregisterListener(ICsvtServiceListener.Stub.asInterface(data.readStrongBinder()));
+                    reply.writeNoException();
+                    return true;
+                case 1598968902:
+                    reply.writeString(DESCRIPTOR);
+                    return true;
+                default:
+                    return super.onTransact(code, data, reply, flags);
+            }
+        }
+
+        /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+        private static class Proxy implements ICsvtService {
+            private IBinder mRemote;
+
+            Proxy(IBinder remote) {
+                this.mRemote = remote;
+            }
+
+            @Override // android.os.IInterface
+            public IBinder asBinder() {
+                return this.mRemote;
+            }
+
+            public String getInterfaceDescriptor() {
+                return Stub.DESCRIPTOR;
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void dial(String number) throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    _data.writeString(number);
+                    this.mRemote.transact(1, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void hangup() throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(2, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void acceptCall() throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(3, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void rejectCall() throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(4, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void fallBack() throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(5, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public boolean isIdle() throws RemoteException {
+                boolean _result = false;
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(6, _data, _reply, 0);
+                    _reply.readException();
+                    if (_reply.readInt() != 0) {
+                        _result = true;
+                    }
+                    return _result;
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public boolean isActive() throws RemoteException {
+                boolean _result = false;
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(7, _data, _reply, 0);
+                    _reply.readException();
+                    if (_reply.readInt() != 0) {
+                        _result = true;
+                    }
+                    return _result;
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public boolean isNonCsvtIdle() throws RemoteException {
+                boolean _result = false;
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    this.mRemote.transact(8, _data, _reply, 0);
+                    _reply.readException();
+                    if (_reply.readInt() != 0) {
+                        _result = true;
+                    }
+                    return _result;
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void getCallForwardingOption(int commandInterfaceCFReason, Message onComplete) throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    _data.writeInt(commandInterfaceCFReason);
+                    if (onComplete != null) {
+                        _data.writeInt(1);
+                        onComplete.writeToParcel(_data, 0);
+                    } else {
+                        _data.writeInt(0);
+                    }
+                    this.mRemote.transact(9, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void setCallForwardingOption(int commandInterfaceCFReason, int commandInterfaceCFAction, String dialingNumber, int timerSeconds, Message onComplete) throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    _data.writeInt(commandInterfaceCFReason);
+                    _data.writeInt(commandInterfaceCFAction);
+                    _data.writeString(dialingNumber);
+                    _data.writeInt(timerSeconds);
+                    if (onComplete != null) {
+                        _data.writeInt(1);
+                        onComplete.writeToParcel(_data, 0);
+                    } else {
+                        _data.writeInt(0);
+                    }
+                    this.mRemote.transact(10, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void getCallWaiting(Message onComplete) throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    if (onComplete != null) {
+                        _data.writeInt(1);
+                        onComplete.writeToParcel(_data, 0);
+                    } else {
+                        _data.writeInt(0);
+                    }
+                    this.mRemote.transact(11, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void setCallWaiting(boolean enable, Message onComplete) throws RemoteException {
+                int i = 1;
+                i = 0;
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    if (!enable) {
+                    }
+                    _data.writeInt(i);
+                    if (onComplete != null) {
+                        _data.writeInt(1);
+                        onComplete.writeToParcel(_data, 0);
+                    } else {
+                        _data.writeInt(0);
+                    }
+                    this.mRemote.transact(12, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void registerListener(ICsvtServiceListener l) throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    _data.writeStrongBinder(l != null ? l.asBinder() : null);
+                    this.mRemote.transact(13, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+
+            @Override // org.codeaurora.ims.csvt.ICsvtService
+            public void unregisterListener(ICsvtServiceListener l) throws RemoteException {
+                Parcel _data = Parcel.obtain();
+                Parcel _reply = Parcel.obtain();
+                try {
+                    _data.writeInterfaceToken(Stub.DESCRIPTOR);
+                    _data.writeStrongBinder(l != null ? l.asBinder() : null);
+                    this.mRemote.transact(14, _data, _reply, 0);
+                    _reply.readException();
+                } finally {
+                    _reply.recycle();
+                    _data.recycle();
+                }
+            }
+        }
+    }
 }

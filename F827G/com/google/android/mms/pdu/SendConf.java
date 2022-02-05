@@ -2,36 +2,38 @@ package com.google.android.mms.pdu;
 
 import com.google.android.mms.InvalidHeaderValueException;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SendConf extends GenericPdu {
     public SendConf() throws InvalidHeaderValueException {
         setMessageType(129);
     }
 
-    SendConf(PduHeaders pduHeaders) {
-        super(pduHeaders);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SendConf(PduHeaders headers) {
+        super(headers);
     }
 
     public byte[] getMessageId() {
         return this.mPduHeaders.getTextString(139);
     }
 
+    public void setMessageId(byte[] value) {
+        this.mPduHeaders.setTextString(value, 139);
+    }
+
     public int getResponseStatus() {
         return this.mPduHeaders.getOctet(146);
+    }
+
+    public void setResponseStatus(int value) throws InvalidHeaderValueException {
+        this.mPduHeaders.setOctet(value, 146);
     }
 
     public byte[] getTransactionId() {
         return this.mPduHeaders.getTextString(152);
     }
 
-    public void setMessageId(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 139);
-    }
-
-    public void setResponseStatus(int i) throws InvalidHeaderValueException {
-        this.mPduHeaders.setOctet(i, 146);
-    }
-
-    public void setTransactionId(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 152);
+    public void setTransactionId(byte[] value) {
+        this.mPduHeaders.setTextString(value, 152);
     }
 }

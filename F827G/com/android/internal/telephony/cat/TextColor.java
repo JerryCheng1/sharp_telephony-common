@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cat;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public enum TextColor {
     BLACK(0),
     DARK_GRAY(1),
@@ -20,14 +21,15 @@ public enum TextColor {
     
     private int mValue;
 
-    private TextColor(int i) {
-        this.mValue = i;
+    TextColor(int value) {
+        this.mValue = value;
     }
 
-    public static TextColor fromInt(int i) {
-        for (TextColor textColor : values()) {
-            if (textColor.mValue == i) {
-                return textColor;
+    public static TextColor fromInt(int value) {
+        TextColor[] arr$ = values();
+        for (TextColor e : arr$) {
+            if (e.mValue == value) {
+                return e;
             }
         }
         return null;

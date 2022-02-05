@@ -9,9 +9,10 @@ import android.os.Message;
 import android.telephony.Rlog;
 import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.PhoneConstants;
 
 @Deprecated
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class PhoneStateIntentReceiver extends BroadcastReceiver {
     private static final boolean DBG = false;
     private static final String LOG_TAG = "PhoneStatIntentReceiver";
@@ -21,7 +22,7 @@ public final class PhoneStateIntentReceiver extends BroadcastReceiver {
     private int mAsuEventWhat;
     private Context mContext;
     private IntentFilter mFilter;
-    State mPhoneState;
+    PhoneConstants.State mPhoneState;
     private int mPhoneStateEventWhat;
     ServiceState mServiceState;
     private int mServiceStateEventWhat;
@@ -30,31 +31,27 @@ public final class PhoneStateIntentReceiver extends BroadcastReceiver {
     private int mWants;
 
     public PhoneStateIntentReceiver() {
-        this.mPhoneState = State.IDLE;
+        this.mPhoneState = PhoneConstants.State.IDLE;
         this.mServiceState = new ServiceState();
         this.mSignalStrength = new SignalStrength();
         this.mFilter = new IntentFilter();
     }
 
-    public PhoneStateIntentReceiver(Context context, Handler handler) {
+    public PhoneStateIntentReceiver(Context context, Handler target) {
         this();
         setContext(context);
-        setTarget(handler);
+        setTarget(target);
     }
 
-    public boolean getNotifyPhoneCallState() {
-        return (this.mWants & 1) != 0;
+    public void setContext(Context c) {
+        this.mContext = c;
     }
 
-    public boolean getNotifyServiceState() {
-        return (this.mWants & 2) != 0;
+    public void setTarget(Handler h) {
+        this.mTarget = h;
     }
 
-    public boolean getNotifySignalStrength() {
-        return (this.mWants & 4) != 0;
-    }
-
-    public State getPhoneState() {
+    public PhoneConstants.State getPhoneState() {
         if ((this.mWants & 1) != 0) {
             return this.mPhoneState;
         }
@@ -68,13 +65,6 @@ public final class PhoneStateIntentReceiver extends BroadcastReceiver {
         throw new RuntimeException("client must call notifyServiceState(int)");
     }
 
-    public int getSignalStrengthDbm() {
-        if ((this.mWants & 4) != 0) {
-            return this.mSignalStrength.getDbm();
-        }
-        throw new RuntimeException("client must call notifySignalStrength(int)");
-    }
-
     public int getSignalStrengthLevelAsu() {
         if ((this.mWants & 4) != 0) {
             return this.mSignalStrength.getAsuLevel();
@@ -82,24 +72,52 @@ public final class PhoneStateIntentReceiver extends BroadcastReceiver {
         throw new RuntimeException("client must call notifySignalStrength(int)");
     }
 
-    public void notifyPhoneCallState(int i) {
+    public int getSignalStrengthDbm() {
+        if ((this.mWants & 4) != 0) {
+            return this.mSignalStrength.getDbm();
+        }
+        throw new RuntimeException("client must call notifySignalStrength(int)");
+    }
+
+    public void notifyPhoneCallState(int eventWhat) {
         this.mWants |= 1;
-        this.mPhoneStateEventWhat = i;
+        this.mPhoneStateEventWhat = eventWhat;
         this.mFilter.addAction("android.intent.action.PHONE_STATE");
     }
 
-    public void notifyServiceState(int i) {
+    public boolean getNotifyPhoneCallState() {
+        return (this.mWants & 1) != 0;
+    }
+
+    public void notifyServiceState(int eventWhat) {
         this.mWants |= 2;
-        this.mServiceStateEventWhat = i;
+        this.mServiceStateEventWhat = eventWhat;
         this.mFilter.addAction("android.intent.action.SERVICE_STATE");
     }
 
-    public void notifySignalStrength(int i) {
+    public boolean getNotifyServiceState() {
+        return (this.mWants & 2) != 0;
+    }
+
+    public void notifySignalStrength(int eventWhat) {
         this.mWants |= 4;
-        this.mAsuEventWhat = i;
+        this.mAsuEventWhat = eventWhat;
         this.mFilter.addAction("android.intent.action.SIG_STR");
     }
 
+    public boolean getNotifySignalStrength() {
+        return (this.mWants & 4) != 0;
+    }
+
+    public void registerIntent() {
+        this.mContext.registerReceiver(this, this.mFilter);
+    }
+
+    public void unregisterIntent() {
+        this.mContext.unregisterReceiver(this);
+    }
+
+    @Override // android.content.BroadcastReceiver
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         try {
@@ -109,7 +127,7 @@ public final class PhoneStateIntentReceiver extends BroadcastReceiver {
                     this.mTarget.sendMessage(Message.obtain(this.mTarget, this.mAsuEventWhat));
                 }
             } else if ("android.intent.action.PHONE_STATE".equals(action)) {
-                this.mPhoneState = (State) Enum.valueOf(State.class, intent.getStringExtra("state"));
+                this.mPhoneState = Enum.valueOf(PhoneConstants.State.class, intent.getStringExtra("state"));
                 if (this.mTarget != null && getNotifyPhoneCallState()) {
                     this.mTarget.sendMessage(Message.obtain(this.mTarget, this.mPhoneStateEventWhat));
                 }
@@ -119,25 +137,9 @@ public final class PhoneStateIntentReceiver extends BroadcastReceiver {
                     this.mTarget.sendMessage(Message.obtain(this.mTarget, this.mServiceStateEventWhat));
                 }
             }
-        } catch (Exception e) {
-            Rlog.e(LOG_TAG, "[PhoneStateIntentRecv] caught " + e);
-            e.printStackTrace();
+        } catch (Exception ex) {
+            Rlog.e(LOG_TAG, "[PhoneStateIntentRecv] caught " + ex);
+            ex.printStackTrace();
         }
-    }
-
-    public void registerIntent() {
-        this.mContext.registerReceiver(this, this.mFilter);
-    }
-
-    public void setContext(Context context) {
-        this.mContext = context;
-    }
-
-    public void setTarget(Handler handler) {
-        this.mTarget = handler;
-    }
-
-    public void unregisterIntent() {
-        this.mContext.unregisterReceiver(this);
     }
 }

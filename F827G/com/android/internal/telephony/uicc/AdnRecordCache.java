@@ -11,6 +11,7 @@ import com.android.internal.telephony.gsm.UsimPhoneBookManager;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class AdnRecordCache extends Handler implements IccConstants {
     static final int EVENT_LOAD_ALL_ADN_LIKE_DONE = 1;
     static final int EVENT_UPDATE_ADN_DONE = 2;
@@ -24,157 +25,362 @@ public final class AdnRecordCache extends Handler implements IccConstants {
     SparseArray<Message> mUserWriteResponse;
     private UsimPhoneBookManager mUsimPhoneBookManager;
 
-    AdnRecordCache(IccFileHandler iccFileHandler) {
+    public AdnRecordCache(IccFileHandler fh) {
         this.mUiccApplication = null;
         this.mAdncountofIcc = 0;
-        this.mAdnLikeFiles = new SparseArray();
-        this.mAdnLikeWaiters = new SparseArray();
-        this.mUserWriteResponse = new SparseArray();
-        this.mFh = iccFileHandler;
+        this.mAdnLikeFiles = new SparseArray<>();
+        this.mAdnLikeWaiters = new SparseArray<>();
+        this.mUserWriteResponse = new SparseArray<>();
+        this.mFh = fh;
         this.mUsimPhoneBookManager = new UsimPhoneBookManager(this.mFh, this);
     }
 
-    AdnRecordCache(IccFileHandler iccFileHandler, UiccCardApplication uiccCardApplication) {
-        this(iccFileHandler);
-        this.mUiccApplication = uiccCardApplication;
+    public AdnRecordCache(IccFileHandler fh, UiccCardApplication app) {
+        this(fh);
+        this.mUiccApplication = app;
     }
 
-    private void clearUserWriters() {
-        int size = this.mUserWriteResponse.size();
-        for (int i = 0; i < size; i++) {
-            sendErrorResponse((Message) this.mUserWriteResponse.valueAt(i), "AdnCace reset");
-        }
-        this.mUserWriteResponse.clear();
+    public void reset() {
+        this.mAdnLikeFiles.clear();
+        this.mUsimPhoneBookManager.reset();
+        clearWaiters();
+        clearUserWriters();
     }
 
     private void clearWaiters() {
         int size = this.mAdnLikeWaiters.size();
         for (int i = 0; i < size; i++) {
-            notifyWaiters((ArrayList) this.mAdnLikeWaiters.valueAt(i), new AsyncResult(null, null, new RuntimeException("AdnCache reset")));
+            notifyWaiters(this.mAdnLikeWaiters.valueAt(i), new AsyncResult((Object) null, (Object) null, new RuntimeException("AdnCache reset")));
         }
         this.mAdnLikeWaiters.clear();
     }
 
-    private void notifyWaiters(ArrayList<Message> arrayList, AsyncResult asyncResult) {
-        if (arrayList != null) {
-            int size = arrayList.size();
-            for (int i = 0; i < size; i++) {
-                Message message = (Message) arrayList.get(i);
-                AsyncResult.forMessage(message, asyncResult.result, asyncResult.exception);
-                message.sendToTarget();
-            }
+    private void clearUserWriters() {
+        int size = this.mUserWriteResponse.size();
+        for (int i = 0; i < size; i++) {
+            sendErrorResponse(this.mUserWriteResponse.valueAt(i), "AdnCace reset");
         }
+        this.mUserWriteResponse.clear();
     }
 
-    private void sendErrorResponse(Message message, String str) {
-        if (message != null) {
-            AsyncResult.forMessage(message).exception = new RuntimeException(str);
-            message.sendToTarget();
-        }
+    public ArrayList<AdnRecord> getRecordsIfLoaded(int efid) {
+        return this.mAdnLikeFiles.get(efid);
     }
 
-    private boolean updateAnrEmailFile(String str, String str2, int i, int i2, int i3) {
-        switch (i2) {
-            case 196:
-                return this.mUsimPhoneBookManager.updateAnrFile(i, str, str2, i3);
-            case USIM_EFEMAIL_TAG /*202*/:
-                try {
-                    return this.mUsimPhoneBookManager.updateEmailFile(i, str, str2, i3);
-                } catch (RuntimeException e) {
-                    Log.e("AdnRecordCache", "update usim record failed", e);
-                    return false;
-                }
-            default:
-                return false;
-        }
-    }
-
-    private void updateEmailAndAnr(int i, String str, AdnRecord adnRecord, AdnRecord adnRecord2, int i2, String str2, Message message) {
-        int extensionEfForEf = extensionEfForEf(adnRecord2.mEfid);
-        if (!updateUsimRecord(adnRecord, adnRecord2, i2, USIM_EFEMAIL_TAG)) {
-            sendErrorResponse(message, "update email failed");
-        } else if (updateUsimRecord(adnRecord, adnRecord2, i2, 196)) {
-            this.mUserWriteResponse.put(i, message);
-            new AdnRecordLoader(this.mFh).updateEF(adnRecord2, adnRecord2.mEfid, extensionEfForEf, str, adnRecord2.mRecordNumber, str2, obtainMessage(2, i, i2, adnRecord2));
-        } else {
-            sendErrorResponse(message, "update anr failed");
-        }
-    }
-
-    private boolean updateUsimRecord(AdnRecord adnRecord, AdnRecord adnRecord2, int i, int i2) {
-        String[] additionalNumbers;
-        String[] additionalNumbers2;
-        boolean z = true;
-        int i3 = 0;
-        switch (i2) {
-            case 196:
-                additionalNumbers = adnRecord.getAdditionalNumbers();
-                additionalNumbers2 = adnRecord2.getAdditionalNumbers();
-                break;
-            case USIM_EFEMAIL_TAG /*202*/:
-                additionalNumbers = adnRecord.getEmails();
-                additionalNumbers2 = adnRecord2.getEmails();
-                break;
-            default:
-                return false;
-        }
-        if (additionalNumbers == null && additionalNumbers2 == null) {
-            Log.e("AdnRecordCache", "Both old and new EMAIL/ANR are null");
-            return true;
-        }
-        boolean z2;
-        int i4;
-        if (additionalNumbers == null && additionalNumbers2 != null) {
-            while (true) {
-                z2 = z;
-                if (i3 < additionalNumbers2.length) {
-                    z = !TextUtils.isEmpty(additionalNumbers2[i3]) ? updateAnrEmailFile(null, additionalNumbers2[i3], i, i2, i3) & z2 : z2;
-                    i3++;
-                }
-            }
-        } else if (additionalNumbers == null || additionalNumbers2 != null) {
-            int length = additionalNumbers.length > additionalNumbers2.length ? additionalNumbers.length : additionalNumbers2.length;
-            i4 = 0;
-            while (i4 < length) {
-                CharSequence charSequence = i4 >= additionalNumbers.length ? null : additionalNumbers[i4];
-                CharSequence charSequence2 = i4 >= additionalNumbers2.length ? null : additionalNumbers2[i4];
-                if (!(TextUtils.isEmpty(charSequence) && TextUtils.isEmpty(charSequence2)) && (charSequence == null || charSequence2 == null || !charSequence.equals(charSequence2))) {
-                    z &= updateAnrEmailFile(charSequence, charSequence2, i, i2, i4);
-                }
-                i4++;
-            }
-            z2 = z;
-        } else {
-            for (i4 = 0; i4 < additionalNumbers.length; i4++) {
-                if (!TextUtils.isEmpty(additionalNumbers[i4])) {
-                    z &= updateAnrEmailFile(additionalNumbers[i4], null, i, i2, i4);
-                }
-            }
-            z2 = z;
-        }
-        return z2;
-    }
-
-    public int extensionEfForEf(int i) {
-        switch (i) {
-            case IccConstants.EF_PBR /*20272*/:
+    public int extensionEfForEf(int efid) {
+        switch (efid) {
+            case IccConstants.EF_PBR /* 20272 */:
                 return 0;
             case 28474:
-            case IccConstants.EF_MSISDN /*28480*/:
+            case IccConstants.EF_MSISDN /* 28480 */:
                 return IccConstants.EF_EXT1;
-            case IccConstants.EF_FDN /*28475*/:
+            case IccConstants.EF_FDN /* 28475 */:
                 return IccConstants.EF_EXT2;
-            case IccConstants.EF_SDN /*28489*/:
+            case IccConstants.EF_SDN /* 28489 */:
                 return IccConstants.EF_EXT3;
-            case IccConstants.EF_MBDN /*28615*/:
+            case IccConstants.EF_MBDN /* 28615 */:
                 return IccConstants.EF_EXT6;
             default:
                 return -1;
         }
     }
 
-    public int getAdnCount() {
-        return this.mAdncountofIcc;
+    private void sendErrorResponse(Message response, String errString) {
+        if (response != null) {
+            AsyncResult.forMessage(response).exception = new RuntimeException(errString);
+            response.sendToTarget();
+        }
+    }
+
+    public void updateAdnByIndex(int efid, AdnRecord adn, int recordIndex, String pin2, Message response) {
+        int extensionEF = extensionEfForEf(efid);
+        if (extensionEF < 0) {
+            sendErrorResponse(response, "EF is not known ADN-like EF:" + efid);
+        } else if (this.mUserWriteResponse.get(efid) != null) {
+            sendErrorResponse(response, "Have pending update for EF:" + efid);
+        } else {
+            this.mUserWriteResponse.put(efid, response);
+            if (TelBrand.IS_SBM) {
+                new AdnRecordLoader(this.mFh, this.mUiccApplication).updateEF(adn, efid, extensionEF, recordIndex, pin2, obtainMessage(2, efid, recordIndex, adn));
+            } else {
+                new AdnRecordLoader(this.mFh).updateEF(adn, efid, extensionEF, recordIndex, pin2, obtainMessage(2, efid, recordIndex, adn));
+            }
+        }
+    }
+
+    public void updateAdnBySearch(int efid, AdnRecord oldAdn, AdnRecord newAdn, String pin2, Message response) {
+        ArrayList<AdnRecord> oldAdnList;
+        int extensionEF = extensionEfForEf(efid);
+        if (extensionEF < 0) {
+            sendErrorResponse(response, "EF is not known ADN-like EF:" + efid);
+            return;
+        }
+        try {
+            if (efid == 20272) {
+                oldAdnList = this.mUsimPhoneBookManager.loadEfFilesFromUsim();
+            } else {
+                oldAdnList = getRecordsIfLoaded(efid);
+            }
+        } catch (NullPointerException e) {
+            oldAdnList = null;
+        }
+        if (oldAdnList == null) {
+            sendErrorResponse(response, "Adn list not exist for EF:" + efid);
+            return;
+        }
+        int index = -1;
+        int count = 1;
+        int prePbrIndex = -2;
+        int anrNum = 0;
+        int emailNum = 0;
+        Iterator<AdnRecord> it = oldAdnList.iterator();
+        while (true) {
+            if (!it.hasNext()) {
+                break;
+            }
+            AdnRecord nextAdnRecord = it.next();
+            boolean isEmailOrAnrIsFull = false;
+            if (efid == 20272) {
+                int pbrIndex = this.mUsimPhoneBookManager.getPbrIndexBy(count - 1);
+                if (pbrIndex != prePbrIndex) {
+                    anrNum = this.mUsimPhoneBookManager.getEmptyAnrNum_Pbrindex(pbrIndex);
+                    emailNum = this.mUsimPhoneBookManager.getEmptyEmailNum_Pbrindex(pbrIndex);
+                    prePbrIndex = pbrIndex;
+                    Log.d("AdnRecordCache", "updateAdnBySearch, pbrIndex: " + pbrIndex + " anrNum:" + anrNum + " emailNum:" + emailNum);
+                }
+                if ((anrNum == 0 && oldAdn.getAdditionalNumbers() == null && newAdn.getAdditionalNumbers() != null) || (emailNum == 0 && oldAdn.getEmails() == null && newAdn.getEmails() != null)) {
+                    isEmailOrAnrIsFull = true;
+                }
+            }
+            if (!isEmailOrAnrIsFull && oldAdn.isEqual(nextAdnRecord)) {
+                index = count;
+                break;
+            }
+            count++;
+        }
+        Log.d("AdnRecordCache", "updateAdnBySearch, update oldADN:" + oldAdn.toString() + ", newAdn:" + newAdn.toString() + ",index :" + index);
+        if (index == -1) {
+            sendErrorResponse(response, "Adn record don't exist for " + oldAdn);
+            return;
+        }
+        if (efid == 20272) {
+            AdnRecord foundAdn = oldAdnList.get(index - 1);
+            newAdn.mEfid = foundAdn.mEfid;
+            newAdn.mExtRecord = foundAdn.mExtRecord;
+            newAdn.mRecordNumber = foundAdn.mRecordNumber;
+            oldAdn.setAdditionalNumbers(foundAdn.getAdditionalNumbers());
+            oldAdn.setEmails(foundAdn.getEmails());
+            newAdn.updateAnrEmailArray(oldAdn, this.mUsimPhoneBookManager.getEmailFilesCountEachAdn(), this.mUsimPhoneBookManager.getAnrFilesCountEachAdn());
+        }
+        if (this.mUserWriteResponse.get(efid) != null) {
+            sendErrorResponse(response, "Have pending update for EF:" + efid);
+        } else if (efid == 20272) {
+            updateEmailAndAnr(efid, this.mUsimPhoneBookManager.getPBPath(efid), oldAdn, newAdn, index, pin2, response);
+        } else {
+            this.mUserWriteResponse.put(efid, response);
+            if (TelBrand.IS_SBM) {
+                new AdnRecordLoader(this.mFh, this.mUiccApplication).updateEF(newAdn, efid, extensionEF, index, pin2, obtainMessage(2, efid, index, newAdn));
+            } else {
+                new AdnRecordLoader(this.mFh).updateEF(newAdn, efid, extensionEF, index, pin2, obtainMessage(2, efid, index, newAdn));
+            }
+        }
+    }
+
+    public void requestLoadAllAdnLike(int efid, int extensionEf, String path, Message response) {
+        ArrayList<AdnRecord> result;
+        if (efid == 20272) {
+            result = this.mUsimPhoneBookManager.loadEfFilesFromUsim();
+        } else {
+            result = getRecordsIfLoaded(efid);
+        }
+        if (result == null) {
+            ArrayList<Message> waiters = this.mAdnLikeWaiters.get(efid);
+            if (waiters != null) {
+                waiters.add(response);
+                return;
+            }
+            ArrayList<Message> waiters2 = new ArrayList<>();
+            waiters2.add(response);
+            this.mAdnLikeWaiters.put(efid, waiters2);
+            if (extensionEf >= 0) {
+                new AdnRecordLoader(this.mFh).loadAllFromEF(efid, extensionEf, path, obtainMessage(1, efid, 0));
+            } else if (response != null) {
+                AsyncResult.forMessage(response).exception = new RuntimeException("EF is not known ADN-like EF:" + efid);
+                response.sendToTarget();
+            }
+        } else if (response != null) {
+            AsyncResult.forMessage(response).result = result;
+            response.sendToTarget();
+        }
+    }
+
+    private void notifyWaiters(ArrayList<Message> waiters, AsyncResult ar) {
+        if (waiters != null) {
+            int s = waiters.size();
+            for (int i = 0; i < s; i++) {
+                Message waiter = waiters.get(i);
+                AsyncResult.forMessage(waiter, ar.result, ar.exception);
+                waiter.sendToTarget();
+            }
+        }
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case 1:
+                AsyncResult ar = (AsyncResult) msg.obj;
+                int efid = msg.arg1;
+                ArrayList<Message> waiters = this.mAdnLikeWaiters.get(efid);
+                this.mAdnLikeWaiters.delete(efid);
+                if (ar.exception == null) {
+                    this.mAdnLikeFiles.put(efid, (ArrayList) ar.result);
+                }
+                notifyWaiters(waiters, ar);
+                if (this.mAdnLikeFiles.get(28474) != null) {
+                    setAdnCount(this.mAdnLikeFiles.get(28474).size());
+                    return;
+                }
+                return;
+            case 2:
+                AsyncResult ar2 = (AsyncResult) msg.obj;
+                int efid2 = msg.arg1;
+                int index = msg.arg2;
+                AdnRecord adn = (AdnRecord) ar2.userObj;
+                if (ar2.exception == null) {
+                    if (this.mAdnLikeFiles.get(efid2) != null) {
+                        this.mAdnLikeFiles.get(efid2).set(index - 1, adn);
+                    }
+                    if (efid2 == 20272) {
+                        this.mUsimPhoneBookManager.loadEfFilesFromUsim().set(index - 1, adn);
+                    }
+                }
+                Message response = this.mUserWriteResponse.get(efid2);
+                this.mUserWriteResponse.delete(efid2);
+                if (response != null) {
+                    AsyncResult.forMessage(response, (Object) null, ar2.exception);
+                    response.sendToTarget();
+                    return;
+                }
+                return;
+            default:
+                return;
+        }
+    }
+
+    private void updateEmailAndAnr(int efid, String path, AdnRecord oldAdn, AdnRecord newAdn, int index, String pin2, Message response) {
+        int extensionEF = extensionEfForEf(newAdn.mEfid);
+        if (!updateUsimRecord(oldAdn, newAdn, index, USIM_EFEMAIL_TAG)) {
+            sendErrorResponse(response, "update email failed");
+        } else if (updateUsimRecord(oldAdn, newAdn, index, 196)) {
+            this.mUserWriteResponse.put(efid, response);
+            new AdnRecordLoader(this.mFh).updateEF(newAdn, newAdn.mEfid, extensionEF, path, newAdn.mRecordNumber, pin2, obtainMessage(2, efid, index, newAdn));
+        } else {
+            sendErrorResponse(response, "update anr failed");
+        }
+    }
+
+    private boolean updateAnrEmailFile(String oldRecord, String newRecord, int index, int tag, int efidIndex) {
+        boolean success;
+        try {
+            switch (tag) {
+                case 196:
+                    success = this.mUsimPhoneBookManager.updateAnrFile(index, oldRecord, newRecord, efidIndex);
+                    break;
+                case USIM_EFEMAIL_TAG /* 202 */:
+                    success = this.mUsimPhoneBookManager.updateEmailFile(index, oldRecord, newRecord, efidIndex);
+                    break;
+                default:
+                    return false;
+            }
+            return success;
+        } catch (RuntimeException e) {
+            Log.e("AdnRecordCache", "update usim record failed", e);
+            return false;
+        }
+    }
+
+    private boolean updateUsimRecord(AdnRecord oldAdn, AdnRecord newAdn, int index, int tag) {
+        String[] oldRecords;
+        String[] newRecords;
+        boolean success = true;
+        switch (tag) {
+            case 196:
+                oldRecords = oldAdn.getAdditionalNumbers();
+                newRecords = newAdn.getAdditionalNumbers();
+                break;
+            case USIM_EFEMAIL_TAG /* 202 */:
+                oldRecords = oldAdn.getEmails();
+                newRecords = newAdn.getEmails();
+                break;
+            default:
+                return false;
+        }
+        if (oldRecords == null && newRecords == null) {
+            Log.e("AdnRecordCache", "Both old and new EMAIL/ANR are null");
+            return true;
+        }
+        if (oldRecords == null && newRecords != null) {
+            for (int i = 0; i < newRecords.length; i++) {
+                if (!TextUtils.isEmpty(newRecords[i])) {
+                    success &= updateAnrEmailFile(null, newRecords[i], index, tag, i);
+                }
+            }
+        } else if (oldRecords == null || newRecords != null) {
+            int maxLen = oldRecords.length > newRecords.length ? oldRecords.length : newRecords.length;
+            int i2 = 0;
+            while (i2 < maxLen) {
+                String oldRecord = i2 >= oldRecords.length ? null : oldRecords[i2];
+                String newRecord = i2 >= newRecords.length ? null : newRecords[i2];
+                if ((!TextUtils.isEmpty(oldRecord) || !TextUtils.isEmpty(newRecord)) && (oldRecord == null || newRecord == null || !oldRecord.equals(newRecord))) {
+                    success &= updateAnrEmailFile(oldRecord, newRecord, index, tag, i2);
+                }
+                i2++;
+            }
+        } else {
+            for (int i3 = 0; i3 < oldRecords.length; i3++) {
+                if (!TextUtils.isEmpty(oldRecords[i3])) {
+                    success &= updateAnrEmailFile(oldRecords[i3], null, index, tag, i3);
+                }
+            }
+        }
+        return success;
+    }
+
+    public void updateUsimAdnByIndex(int efid, AdnRecord newAdn, int recordIndex, String pin2, Message response) {
+        ArrayList<AdnRecord> oldAdnList;
+        int extensionEF = extensionEfForEf(efid);
+        if (extensionEF < 0) {
+            sendErrorResponse(response, "EF is not known ADN-like EF:" + efid);
+            return;
+        }
+        try {
+            if (efid == 20272) {
+                oldAdnList = this.mUsimPhoneBookManager.loadEfFilesFromUsim();
+            } else {
+                oldAdnList = getRecordsIfLoaded(efid);
+            }
+        } catch (NullPointerException e) {
+            oldAdnList = null;
+        }
+        if (oldAdnList == null) {
+            sendErrorResponse(response, "Adn list not exist for EF:" + efid);
+            return;
+        }
+        if (efid == 20272) {
+            AdnRecord foundAdn = oldAdnList.get(recordIndex - 1);
+            newAdn.mEfid = foundAdn.mEfid;
+            newAdn.mExtRecord = foundAdn.mExtRecord;
+            newAdn.mRecordNumber = foundAdn.mRecordNumber;
+        }
+        if (this.mUserWriteResponse.get(efid) != null) {
+            sendErrorResponse(response, "Have pending update for EF:" + efid);
+        } else if (efid == 20272) {
+            updateEmailAndAnr(efid, this.mUsimPhoneBookManager.getPBPath(efid), oldAdnList.get(recordIndex - 1), newAdn, recordIndex, pin2, response);
+        } else {
+            this.mUserWriteResponse.put(efid, response);
+            new AdnRecordLoader(this.mFh).updateEF(newAdn, efid, extensionEF, recordIndex, pin2, obtainMessage(2, efid, recordIndex, newAdn));
+        }
     }
 
     public int getAnrCount() {
@@ -185,10 +391,6 @@ public final class AdnRecordCache extends Handler implements IccConstants {
         return this.mUsimPhoneBookManager.getEmailCount();
     }
 
-    public ArrayList<AdnRecord> getRecordsIfLoaded(int i) {
-        return (ArrayList) this.mAdnLikeFiles.get(i);
-    }
-
     public int getSpareAnrCount() {
         return this.mUsimPhoneBookManager.getSpareAnrCount();
     }
@@ -197,212 +399,15 @@ public final class AdnRecordCache extends Handler implements IccConstants {
         return this.mUsimPhoneBookManager.getSpareEmailCount();
     }
 
+    public int getAdnCount() {
+        return this.mAdncountofIcc;
+    }
+
+    public void setAdnCount(int count) {
+        this.mAdncountofIcc = count;
+    }
+
     public int getUsimAdnCount() {
         return this.mUsimPhoneBookManager.getUsimAdnCount();
-    }
-
-    public void handleMessage(Message message) {
-        AsyncResult asyncResult;
-        int i;
-        switch (message.what) {
-            case 1:
-                asyncResult = (AsyncResult) message.obj;
-                i = message.arg1;
-                ArrayList arrayList = (ArrayList) this.mAdnLikeWaiters.get(i);
-                this.mAdnLikeWaiters.delete(i);
-                if (asyncResult.exception == null) {
-                    this.mAdnLikeFiles.put(i, (ArrayList) asyncResult.result);
-                }
-                notifyWaiters(arrayList, asyncResult);
-                if (this.mAdnLikeFiles.get(28474) != null) {
-                    setAdnCount(((ArrayList) this.mAdnLikeFiles.get(28474)).size());
-                    return;
-                }
-                return;
-            case 2:
-                asyncResult = (AsyncResult) message.obj;
-                i = message.arg1;
-                int i2 = message.arg2;
-                AdnRecord adnRecord = (AdnRecord) asyncResult.userObj;
-                if (asyncResult.exception == null) {
-                    if (this.mAdnLikeFiles.get(i) != null) {
-                        ((ArrayList) this.mAdnLikeFiles.get(i)).set(i2 - 1, adnRecord);
-                    }
-                    if (i == IccConstants.EF_PBR) {
-                        this.mUsimPhoneBookManager.loadEfFilesFromUsim().set(i2 - 1, adnRecord);
-                    }
-                }
-                Message message2 = (Message) this.mUserWriteResponse.get(i);
-                this.mUserWriteResponse.delete(i);
-                if (message2 != null) {
-                    AsyncResult.forMessage(message2, null, asyncResult.exception);
-                    message2.sendToTarget();
-                    return;
-                }
-                return;
-            default:
-                return;
-        }
-    }
-
-    public void requestLoadAllAdnLike(int i, int i2, String str, Message message) {
-        Object loadEfFilesFromUsim = i == IccConstants.EF_PBR ? this.mUsimPhoneBookManager.loadEfFilesFromUsim() : getRecordsIfLoaded(i);
-        if (loadEfFilesFromUsim == null) {
-            ArrayList arrayList = (ArrayList) this.mAdnLikeWaiters.get(i);
-            if (arrayList != null) {
-                arrayList.add(message);
-                return;
-            }
-            arrayList = new ArrayList();
-            arrayList.add(message);
-            this.mAdnLikeWaiters.put(i, arrayList);
-            if (i2 >= 0) {
-                new AdnRecordLoader(this.mFh).loadAllFromEF(i, i2, str, obtainMessage(1, i, 0));
-            } else if (message != null) {
-                AsyncResult.forMessage(message).exception = new RuntimeException("EF is not known ADN-like EF:" + i);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            AsyncResult.forMessage(message).result = loadEfFilesFromUsim;
-            message.sendToTarget();
-        }
-    }
-
-    public void reset() {
-        this.mAdnLikeFiles.clear();
-        this.mUsimPhoneBookManager.reset();
-        clearWaiters();
-        clearUserWriters();
-    }
-
-    public void setAdnCount(int i) {
-        this.mAdncountofIcc = i;
-    }
-
-    public void updateAdnByIndex(int i, AdnRecord adnRecord, int i2, String str, Message message) {
-        int extensionEfForEf = extensionEfForEf(i);
-        if (extensionEfForEf < 0) {
-            sendErrorResponse(message, "EF is not known ADN-like EF:" + i);
-        } else if (((Message) this.mUserWriteResponse.get(i)) != null) {
-            sendErrorResponse(message, "Have pending update for EF:" + i);
-        } else {
-            this.mUserWriteResponse.put(i, message);
-            if (TelBrand.IS_SBM) {
-                new AdnRecordLoader(this.mFh, this.mUiccApplication).updateEF(adnRecord, i, extensionEfForEf, i2, str, obtainMessage(2, i, i2, adnRecord));
-                return;
-            }
-            new AdnRecordLoader(this.mFh).updateEF(adnRecord, i, extensionEfForEf, i2, str, obtainMessage(2, i, i2, adnRecord));
-        }
-    }
-
-    public void updateAdnBySearch(int i, AdnRecord adnRecord, AdnRecord adnRecord2, String str, Message message) {
-        int extensionEfForEf = extensionEfForEf(i);
-        if (extensionEfForEf < 0) {
-            sendErrorResponse(message, "EF is not known ADN-like EF:" + i);
-            return;
-        }
-        ArrayList loadEfFilesFromUsim;
-        if (i == 20272) {
-            try {
-                loadEfFilesFromUsim = this.mUsimPhoneBookManager.loadEfFilesFromUsim();
-            } catch (NullPointerException e) {
-                loadEfFilesFromUsim = null;
-            }
-        } else {
-            loadEfFilesFromUsim = getRecordsIfLoaded(i);
-        }
-        if (loadEfFilesFromUsim == null) {
-            sendErrorResponse(message, "Adn list not exist for EF:" + i);
-            return;
-        }
-        AdnRecord adnRecord3;
-        int i2 = 1;
-        int i3 = -2;
-        int i4 = 0;
-        Iterator it = loadEfFilesFromUsim.iterator();
-        int i5 = 0;
-        while (it.hasNext()) {
-            adnRecord3 = (AdnRecord) it.next();
-            Object obj = null;
-            if (i == 20272) {
-                int pbrIndexBy = this.mUsimPhoneBookManager.getPbrIndexBy(i2 - 1);
-                if (pbrIndexBy != i3) {
-                    i5 = this.mUsimPhoneBookManager.getEmptyAnrNum_Pbrindex(pbrIndexBy);
-                    i4 = this.mUsimPhoneBookManager.getEmptyEmailNum_Pbrindex(pbrIndexBy);
-                    Log.d("AdnRecordCache", "updateAdnBySearch, pbrIndex: " + pbrIndexBy + " anrNum:" + i5 + " emailNum:" + i4);
-                    i3 = pbrIndexBy;
-                }
-                if ((i5 == 0 && adnRecord.getAdditionalNumbers() == null && adnRecord2.getAdditionalNumbers() != null) || (i4 == 0 && adnRecord.getEmails() == null && adnRecord2.getEmails() != null)) {
-                    obj = 1;
-                }
-            }
-            if (obj == null && adnRecord.isEqual(adnRecord3)) {
-                break;
-            }
-            i2++;
-        }
-        i2 = -1;
-        Log.d("AdnRecordCache", "updateAdnBySearch, update oldADN:" + adnRecord.toString() + ", newAdn:" + adnRecord2.toString() + ",index :" + i2);
-        if (i2 == -1) {
-            sendErrorResponse(message, "Adn record don't exist for " + adnRecord);
-            return;
-        }
-        if (i == 20272) {
-            adnRecord3 = (AdnRecord) loadEfFilesFromUsim.get(i2 - 1);
-            adnRecord2.mEfid = adnRecord3.mEfid;
-            adnRecord2.mExtRecord = adnRecord3.mExtRecord;
-            adnRecord2.mRecordNumber = adnRecord3.mRecordNumber;
-            adnRecord.setAdditionalNumbers(adnRecord3.getAdditionalNumbers());
-            adnRecord.setEmails(adnRecord3.getEmails());
-            adnRecord2.updateAnrEmailArray(adnRecord, this.mUsimPhoneBookManager.getEmailFilesCountEachAdn(), this.mUsimPhoneBookManager.getAnrFilesCountEachAdn());
-        }
-        if (((Message) this.mUserWriteResponse.get(i)) != null) {
-            sendErrorResponse(message, "Have pending update for EF:" + i);
-        } else if (i == 20272) {
-            updateEmailAndAnr(i, this.mUsimPhoneBookManager.getPBPath(i), adnRecord, adnRecord2, i2, str, message);
-        } else {
-            this.mUserWriteResponse.put(i, message);
-            if (TelBrand.IS_SBM) {
-                new AdnRecordLoader(this.mFh, this.mUiccApplication).updateEF(adnRecord2, i, extensionEfForEf, i2, str, obtainMessage(2, i, i2, adnRecord2));
-                return;
-            }
-            new AdnRecordLoader(this.mFh).updateEF(adnRecord2, i, extensionEfForEf, i2, str, obtainMessage(2, i, i2, adnRecord2));
-        }
-    }
-
-    public void updateUsimAdnByIndex(int i, AdnRecord adnRecord, int i2, String str, Message message) {
-        int extensionEfForEf = extensionEfForEf(i);
-        if (extensionEfForEf < 0) {
-            sendErrorResponse(message, "EF is not known ADN-like EF:" + i);
-            return;
-        }
-        ArrayList loadEfFilesFromUsim;
-        if (i == IccConstants.EF_PBR) {
-            try {
-                loadEfFilesFromUsim = this.mUsimPhoneBookManager.loadEfFilesFromUsim();
-            } catch (NullPointerException e) {
-                loadEfFilesFromUsim = null;
-            }
-        } else {
-            loadEfFilesFromUsim = getRecordsIfLoaded(i);
-        }
-        if (loadEfFilesFromUsim == null) {
-            sendErrorResponse(message, "Adn list not exist for EF:" + i);
-            return;
-        }
-        if (i == IccConstants.EF_PBR) {
-            AdnRecord adnRecord2 = (AdnRecord) loadEfFilesFromUsim.get(i2 - 1);
-            adnRecord.mEfid = adnRecord2.mEfid;
-            adnRecord.mExtRecord = adnRecord2.mExtRecord;
-            adnRecord.mRecordNumber = adnRecord2.mRecordNumber;
-        }
-        if (((Message) this.mUserWriteResponse.get(i)) != null) {
-            sendErrorResponse(message, "Have pending update for EF:" + i);
-        } else if (i == IccConstants.EF_PBR) {
-            updateEmailAndAnr(i, this.mUsimPhoneBookManager.getPBPath(i), (AdnRecord) loadEfFilesFromUsim.get(i2 - 1), adnRecord, i2, str, message);
-        } else {
-            this.mUserWriteResponse.put(i, message);
-            new AdnRecordLoader(this.mFh).updateEF(adnRecord, i, extensionEfForEf, i2, str, obtainMessage(2, i, i2, adnRecord));
-        }
     }
 }

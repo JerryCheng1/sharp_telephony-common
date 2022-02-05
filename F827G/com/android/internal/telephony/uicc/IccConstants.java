@@ -1,5 +1,6 @@
 package com.android.internal.telephony.uicc;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface IccConstants {
     public static final int CDMA_SMS_RECORD_LENGTH = 255;
     public static final String DF_ADF = "7FFF";

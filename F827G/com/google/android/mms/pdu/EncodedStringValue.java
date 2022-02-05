@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class EncodedStringValue implements Cloneable {
     private static final boolean DEBUG = false;
     private static final boolean LOCAL_LOGV = false;
@@ -13,104 +14,48 @@ public class EncodedStringValue implements Cloneable {
     private int mCharacterSet;
     private byte[] mData;
 
-    public EncodedStringValue(int i, byte[] bArr) {
-        if (bArr == null) {
+    public EncodedStringValue(int charset, byte[] data) {
+        if (data == null) {
             throw new NullPointerException("EncodedStringValue: Text-string is null.");
         }
-        this.mCharacterSet = i;
-        this.mData = new byte[bArr.length];
-        System.arraycopy(bArr, 0, this.mData, 0, bArr.length);
+        this.mCharacterSet = charset;
+        this.mData = new byte[data.length];
+        System.arraycopy(data, 0, this.mData, 0, data.length);
     }
 
-    public EncodedStringValue(String str) {
+    public EncodedStringValue(byte[] data) {
+        this(106, data);
+    }
+
+    public EncodedStringValue(String data) {
         try {
-            this.mData = str.getBytes("utf-8");
+            this.mData = data.getBytes("utf-8");
             this.mCharacterSet = 106;
         } catch (UnsupportedEncodingException e) {
             Log.e(TAG, "Default encoding must be supported.", e);
         }
     }
 
-    public EncodedStringValue(byte[] bArr) {
-        this(106, bArr);
-    }
-
-    public static String concat(EncodedStringValue[] encodedStringValueArr) {
-        StringBuilder stringBuilder = new StringBuilder();
-        int length = encodedStringValueArr.length - 1;
-        for (int i = 0; i <= length; i++) {
-            stringBuilder.append(encodedStringValueArr[i].getString());
-            if (i < length) {
-                stringBuilder.append(";");
-            }
-        }
-        return stringBuilder.toString();
-    }
-
-    public static EncodedStringValue copy(EncodedStringValue encodedStringValue) {
-        return encodedStringValue == null ? null : new EncodedStringValue(encodedStringValue.mCharacterSet, encodedStringValue.mData);
-    }
-
-    public static EncodedStringValue[] encodeStrings(String[] strArr) {
-        int length = strArr.length;
-        if (length <= 0) {
-            return null;
-        }
-        EncodedStringValue[] encodedStringValueArr = new EncodedStringValue[length];
-        for (int i = 0; i < length; i++) {
-            encodedStringValueArr[i] = new EncodedStringValue(strArr[i]);
-        }
-        return encodedStringValueArr;
-    }
-
-    public static EncodedStringValue[] extract(String str) {
-        int i;
-        String[] split = str.split(";");
-        ArrayList arrayList = new ArrayList();
-        for (i = 0; i < split.length; i++) {
-            if (split[i].length() > 0) {
-                arrayList.add(new EncodedStringValue(split[i]));
-            }
-        }
-        i = arrayList.size();
-        return i > 0 ? (EncodedStringValue[]) arrayList.toArray(new EncodedStringValue[i]) : null;
-    }
-
-    public void appendTextString(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("Text-string is null.");
-        } else if (this.mData == null) {
-            this.mData = new byte[bArr.length];
-            System.arraycopy(bArr, 0, this.mData, 0, bArr.length);
-        } else {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            try {
-                byteArrayOutputStream.write(this.mData);
-                byteArrayOutputStream.write(bArr);
-                this.mData = byteArrayOutputStream.toByteArray();
-            } catch (IOException e) {
-                e.printStackTrace();
-                throw new NullPointerException("appendTextString: failed when write a new Text-string");
-            }
-        }
-    }
-
-    public Object clone() throws CloneNotSupportedException {
-        super.clone();
-        int length = this.mData.length;
-        byte[] bArr = new byte[length];
-        System.arraycopy(this.mData, 0, bArr, 0, length);
-        try {
-            return new EncodedStringValue(this.mCharacterSet, bArr);
-        } catch (Exception e) {
-            Log.e(TAG, "failed to clone an EncodedStringValue: " + this);
-            e.printStackTrace();
-            throw new CloneNotSupportedException(e.getMessage());
-        }
-    }
-
     public int getCharacterSet() {
         return this.mCharacterSet;
+    }
+
+    public void setCharacterSet(int charset) {
+        this.mCharacterSet = charset;
+    }
+
+    public byte[] getTextString() {
+        byte[] byteArray = new byte[this.mData.length];
+        System.arraycopy(this.mData, 0, byteArray, 0, this.mData.length);
+        return byteArray;
+    }
+
+    public void setTextString(byte[] textString) {
+        if (textString == null) {
+            throw new NullPointerException("EncodedStringValue: Text-string is null.");
+        }
+        this.mData = new byte[textString.length];
+        System.arraycopy(textString, 0, this.mData, 0, textString.length);
     }
 
     public String getString() {
@@ -128,36 +73,95 @@ public class EncodedStringValue implements Cloneable {
         }
     }
 
-    public byte[] getTextString() {
-        byte[] bArr = new byte[this.mData.length];
-        System.arraycopy(this.mData, 0, bArr, 0, this.mData.length);
-        return bArr;
-    }
-
-    public void setCharacterSet(int i) {
-        this.mCharacterSet = i;
-    }
-
-    public void setTextString(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("EncodedStringValue: Text-string is null.");
-        }
-        this.mData = new byte[bArr.length];
-        System.arraycopy(bArr, 0, this.mData, 0, bArr.length);
-    }
-
-    public EncodedStringValue[] split(String str) {
-        String[] split = getString().split(str);
-        EncodedStringValue[] encodedStringValueArr = new EncodedStringValue[split.length];
-        int i = 0;
-        while (i < encodedStringValueArr.length) {
+    public void appendTextString(byte[] textString) {
+        if (textString == null) {
+            throw new NullPointerException("Text-string is null.");
+        } else if (this.mData == null) {
+            this.mData = new byte[textString.length];
+            System.arraycopy(textString, 0, this.mData, 0, textString.length);
+        } else {
+            ByteArrayOutputStream newTextString = new ByteArrayOutputStream();
             try {
-                encodedStringValueArr[i] = new EncodedStringValue(this.mCharacterSet, split[i].getBytes());
-                i++;
+                newTextString.write(this.mData);
+                newTextString.write(textString);
+                this.mData = newTextString.toByteArray();
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new NullPointerException("appendTextString: failed when write a new Text-string");
+            }
+        }
+    }
+
+    public Object clone() throws CloneNotSupportedException {
+        super.clone();
+        int len = this.mData.length;
+        byte[] dstBytes = new byte[len];
+        System.arraycopy(this.mData, 0, dstBytes, 0, len);
+        try {
+            return new EncodedStringValue(this.mCharacterSet, dstBytes);
+        } catch (Exception e) {
+            Log.e(TAG, "failed to clone an EncodedStringValue: " + this);
+            e.printStackTrace();
+            throw new CloneNotSupportedException(e.getMessage());
+        }
+    }
+
+    public EncodedStringValue[] split(String pattern) {
+        String[] temp = getString().split(pattern);
+        EncodedStringValue[] ret = new EncodedStringValue[temp.length];
+        for (int i = 0; i < ret.length; i++) {
+            try {
+                ret[i] = new EncodedStringValue(this.mCharacterSet, temp[i].getBytes());
             } catch (NullPointerException e) {
                 return null;
             }
         }
-        return encodedStringValueArr;
+        return ret;
+    }
+
+    public static EncodedStringValue[] extract(String src) {
+        String[] values = src.split(";");
+        ArrayList<EncodedStringValue> list = new ArrayList<>();
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].length() > 0) {
+                list.add(new EncodedStringValue(values[i]));
+            }
+        }
+        int len = list.size();
+        if (len > 0) {
+            return (EncodedStringValue[]) list.toArray(new EncodedStringValue[len]);
+        }
+        return null;
+    }
+
+    public static String concat(EncodedStringValue[] addr) {
+        StringBuilder sb = new StringBuilder();
+        int maxIndex = addr.length - 1;
+        for (int i = 0; i <= maxIndex; i++) {
+            sb.append(addr[i].getString());
+            if (i < maxIndex) {
+                sb.append(";");
+            }
+        }
+        return sb.toString();
+    }
+
+    public static EncodedStringValue copy(EncodedStringValue value) {
+        if (value == null) {
+            return null;
+        }
+        return new EncodedStringValue(value.mCharacterSet, value.mData);
+    }
+
+    public static EncodedStringValue[] encodeStrings(String[] array) {
+        int count = array.length;
+        if (count <= 0) {
+            return null;
+        }
+        EncodedStringValue[] encodedArray = new EncodedStringValue[count];
+        for (int i = 0; i < count; i++) {
+            encodedArray[i] = new EncodedStringValue(array[i]);
+        }
+        return encodedArray;
     }
 }

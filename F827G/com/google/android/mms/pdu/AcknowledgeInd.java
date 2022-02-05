@@ -2,30 +2,32 @@ package com.google.android.mms.pdu;
 
 import com.google.android.mms.InvalidHeaderValueException;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class AcknowledgeInd extends GenericPdu {
-    public AcknowledgeInd(int i, byte[] bArr) throws InvalidHeaderValueException {
+    public AcknowledgeInd(int mmsVersion, byte[] transactionId) throws InvalidHeaderValueException {
         setMessageType(133);
-        setMmsVersion(i);
-        setTransactionId(bArr);
+        setMmsVersion(mmsVersion);
+        setTransactionId(transactionId);
     }
 
-    AcknowledgeInd(PduHeaders pduHeaders) {
-        super(pduHeaders);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public AcknowledgeInd(PduHeaders headers) {
+        super(headers);
     }
 
     public int getReportAllowed() {
         return this.mPduHeaders.getOctet(145);
     }
 
+    public void setReportAllowed(int value) throws InvalidHeaderValueException {
+        this.mPduHeaders.setOctet(value, 145);
+    }
+
     public byte[] getTransactionId() {
         return this.mPduHeaders.getTextString(152);
     }
 
-    public void setReportAllowed(int i) throws InvalidHeaderValueException {
-        this.mPduHeaders.setOctet(i, 145);
-    }
-
-    public void setTransactionId(byte[] bArr) {
-        this.mPduHeaders.setTextString(bArr, 152);
+    public void setTransactionId(byte[] value) {
+        this.mPduHeaders.setTextString(value, 152);
     }
 }

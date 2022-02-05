@@ -2,16 +2,20 @@ package android.telephony;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsCbLocation implements Parcelable {
-    public static final Creator<SmsCbLocation> CREATOR = new Creator<SmsCbLocation>() {
-        public SmsCbLocation createFromParcel(Parcel parcel) {
-            return new SmsCbLocation(parcel);
+    public static final Parcelable.Creator<SmsCbLocation> CREATOR = new Parcelable.Creator<SmsCbLocation>() { // from class: android.telephony.SmsCbLocation.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbLocation createFromParcel(Parcel in) {
+            return new SmsCbLocation(in);
         }
 
-        public SmsCbLocation[] newArray(int i) {
-            return new SmsCbLocation[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public SmsCbLocation[] newArray(int size) {
+            return new SmsCbLocation[size];
         }
     };
     private final int mCid;
@@ -24,72 +28,84 @@ public class SmsCbLocation implements Parcelable {
         this.mCid = -1;
     }
 
-    public SmsCbLocation(Parcel parcel) {
-        this.mPlmn = parcel.readString();
-        this.mLac = parcel.readInt();
-        this.mCid = parcel.readInt();
-    }
-
-    public SmsCbLocation(String str) {
-        this.mPlmn = str;
+    public SmsCbLocation(String plmn) {
+        this.mPlmn = plmn;
         this.mLac = -1;
         this.mCid = -1;
     }
 
-    public SmsCbLocation(String str, int i, int i2) {
-        this.mPlmn = str;
-        this.mLac = i;
-        this.mCid = i2;
+    public SmsCbLocation(String plmn, int lac, int cid) {
+        this.mPlmn = plmn;
+        this.mLac = lac;
+        this.mCid = cid;
     }
 
-    public int describeContents() {
-        return 0;
-    }
-
-    public boolean equals(Object obj) {
-        if (obj != this) {
-            if (obj == null || !(obj instanceof SmsCbLocation)) {
-                return false;
-            }
-            SmsCbLocation smsCbLocation = (SmsCbLocation) obj;
-            if (!(this.mPlmn.equals(smsCbLocation.mPlmn) && this.mLac == smsCbLocation.mLac && this.mCid == smsCbLocation.mCid)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    public int getCid() {
-        return this.mCid;
-    }
-
-    public int getLac() {
-        return this.mLac;
+    public SmsCbLocation(Parcel in) {
+        this.mPlmn = in.readString();
+        this.mLac = in.readInt();
+        this.mCid = in.readInt();
     }
 
     public String getPlmn() {
         return this.mPlmn;
     }
 
+    public int getLac() {
+        return this.mLac;
+    }
+
+    public int getCid() {
+        return this.mCid;
+    }
+
     public int hashCode() {
         return (((this.mPlmn.hashCode() * 31) + this.mLac) * 31) + this.mCid;
     }
 
-    public boolean isInLocationArea(SmsCbLocation smsCbLocation) {
-        return ((this.mCid == -1 || this.mCid == smsCbLocation.mCid) && (this.mLac == -1 || this.mLac == smsCbLocation.mLac)) ? this.mPlmn.equals(smsCbLocation.mPlmn) : false;
-    }
-
-    public boolean isInLocationArea(String str, int i, int i2) {
-        return this.mPlmn.equals(str) && ((this.mLac == -1 || this.mLac == i) && (this.mCid == -1 || this.mCid == i2));
+    public boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        }
+        if (o == null || !(o instanceof SmsCbLocation)) {
+            return false;
+        }
+        SmsCbLocation other = (SmsCbLocation) o;
+        return this.mPlmn.equals(other.mPlmn) && this.mLac == other.mLac && this.mCid == other.mCid;
     }
 
     public String toString() {
         return '[' + this.mPlmn + ',' + this.mLac + ',' + this.mCid + ']';
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeString(this.mPlmn);
-        parcel.writeInt(this.mLac);
-        parcel.writeInt(this.mCid);
+    public boolean isInLocationArea(SmsCbLocation area) {
+        if (this.mCid != -1 && this.mCid != area.mCid) {
+            return false;
+        }
+        if (this.mLac == -1 || this.mLac == area.mLac) {
+            return this.mPlmn.equals(area.mPlmn);
+        }
+        return false;
+    }
+
+    public boolean isInLocationArea(String plmn, int lac, int cid) {
+        if (!this.mPlmn.equals(plmn)) {
+            return false;
+        }
+        if (this.mLac == -1 || this.mLac == lac) {
+            return this.mCid == -1 || this.mCid == cid;
+        }
+        return false;
+    }
+
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(this.mPlmn);
+        dest.writeInt(this.mLac);
+        dest.writeInt(this.mCid);
+    }
+
+    @Override // android.os.Parcelable
+    public int describeContents() {
+        return 0;
     }
 }

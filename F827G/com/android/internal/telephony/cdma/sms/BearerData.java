@@ -8,20 +8,20 @@ import android.telephony.cdma.CdmaSmsCbProgramResults;
 import android.text.format.Time;
 import com.android.internal.telephony.EncodeException;
 import com.android.internal.telephony.GsmAlphabet;
-import com.android.internal.telephony.GsmAlphabet.TextEncodingDetails;
 import com.android.internal.telephony.SmsHeader;
 import com.android.internal.telephony.gsm.SmsMessage;
 import com.android.internal.telephony.uicc.IccUtils;
 import com.android.internal.util.BitwiseInputStream;
-import com.android.internal.util.BitwiseInputStream.AccessException;
 import com.android.internal.util.BitwiseOutputStream;
 import com.google.android.mms.pdu.PduPart;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.TimeZone;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 import jp.co.sharp.telephony.OemGsmTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class BearerData {
     public static final int ALERT_DEFAULT = 0;
     public static final int ALERT_HIGH_PRIO = 3;
@@ -81,29 +81,27 @@ public final class BearerData {
     public static final int STATUS_TEXT_TOO_LONG = 8;
     public static final int STATUS_UNDEFINED = 255;
     public static final int STATUS_UNKNOWN_ERROR = 31;
-    private static final byte SUBPARAM_ALERT_ON_MESSAGE_DELIVERY = (byte) 12;
-    private static final byte SUBPARAM_CALLBACK_NUMBER = (byte) 14;
-    private static final byte SUBPARAM_DEFERRED_DELIVERY_TIME_ABSOLUTE = (byte) 6;
-    private static final byte SUBPARAM_DEFERRED_DELIVERY_TIME_RELATIVE = (byte) 7;
-    private static final byte SUBPARAM_ID_LAST_DEFINED = (byte) 23;
-    private static final byte SUBPARAM_LANGUAGE_INDICATOR = (byte) 13;
-    private static final byte SUBPARAM_MESSAGE_CENTER_TIME_STAMP = (byte) 3;
-    private static final byte SUBPARAM_MESSAGE_DEPOSIT_INDEX = (byte) 17;
-    private static final byte SUBPARAM_MESSAGE_DISPLAY_MODE = (byte) 15;
-    private static final byte SUBPARAM_MESSAGE_IDENTIFIER = (byte) 0;
-    private static final byte SUBPARAM_MESSAGE_STATUS = (byte) 20;
-    private static final byte SUBPARAM_NUMBER_OF_MESSAGES = (byte) 11;
-    private static final byte SUBPARAM_PRIORITY_INDICATOR = (byte) 8;
-    private static final byte SUBPARAM_PRIVACY_INDICATOR = (byte) 9;
-    private static final byte SUBPARAM_REPLY_OPTION = (byte) 10;
-    private static final byte SUBPARAM_SERVICE_CATEGORY_PROGRAM_DATA = (byte) 18;
-    private static final byte SUBPARAM_SERVICE_CATEGORY_PROGRAM_RESULTS = (byte) 19;
-    private static final byte SUBPARAM_USER_DATA = (byte) 1;
-    private static final byte SUBPARAM_USER_RESPONSE_CODE = (byte) 2;
-    private static final byte SUBPARAM_VALIDITY_PERIOD_ABSOLUTE = (byte) 4;
-    private static final byte SUBPARAM_VALIDITY_PERIOD_RELATIVE = (byte) 5;
-    public int alert = 0;
-    public boolean alertIndicatorSet = false;
+    private static final byte SUBPARAM_ALERT_ON_MESSAGE_DELIVERY = 12;
+    private static final byte SUBPARAM_CALLBACK_NUMBER = 14;
+    private static final byte SUBPARAM_DEFERRED_DELIVERY_TIME_ABSOLUTE = 6;
+    private static final byte SUBPARAM_DEFERRED_DELIVERY_TIME_RELATIVE = 7;
+    private static final byte SUBPARAM_ID_LAST_DEFINED = 23;
+    private static final byte SUBPARAM_LANGUAGE_INDICATOR = 13;
+    private static final byte SUBPARAM_MESSAGE_CENTER_TIME_STAMP = 3;
+    private static final byte SUBPARAM_MESSAGE_DEPOSIT_INDEX = 17;
+    private static final byte SUBPARAM_MESSAGE_DISPLAY_MODE = 15;
+    private static final byte SUBPARAM_MESSAGE_IDENTIFIER = 0;
+    private static final byte SUBPARAM_MESSAGE_STATUS = 20;
+    private static final byte SUBPARAM_NUMBER_OF_MESSAGES = 11;
+    private static final byte SUBPARAM_PRIORITY_INDICATOR = 8;
+    private static final byte SUBPARAM_PRIVACY_INDICATOR = 9;
+    private static final byte SUBPARAM_REPLY_OPTION = 10;
+    private static final byte SUBPARAM_SERVICE_CATEGORY_PROGRAM_DATA = 18;
+    private static final byte SUBPARAM_SERVICE_CATEGORY_PROGRAM_RESULTS = 19;
+    private static final byte SUBPARAM_USER_DATA = 1;
+    private static final byte SUBPARAM_USER_RESPONSE_CODE = 2;
+    private static final byte SUBPARAM_VALIDITY_PERIOD_ABSOLUTE = 4;
+    private static final byte SUBPARAM_VALIDITY_PERIOD_RELATIVE = 5;
     public CdmaSmsAddress callbackNumber;
     public SmsCbCmasInfo cmasWarningInfo;
     public TimeStamp deferredDeliveryTimeAbsolute;
@@ -111,22 +109,11 @@ public final class BearerData {
     public boolean deferredDeliveryTimeRelativeSet;
     public boolean deliveryAckReq;
     public int depositIndex;
-    public int displayMode = 1;
-    public boolean displayModeSet = false;
-    public int errorClass = 255;
     public boolean hasUserDataHeader;
-    public int language = 0;
-    public boolean languageIndicatorSet = false;
     public int messageId;
-    public int messageStatus = 255;
-    public boolean messageStatusSet = false;
     public int messageType;
     public TimeStamp msgCenterTimeStamp;
     public int numberOfMessages;
-    public int priority = 0;
-    public boolean priorityIndicatorSet = false;
-    public int privacy = 0;
-    public boolean privacyIndicatorSet = false;
     public boolean readAckReq;
     public boolean reportReq;
     public ArrayList<CdmaSmsCbProgramData> serviceCategoryProgramData;
@@ -134,1371 +121,94 @@ public final class BearerData {
     public boolean userAckReq;
     public UserData userData;
     public int userResponseCode;
-    public boolean userResponseCodeSet = false;
     public TimeStamp validityPeriodAbsolute;
     public int validityPeriodRelative;
     public boolean validityPeriodRelativeSet;
+    public boolean priorityIndicatorSet = false;
+    public int priority = 0;
+    public boolean privacyIndicatorSet = false;
+    public int privacy = 0;
+    public boolean alertIndicatorSet = false;
+    public int alert = 0;
+    public boolean displayModeSet = false;
+    public int displayMode = 1;
+    public boolean languageIndicatorSet = false;
+    public int language = 0;
+    public boolean messageStatusSet = false;
+    public int errorClass = 255;
+    public int messageStatus = 255;
+    public boolean userResponseCodeSet = false;
 
-    private static class CodingException extends Exception {
-        public CodingException(String str) {
-            super(str);
-        }
-    }
-
-    private static class Gsm7bitCodingResult {
-        byte[] data;
-        int septets;
-
-        private Gsm7bitCodingResult() {
-        }
-    }
-
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class TimeStamp extends Time {
         public TimeStamp() {
             super(TimeZone.getDefault().getID());
         }
 
-        public static TimeStamp fromByteArray(byte[] bArr) {
-            TimeStamp timeStamp = new TimeStamp();
-            int cdmaBcdByteToInt = IccUtils.cdmaBcdByteToInt(bArr[0]);
-            if (cdmaBcdByteToInt > 99 || cdmaBcdByteToInt < 0) {
+        public static TimeStamp fromByteArray(byte[] data) {
+            TimeStamp ts = new TimeStamp();
+            int year = IccUtils.cdmaBcdByteToInt(data[0]);
+            if (year > 99 || year < 0) {
                 return null;
             }
-            timeStamp.year = cdmaBcdByteToInt >= 96 ? cdmaBcdByteToInt + OemGsmTelephonyManager.GSM_1900 : cdmaBcdByteToInt + 2000;
-            cdmaBcdByteToInt = IccUtils.cdmaBcdByteToInt(bArr[1]);
-            if (cdmaBcdByteToInt < 1 || cdmaBcdByteToInt > 12) {
+            ts.year = year >= 96 ? year + OemGsmTelephonyManager.GSM_1900 : year + 2000;
+            int month = IccUtils.cdmaBcdByteToInt(data[1]);
+            if (month < 1 || month > 12) {
                 return null;
             }
-            timeStamp.month = cdmaBcdByteToInt - 1;
-            cdmaBcdByteToInt = IccUtils.cdmaBcdByteToInt(bArr[2]);
-            if (cdmaBcdByteToInt < 1 || cdmaBcdByteToInt > 31) {
+            ts.month = month - 1;
+            int day = IccUtils.cdmaBcdByteToInt(data[2]);
+            if (day < 1 || day > 31) {
                 return null;
             }
-            timeStamp.monthDay = cdmaBcdByteToInt;
-            cdmaBcdByteToInt = IccUtils.cdmaBcdByteToInt(bArr[3]);
-            if (cdmaBcdByteToInt < 0 || cdmaBcdByteToInt > 23) {
+            ts.monthDay = day;
+            int hour = IccUtils.cdmaBcdByteToInt(data[3]);
+            if (hour < 0 || hour > 23) {
                 return null;
             }
-            timeStamp.hour = cdmaBcdByteToInt;
-            cdmaBcdByteToInt = IccUtils.cdmaBcdByteToInt(bArr[4]);
-            if (cdmaBcdByteToInt < 0 || cdmaBcdByteToInt > 59) {
+            ts.hour = hour;
+            int minute = IccUtils.cdmaBcdByteToInt(data[4]);
+            if (minute < 0 || minute > 59) {
                 return null;
             }
-            timeStamp.minute = cdmaBcdByteToInt;
-            cdmaBcdByteToInt = IccUtils.cdmaBcdByteToInt(bArr[5]);
-            if (cdmaBcdByteToInt < 0 || cdmaBcdByteToInt > 59) {
+            ts.minute = minute;
+            int second = IccUtils.cdmaBcdByteToInt(data[5]);
+            if (second < 0 || second > 59) {
                 return null;
             }
-            timeStamp.second = cdmaBcdByteToInt;
-            return timeStamp;
+            ts.second = second;
+            return ts;
         }
 
+        @Override // android.text.format.Time
         public String toString() {
-            StringBuilder stringBuilder = new StringBuilder();
-            stringBuilder.append("TimeStamp ");
-            stringBuilder.append("{ year=" + this.year);
-            stringBuilder.append(", month=" + this.month);
-            stringBuilder.append(", day=" + this.monthDay);
-            stringBuilder.append(", hour=" + this.hour);
-            stringBuilder.append(", minute=" + this.minute);
-            stringBuilder.append(", second=" + this.second);
-            stringBuilder.append(" }");
-            return stringBuilder.toString();
+            StringBuilder builder = new StringBuilder();
+            builder.append("TimeStamp ");
+            builder.append("{ year=" + this.year);
+            builder.append(", month=" + this.month);
+            builder.append(", day=" + this.monthDay);
+            builder.append(", hour=" + this.hour);
+            builder.append(", minute=" + this.minute);
+            builder.append(", second=" + this.second);
+            builder.append(" }");
+            return builder.toString();
         }
     }
 
-    public static TextEncodingDetails calcTextEncodingDetails(CharSequence charSequence, boolean z) {
-        int countAsciiSeptets = countAsciiSeptets(charSequence, z);
-        TextEncodingDetails calculateLength;
-        if (countAsciiSeptets == -1 || countAsciiSeptets > 160) {
-            calculateLength = SmsMessage.calculateLength(charSequence, z);
-            if (calculateLength.msgCount != 1 || calculateLength.codeUnitSize != 1) {
-                return calculateLength;
-            }
-            calculateLength.codeUnitCount = charSequence.length();
-            int i = calculateLength.codeUnitCount * 2;
-            if (i > 140) {
-                countAsciiSeptets = 134;
-                if (!android.telephony.SmsMessage.hasEmsSupport() && i <= 1188) {
-                    countAsciiSeptets = 132;
-                }
-                calculateLength.msgCount = ((countAsciiSeptets - 1) + i) / countAsciiSeptets;
-                calculateLength.codeUnitsRemaining = ((countAsciiSeptets * calculateLength.msgCount) - i) / 2;
-            } else {
-                calculateLength.msgCount = 1;
-                calculateLength.codeUnitsRemaining = (140 - i) / 2;
-            }
-            calculateLength.codeUnitSize = 3;
-            return calculateLength;
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class CodingException extends Exception {
+        public CodingException(String s) {
+            super(s);
         }
-        calculateLength = new TextEncodingDetails();
-        calculateLength.msgCount = 1;
-        calculateLength.codeUnitCount = countAsciiSeptets;
-        calculateLength.codeUnitsRemaining = 160 - countAsciiSeptets;
-        calculateLength.codeUnitSize = 1;
-        return calculateLength;
     }
 
-    private static int countAsciiSeptets(CharSequence charSequence, boolean z) {
-        int length = charSequence.length();
-        if (z) {
-            return length;
-        }
-        for (int i = 0; i < length; i++) {
-            if (UserData.charToAscii.get(charSequence.charAt(i), -1) == -1) {
-                return -1;
-            }
-        }
-        return length;
-    }
-
-    public static BearerData decode(byte[] bArr) {
-        return decode(bArr, 0);
-    }
-
-    public static BearerData decode(byte[] bArr, int i) {
-        try {
-            BitwiseInputStream bitwiseInputStream = new BitwiseInputStream(bArr);
-            BearerData bearerData = new BearerData();
-            int i2 = 0;
-            while (bitwiseInputStream.available() > 0) {
-                int read = bitwiseInputStream.read(8);
-                int i3 = 1 << read;
-                if ((i2 & i3) == 0 || read < 0 || read > 23) {
-                    boolean decodeMessageId;
-                    switch (read) {
-                        case 0:
-                            decodeMessageId = decodeMessageId(bearerData, bitwiseInputStream);
-                            break;
-                        case 1:
-                            decodeMessageId = decodeUserData(bearerData, bitwiseInputStream);
-                            break;
-                        case 2:
-                            decodeMessageId = decodeUserResponseCode(bearerData, bitwiseInputStream);
-                            break;
-                        case 3:
-                            decodeMessageId = decodeMsgCenterTimeStamp(bearerData, bitwiseInputStream);
-                            break;
-                        case 4:
-                            decodeMessageId = decodeValidityAbs(bearerData, bitwiseInputStream);
-                            break;
-                        case 5:
-                            decodeMessageId = decodeValidityRel(bearerData, bitwiseInputStream);
-                            break;
-                        case 6:
-                            decodeMessageId = decodeDeferredDeliveryAbs(bearerData, bitwiseInputStream);
-                            break;
-                        case 7:
-                            decodeMessageId = decodeDeferredDeliveryRel(bearerData, bitwiseInputStream);
-                            break;
-                        case 8:
-                            decodeMessageId = decodePriorityIndicator(bearerData, bitwiseInputStream);
-                            break;
-                        case 9:
-                            decodeMessageId = decodePrivacyIndicator(bearerData, bitwiseInputStream);
-                            break;
-                        case 10:
-                            decodeMessageId = decodeReplyOption(bearerData, bitwiseInputStream);
-                            break;
-                        case 11:
-                            decodeMessageId = decodeMsgCount(bearerData, bitwiseInputStream);
-                            break;
-                        case 12:
-                            decodeMessageId = decodeMsgDeliveryAlert(bearerData, bitwiseInputStream);
-                            break;
-                        case 13:
-                            decodeMessageId = decodeLanguageIndicator(bearerData, bitwiseInputStream);
-                            break;
-                        case 14:
-                            decodeMessageId = decodeCallbackNumber(bearerData, bitwiseInputStream);
-                            break;
-                        case 15:
-                            decodeMessageId = decodeDisplayMode(bearerData, bitwiseInputStream);
-                            break;
-                        case 17:
-                            decodeMessageId = decodeDepositIndex(bearerData, bitwiseInputStream);
-                            break;
-                        case 18:
-                            decodeMessageId = decodeServiceCategoryProgramData(bearerData, bitwiseInputStream);
-                            break;
-                        case 20:
-                            decodeMessageId = decodeMsgStatus(bearerData, bitwiseInputStream);
-                            break;
-                        default:
-                            decodeMessageId = decodeReserved(bearerData, bitwiseInputStream, read);
-                            break;
-                    }
-                    if (decodeMessageId && read >= 0 && read <= 23) {
-                        i2 |= i3;
-                    }
-                } else {
-                    throw new CodingException("illegal duplicate subparameter (" + read + ")");
-                }
-            }
-            if ((i2 & 1) == 0) {
-                throw new CodingException("missing MESSAGE_IDENTIFIER subparam");
-            } else if (bearerData.userData == null) {
-                return bearerData;
-            } else {
-                if (isCmasAlertCategory(i)) {
-                    decodeCmasUserData(bearerData, i);
-                    return bearerData;
-                } else if (bearerData.userData.msgEncoding == 1) {
-                    if (((i2 ^ 1) ^ 2) != 0) {
-                        Rlog.e(LOG_TAG, "IS-91 must occur without extra subparams (" + i2 + ")");
-                    }
-                    decodeIs91(bearerData);
-                    return bearerData;
-                } else {
-                    decodeUserDataPayload(bearerData.userData, bearerData.hasUserDataHeader);
-                    return bearerData;
-                }
-            }
-        } catch (AccessException e) {
-            Rlog.e(LOG_TAG, "BearerData decode failed: " + e);
-            return null;
-        } catch (CodingException e2) {
-            Rlog.e(LOG_TAG, "BearerData decode failed: " + e2);
-            return null;
-        }
-    }
-
-    private static String decode7bitAscii(byte[] bArr, int i, int i2) throws CodingException {
-        int i3 = i * 8;
-        try {
-            int i4 = (i3 + 6) / 7;
-            int i5 = i2 - i4;
-            StringBuffer stringBuffer = new StringBuffer(i5);
-            BitwiseInputStream bitwiseInputStream = new BitwiseInputStream(bArr);
-            int i6 = (i4 * 7) + (i5 * 7);
-            if (bitwiseInputStream.available() < i6) {
-                throw new CodingException("insufficient data (wanted " + i6 + " bits, but only have " + bitwiseInputStream.available() + ")");
-            }
-            bitwiseInputStream.skip(i3 + ((i4 * 7) - i3));
-            for (i3 = 0; i3 < i5; i3++) {
-                i4 = bitwiseInputStream.read(7);
-                if (i4 >= 32 && i4 <= UserData.ASCII_MAP_MAX_INDEX) {
-                    stringBuffer.append(UserData.ASCII_MAP[i4 - 32]);
-                } else if (i4 == 10) {
-                    stringBuffer.append(10);
-                } else if (i4 == 13) {
-                    stringBuffer.append(13);
-                } else {
-                    stringBuffer.append(' ');
-                }
-            }
-            return stringBuffer.toString();
-        } catch (AccessException e) {
-            throw new CodingException("7bit ASCII decode failed: " + e);
-        }
-    }
-
-    private static String decode7bitGsm(byte[] bArr, int i, int i2) throws CodingException {
-        int i3 = i * 8;
-        int i4 = (i3 + 6) / 7;
-        String gsm7BitPackedToString = GsmAlphabet.gsm7BitPackedToString(bArr, i, i2 - i4, (i4 * 7) - i3, 0, 0);
-        if (gsm7BitPackedToString != null) {
-            return gsm7BitPackedToString;
-        }
-        throw new CodingException("7bit GSM decoding failed");
-    }
-
-    private static boolean decodeCallbackNumber(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException, CodingException {
-        int i = 4;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read < 8) {
-            bitwiseInputStream.skip(read);
-            return false;
-        }
-        int i2;
-        CdmaSmsAddress cdmaSmsAddress = new CdmaSmsAddress();
-        cdmaSmsAddress.digitMode = bitwiseInputStream.read(1);
-        if (cdmaSmsAddress.digitMode == 1) {
-            cdmaSmsAddress.ton = bitwiseInputStream.read(3);
-            cdmaSmsAddress.numberPlan = bitwiseInputStream.read(4);
-            i2 = (byte) 8;
-            i = 8;
-        } else {
-            i2 = 1;
-        }
-        cdmaSmsAddress.numberOfDigits = bitwiseInputStream.read(8);
-        i2 = read - ((byte) (i2 + 8));
-        i *= cdmaSmsAddress.numberOfDigits;
-        int i3 = i2 - i;
-        if (i2 < i) {
-            throw new CodingException("CALLBACK_NUMBER subparam encoding size error (remainingBits + " + i2 + ", dataBits + " + i + ", paddingBits + " + i3 + ")");
-        }
-        cdmaSmsAddress.origBytes = bitwiseInputStream.readByteArray(i);
-        bitwiseInputStream.skip(i3);
-        decodeSmsAddress(cdmaSmsAddress);
-        bearerData.callbackNumber = cdmaSmsAddress;
-        return true;
-    }
-
-    private static String decodeCharset(byte[] bArr, int i, int i2, int i3, String str) throws CodingException {
-        if (i2 < 0 || (i2 * i3) + i > bArr.length) {
-            int length = ((bArr.length - i) - (i % i3)) / i3;
-            if (length < 0) {
-                throw new CodingException(str + " decode failed: offset out of range");
-            }
-            Rlog.e(LOG_TAG, str + " decode error: offset = " + i + " numFields = " + i2 + " data.length = " + bArr.length + " maxNumFields = " + length);
-            i2 = length;
-        }
-        try {
-            return new String(bArr, i, i2 * i3, str);
-        } catch (UnsupportedEncodingException e) {
-            throw new CodingException(str + " decode failed: " + e);
-        }
-    }
-
-    private static void decodeCmasUserData(BearerData bearerData, int i) throws AccessException, CodingException {
-        BitwiseInputStream bitwiseInputStream = new BitwiseInputStream(bearerData.userData.payload);
-        if (bitwiseInputStream.available() < 8) {
-            throw new CodingException("emergency CB with no CMAE_protocol_version");
-        }
-        int read = bitwiseInputStream.read(8);
-        if (read != 0) {
-            throw new CodingException("unsupported CMAE_protocol_version " + read);
-        }
-        int serviceCategoryToCmasMessageClass = serviceCategoryToCmasMessageClass(i);
-        int i2 = -1;
-        int i3 = -1;
-        int i4 = -1;
-        int i5 = -1;
-        int i6 = -1;
-        while (bitwiseInputStream.available() >= 16) {
-            read = bitwiseInputStream.read(8);
-            int read2 = bitwiseInputStream.read(8);
-            switch (read) {
-                case 0:
-                    UserData userData = new UserData();
-                    userData.msgEncoding = bitwiseInputStream.read(5);
-                    userData.msgEncodingSet = true;
-                    userData.msgType = 0;
-                    switch (userData.msgEncoding) {
-                        case 0:
-                        case 8:
-                            read = read2 - 1;
-                            break;
-                        case 2:
-                        case 3:
-                        case 9:
-                            read = ((read2 * 8) - 5) / 7;
-                            break;
-                        case 4:
-                            read = (read2 - 1) / 2;
-                            break;
-                        default:
-                            read = 0;
-                            break;
-                    }
-                    userData.numFields = read;
-                    userData.payload = bitwiseInputStream.readByteArray((read2 * 8) - 5);
-                    decodeUserDataPayload(userData, false);
-                    bearerData.userData = userData;
-                    break;
-                case 1:
-                    i2 = bitwiseInputStream.read(8);
-                    i3 = bitwiseInputStream.read(8);
-                    i4 = bitwiseInputStream.read(4);
-                    i5 = bitwiseInputStream.read(4);
-                    i6 = bitwiseInputStream.read(4);
-                    bitwiseInputStream.skip((read2 * 8) - 28);
-                    break;
-                default:
-                    Rlog.w(LOG_TAG, "skipping unsupported CMAS record type " + read);
-                    bitwiseInputStream.skip(read2 * 8);
-                    break;
-            }
-        }
-        bearerData.cmasWarningInfo = new SmsCbCmasInfo(serviceCategoryToCmasMessageClass, i2, i3, i4, i5, i6);
-    }
-
-    private static boolean decodeDeferredDeliveryAbs(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 48) {
-            read -= 48;
-            z = true;
-            bearerData.deferredDeliveryTimeAbsolute = TimeStamp.fromByteArray(bitwiseInputStream.readByteArray(48));
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "DEFERRED_DELIVERY_TIME_ABSOLUTE decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        return z2;
-    }
-
-    private static boolean decodeDeferredDeliveryRel(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.validityPeriodRelative = bitwiseInputStream.read(8);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "DEFERRED_DELIVERY_TIME_RELATIVE decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.validityPeriodRelativeSet = z2;
-        return z2;
-    }
-
-    private static boolean decodeDepositIndex(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 16) {
-            read -= 16;
-            z = true;
-            bearerData.depositIndex = (bitwiseInputStream.read(8) << 8) | bitwiseInputStream.read(8);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "MESSAGE_DEPOSIT_INDEX decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        return z2;
-    }
-
-    private static boolean decodeDisplayMode(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.displayMode = bitwiseInputStream.read(2);
-            bitwiseInputStream.skip(6);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "DISPLAY_MODE decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.displayModeSet = z2;
-        return z2;
-    }
-
-    private static String decodeDtmfSmsAddress(byte[] bArr, int i) throws CodingException {
-        StringBuffer stringBuffer = new StringBuffer(i);
-        for (int i2 = 0; i2 < i; i2++) {
-            int i3 = (bArr[i2 / 2] >>> (4 - ((i2 % 2) * 4))) & 15;
-            if (i3 >= 1 && i3 <= 9) {
-                stringBuffer.append(Integer.toString(i3, 10));
-            } else if (i3 == 10) {
-                stringBuffer.append('0');
-            } else if (i3 == 11) {
-                stringBuffer.append('*');
-            } else if (i3 == 12) {
-                stringBuffer.append('#');
-            } else {
-                throw new CodingException("invalid SMS address DTMF code (" + i3 + ")");
-            }
-        }
-        return stringBuffer.toString();
-    }
-
-    private static String decodeGsmDcs(byte[] bArr, int i, int i2, int i3) throws CodingException {
-        switch ((i3 >> 2) & 3) {
-            case 0:
-                return decode7bitGsm(bArr, i, i2);
-            case 1:
-                return decodeUtf8(bArr, i, i2);
-            case 2:
-                return decodeUtf16(bArr, i, i2);
-            default:
-                throw new CodingException("unsupported user msgType encoding (" + i3 + ")");
-        }
-    }
-
-    private static void decodeIs91(BearerData bearerData) throws AccessException, CodingException {
-        switch (bearerData.userData.msgType) {
-            case 130:
-                decodeIs91VoicemailStatus(bearerData);
-                return;
-            case 131:
-            case 133:
-                decodeIs91ShortMessage(bearerData);
-                return;
-            case 132:
-                decodeIs91Cli(bearerData);
-                return;
-            default:
-                throw new CodingException("unsupported IS-91 message type (" + bearerData.userData.msgType + ")");
-        }
-    }
-
-    private static void decodeIs91Cli(BearerData bearerData) throws CodingException {
-        int available = new BitwiseInputStream(bearerData.userData.payload).available() / 4;
-        int i = bearerData.userData.numFields;
-        if (available > 14 || available < 3 || available < i) {
-            throw new CodingException("IS-91 voicemail status decoding failed");
-        }
-        CdmaSmsAddress cdmaSmsAddress = new CdmaSmsAddress();
-        cdmaSmsAddress.digitMode = 0;
-        cdmaSmsAddress.origBytes = bearerData.userData.payload;
-        cdmaSmsAddress.numberOfDigits = (byte) i;
-        decodeSmsAddress(cdmaSmsAddress);
-        bearerData.callbackNumber = cdmaSmsAddress;
-    }
-
-    private static void decodeIs91ShortMessage(BearerData bearerData) throws AccessException, CodingException {
-        BitwiseInputStream bitwiseInputStream = new BitwiseInputStream(bearerData.userData.payload);
-        int available = bitwiseInputStream.available() / 6;
-        int i = bearerData.userData.numFields;
-        if (i > 14 || available < i) {
-            throw new CodingException("IS-91 short message decoding failed");
-        }
-        StringBuffer stringBuffer = new StringBuffer(available);
-        for (available = 0; available < i; available++) {
-            stringBuffer.append(UserData.ASCII_MAP[bitwiseInputStream.read(6)]);
-        }
-        bearerData.userData.payloadStr = stringBuffer.toString();
-    }
-
-    private static void decodeIs91VoicemailStatus(BearerData bearerData) throws AccessException, CodingException {
-        BitwiseInputStream bitwiseInputStream = new BitwiseInputStream(bearerData.userData.payload);
-        int available = bitwiseInputStream.available() / 6;
-        int i = bearerData.userData.numFields;
-        if (available > 14 || available < 3 || available < i) {
-            throw new CodingException("IS-91 voicemail status decoding failed");
-        }
-        try {
-            StringBuffer stringBuffer = new StringBuffer(available);
-            while (bitwiseInputStream.available() >= 6) {
-                stringBuffer.append(UserData.ASCII_MAP[bitwiseInputStream.read(6)]);
-            }
-            String stringBuffer2 = stringBuffer.toString();
-            bearerData.numberOfMessages = Integer.parseInt(stringBuffer2.substring(0, 2));
-            char charAt = stringBuffer2.charAt(2);
-            if (charAt == ' ') {
-                bearerData.priority = 0;
-            } else if (charAt == '!') {
-                bearerData.priority = 2;
-            } else {
-                throw new CodingException("IS-91 voicemail status decoding failed: illegal priority setting (" + charAt + ")");
-            }
-            bearerData.priorityIndicatorSet = true;
-            bearerData.userData.payloadStr = stringBuffer2.substring(3, i - 3);
-        } catch (NumberFormatException e) {
-            throw new CodingException("IS-91 voicemail status decoding failed: " + e);
-        } catch (IndexOutOfBoundsException e2) {
-            throw new CodingException("IS-91 voicemail status decoding failed: " + e2);
-        }
-    }
-
-    private static boolean decodeLanguageIndicator(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.language = bitwiseInputStream.read(8);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "LANGUAGE_INDICATOR decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.languageIndicatorSet = z2;
-        return z2;
-    }
-
-    private static String decodeLatin(byte[] bArr, int i, int i2) throws CodingException {
-        return decodeCharset(bArr, i, i2, 1, "ISO-8859-1");
-    }
-
-    private static boolean decodeMessageId(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        boolean z2 = true;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 24) {
-            read -= 24;
-            bearerData.messageType = bitwiseInputStream.read(4);
-            bearerData.messageId = bitwiseInputStream.read(8) << 8;
-            bearerData.messageId |= bitwiseInputStream.read(8);
-            if (bitwiseInputStream.read(1) == 1) {
-                z = true;
-            }
-            bearerData.hasUserDataHeader = z;
-            bitwiseInputStream.skip(3);
-        } else {
-            z2 = false;
-        }
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "MESSAGE_IDENTIFIER decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        return z2;
-    }
-
-    private static boolean decodeMsgCenterTimeStamp(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 48) {
-            read -= 48;
-            z = true;
-            bearerData.msgCenterTimeStamp = TimeStamp.fromByteArray(bitwiseInputStream.readByteArray(48));
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "MESSAGE_CENTER_TIME_STAMP decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        return z2;
-    }
-
-    private static boolean decodeMsgCount(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.numberOfMessages = IccUtils.cdmaBcdByteToInt((byte) bitwiseInputStream.read(8));
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "NUMBER_OF_MESSAGES decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        return z2;
-    }
-
-    private static boolean decodeMsgDeliveryAlert(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.alert = bitwiseInputStream.read(2);
-            bitwiseInputStream.skip(6);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "ALERT_ON_MESSAGE_DELIVERY decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.alertIndicatorSet = z2;
-        return z2;
-    }
-
-    private static boolean decodeMsgStatus(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.errorClass = bitwiseInputStream.read(2);
-            bearerData.messageStatus = bitwiseInputStream.read(6);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "MESSAGE_STATUS decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.messageStatusSet = z2;
-        return z2;
-    }
-
-    private static boolean decodePriorityIndicator(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.priority = bitwiseInputStream.read(2);
-            bitwiseInputStream.skip(6);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "PRIORITY_INDICATOR decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.priorityIndicatorSet = z2;
-        return z2;
-    }
-
-    private static boolean decodePrivacyIndicator(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.privacy = bitwiseInputStream.read(2);
-            bitwiseInputStream.skip(6);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "PRIVACY_INDICATOR decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.privacyIndicatorSet = z2;
-        return z2;
-    }
-
-    private static boolean decodeReplyOption(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        int i;
-        boolean z = false;
-        boolean z2 = true;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            i = read - 8;
-            bearerData.userAckReq = bitwiseInputStream.read(1) == 1;
-            bearerData.deliveryAckReq = bitwiseInputStream.read(1) == 1;
-            bearerData.readAckReq = bitwiseInputStream.read(1) == 1;
-            if (bitwiseInputStream.read(1) == 1) {
-                z = true;
-            }
-            bearerData.reportReq = z;
-            bitwiseInputStream.skip(4);
-        } else {
-            z2 = false;
-            i = read;
-        }
-        if (!z2 || i > 0) {
-            Rlog.d(LOG_TAG, "REPLY_OPTION decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + i + ")");
-        }
-        bitwiseInputStream.skip(i);
-        return z2;
-    }
-
-    private static boolean decodeReserved(BearerData bearerData, BitwiseInputStream bitwiseInputStream, int i) throws AccessException, CodingException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8);
-        int i2 = read * 8;
-        if (i2 <= bitwiseInputStream.available()) {
-            z = true;
-            bitwiseInputStream.skip(i2);
-        }
-        Rlog.d(LOG_TAG, "RESERVED bearer data subparameter " + i + " decode " + (z ? "succeeded" : "failed") + " (param bits = " + i2 + ")");
-        if (z) {
-            return z;
-        }
-        throw new CodingException("RESERVED bearer data subparameter " + i + " had invalid SUBPARAM_LEN " + read);
-    }
-
-    private static boolean decodeServiceCategoryProgramData(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException, CodingException {
-        if (bitwiseInputStream.available() < 13) {
-            throw new CodingException("SERVICE_CATEGORY_PROGRAM_DATA decode failed: only " + bitwiseInputStream.available() + " bits available");
-        }
-        int read = bitwiseInputStream.read(8);
-        int read2 = bitwiseInputStream.read(5);
-        int i = (read * 8) - 5;
-        if (bitwiseInputStream.available() < i) {
-            throw new CodingException("SERVICE_CATEGORY_PROGRAM_DATA decode failed: only " + bitwiseInputStream.available() + " bits available (" + i + " bits expected)");
-        }
-        ArrayList arrayList = new ArrayList();
-        boolean z = false;
-        while (i >= 48) {
-            int read3 = bitwiseInputStream.read(4);
-            int read4 = bitwiseInputStream.read(8);
-            int read5 = bitwiseInputStream.read(8);
-            int read6 = bitwiseInputStream.read(8);
-            int read7 = bitwiseInputStream.read(8);
-            int read8 = bitwiseInputStream.read(4);
-            read = bitwiseInputStream.read(8);
-            i -= 48;
-            int bitsForNumFields = getBitsForNumFields(read2, read);
-            if (i < bitsForNumFields) {
-                throw new CodingException("category name is " + bitsForNumFields + " bits in length," + " but there are only " + i + " bits available");
-            }
-            UserData userData = new UserData();
-            userData.msgEncoding = read2;
-            userData.msgEncodingSet = true;
-            userData.numFields = read;
-            userData.payload = bitwiseInputStream.readByteArray(bitsForNumFields);
-            bitsForNumFields = i - bitsForNumFields;
-            decodeUserDataPayload(userData, false);
-            arrayList.add(new CdmaSmsCbProgramData(read3, (read4 << 8) | read5, read6, read7, read8, userData.payloadStr));
-            z = true;
-            i = bitsForNumFields;
-        }
-        if (!z || i > 0) {
-            Rlog.d(LOG_TAG, "SERVICE_CATEGORY_PROGRAM_DATA decode " + (z ? "succeeded" : "failed") + " (extra bits = " + i + ')');
-        }
-        bitwiseInputStream.skip(i);
-        bearerData.serviceCategoryProgramData = arrayList;
-        return z;
-    }
-
-    private static String decodeShiftJis(byte[] bArr, int i, int i2) throws CodingException {
-        return decodeCharset(bArr, i, i2, 1, "Shift_JIS");
-    }
-
-    private static void decodeSmsAddress(CdmaSmsAddress cdmaSmsAddress) throws CodingException {
-        if (cdmaSmsAddress.digitMode == 1) {
-            try {
-                cdmaSmsAddress.address = new String(cdmaSmsAddress.origBytes, 0, cdmaSmsAddress.origBytes.length, "US-ASCII");
-                return;
-            } catch (UnsupportedEncodingException e) {
-                throw new CodingException("invalid SMS address ASCII code");
-            }
-        }
-        cdmaSmsAddress.address = decodeDtmfSmsAddress(cdmaSmsAddress.origBytes, cdmaSmsAddress.numberOfDigits);
-    }
-
-    private static boolean decodeUserData(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        int i = 5;
-        int read = bitwiseInputStream.read(8);
-        bearerData.userData = new UserData();
-        bearerData.userData.msgEncoding = bitwiseInputStream.read(5);
-        bearerData.userData.msgEncodingSet = true;
-        bearerData.userData.msgType = 0;
-        if (bearerData.userData.msgEncoding == 1 || bearerData.userData.msgEncoding == 10) {
-            bearerData.userData.msgType = bitwiseInputStream.read(8);
-            i = 13;
-        }
-        bearerData.userData.numFields = bitwiseInputStream.read(8);
-        bearerData.userData.payload = bitwiseInputStream.readByteArray((read * 8) - (i + 8));
-        return true;
-    }
-
-    private static void decodeUserDataPayload(UserData userData, boolean z) throws CodingException {
-        int i;
-        if (z) {
-            int i2 = userData.payload[0] & 255;
-            i = (i2 + 1) + 0;
-            byte[] bArr = new byte[i2];
-            System.arraycopy(userData.payload, 1, bArr, 0, i2);
-            userData.userDataHeader = SmsHeader.fromByteArray(bArr);
-        } else {
-            i = 0;
-        }
-        switch (userData.msgEncoding) {
-            case 0:
-                boolean z2 = Resources.getSystem().getBoolean(17956956);
-                byte[] bArr2 = new byte[userData.numFields];
-                System.arraycopy(userData.payload, 0, bArr2, 0, userData.numFields < userData.payload.length ? userData.numFields : userData.payload.length);
-                userData.payload = bArr2;
-                if (z2) {
-                    userData.payloadStr = decodeUtf8(userData.payload, i, userData.numFields);
-                    return;
-                } else {
-                    userData.payloadStr = decodeLatin(userData.payload, i, userData.numFields);
-                    return;
-                }
-            case 2:
-            case 3:
-                userData.payloadStr = decode7bitAscii(userData.payload, i, userData.numFields);
-                return;
-            case 4:
-                userData.payloadStr = decodeUtf16(userData.payload, i, userData.numFields);
-                return;
-            case 5:
-                userData.payloadStr = decodeShiftJis(userData.payload, i, userData.numFields);
-                return;
-            case 8:
-                userData.payloadStr = decodeLatin(userData.payload, i, userData.numFields);
-                return;
-            case 9:
-                userData.payloadStr = decode7bitGsm(userData.payload, i, userData.numFields);
-                return;
-            case 10:
-                userData.payloadStr = decodeGsmDcs(userData.payload, i, userData.numFields, userData.msgType);
-                return;
-            default:
-                throw new CodingException("unsupported user data encoding (" + userData.msgEncoding + ")");
-        }
-    }
-
-    private static boolean decodeUserResponseCode(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.userResponseCode = bitwiseInputStream.read(8);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "USER_RESPONSE_CODE decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.userResponseCodeSet = z2;
-        return z2;
-    }
-
-    private static String decodeUtf16(byte[] bArr, int i, int i2) throws CodingException {
-        return decodeCharset(bArr, i, i2 - (((i % 2) + i) / 2), 2, "utf-16be");
-    }
-
-    private static String decodeUtf8(byte[] bArr, int i, int i2) throws CodingException {
-        return decodeCharset(bArr, i, i2, 1, "UTF-8");
-    }
-
-    private static boolean decodeValidityAbs(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 48) {
-            read -= 48;
-            z = true;
-            bearerData.validityPeriodAbsolute = TimeStamp.fromByteArray(bitwiseInputStream.readByteArray(48));
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "VALIDITY_PERIOD_ABSOLUTE decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        return z2;
-    }
-
-    private static boolean decodeValidityRel(BearerData bearerData, BitwiseInputStream bitwiseInputStream) throws AccessException {
-        boolean z = false;
-        int read = bitwiseInputStream.read(8) * 8;
-        if (read >= 8) {
-            read -= 8;
-            z = true;
-            bearerData.deferredDeliveryTimeRelative = bitwiseInputStream.read(8);
-        }
-        boolean z2 = z;
-        if (!z2 || read > 0) {
-            Rlog.d(LOG_TAG, "VALIDITY_PERIOD_RELATIVE decode " + (z2 ? "succeeded" : "failed") + " (extra bits = " + read + ")");
-        }
-        bitwiseInputStream.skip(read);
-        bearerData.deferredDeliveryTimeRelativeSet = z2;
-        return z2;
-    }
-
-    public static byte[] encode(BearerData bearerData) {
-        boolean z = true;
-        if (bearerData.userData == null || bearerData.userData.userDataHeader == null) {
-            z = false;
-        }
-        bearerData.hasUserDataHeader = z;
-        try {
-            BitwiseOutputStream bitwiseOutputStream = new BitwiseOutputStream(PduPart.P_CONTENT_TRANSFER_ENCODING);
-            bitwiseOutputStream.write(8, 0);
-            encodeMessageId(bearerData, bitwiseOutputStream);
-            if (bearerData.userData != null) {
-                bitwiseOutputStream.write(8, 1);
-                encodeUserData(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.callbackNumber != null) {
-                bitwiseOutputStream.write(8, 14);
-                encodeCallbackNumber(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.userAckReq || bearerData.deliveryAckReq || bearerData.readAckReq || bearerData.reportReq) {
-                bitwiseOutputStream.write(8, 10);
-                encodeReplyOption(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.numberOfMessages != 0) {
-                bitwiseOutputStream.write(8, 11);
-                encodeMsgCount(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.validityPeriodRelativeSet) {
-                bitwiseOutputStream.write(8, 5);
-                encodeValidityPeriodRel(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.privacyIndicatorSet) {
-                bitwiseOutputStream.write(8, 9);
-                encodePrivacyIndicator(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.languageIndicatorSet) {
-                bitwiseOutputStream.write(8, 13);
-                encodeLanguageIndicator(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.displayModeSet) {
-                bitwiseOutputStream.write(8, 15);
-                encodeDisplayMode(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.priorityIndicatorSet) {
-                bitwiseOutputStream.write(8, 8);
-                encodePriorityIndicator(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.alertIndicatorSet) {
-                bitwiseOutputStream.write(8, 12);
-                encodeMsgDeliveryAlert(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.messageStatusSet) {
-                bitwiseOutputStream.write(8, 20);
-                encodeMsgStatus(bearerData, bitwiseOutputStream);
-            }
-            if (bearerData.serviceCategoryProgramResults != null) {
-                bitwiseOutputStream.write(8, 19);
-                encodeScpResults(bearerData, bitwiseOutputStream);
-            }
-            return bitwiseOutputStream.toByteArray();
-        } catch (BitwiseOutputStream.AccessException e) {
-            Rlog.e(LOG_TAG, "BearerData encode failed: " + e);
-            return null;
-        } catch (CodingException e2) {
-            Rlog.e(LOG_TAG, "BearerData encode failed: " + e2);
-            return null;
-        }
-    }
-
-    private static void encode16bitEms(UserData userData, byte[] bArr) throws CodingException {
-        byte[] encodeUtf16 = encodeUtf16(userData.payloadStr);
-        int length = bArr.length + 1;
-        int i = (length + 1) / 2;
-        int length2 = encodeUtf16.length / 2;
-        userData.msgEncoding = 4;
-        userData.msgEncodingSet = true;
-        userData.numFields = i + length2;
-        userData.payload = new byte[(userData.numFields * 2)];
-        userData.payload[0] = (byte) bArr.length;
-        System.arraycopy(bArr, 0, userData.payload, 1, bArr.length);
-        System.arraycopy(encodeUtf16, 0, userData.payload, length, encodeUtf16.length);
-    }
-
-    private static byte[] encode7bitAscii(String str, boolean z) throws CodingException {
-        try {
-            BitwiseOutputStream bitwiseOutputStream = new BitwiseOutputStream(str.length());
-            int length = str.length();
-            for (int i = 0; i < length; i++) {
-                int i2 = UserData.charToAscii.get(str.charAt(i), -1);
-                if (i2 != -1) {
-                    bitwiseOutputStream.write(7, i2);
-                } else if (z) {
-                    bitwiseOutputStream.write(7, 32);
-                } else {
-                    throw new CodingException("cannot ASCII encode (" + str.charAt(i) + ")");
-                }
-            }
-            return bitwiseOutputStream.toByteArray();
-        } catch (BitwiseOutputStream.AccessException e) {
-            throw new CodingException("7bit ASCII encode failed: " + e);
-        }
-    }
-
-    private static void encode7bitAsciiEms(UserData userData, byte[] bArr, boolean z) throws CodingException {
-        int i = 1;
-        int i2 = 0;
-        try {
-            Rlog.d(LOG_TAG, "encode7bitAsciiEms");
-            int length = bArr.length + 1;
-            int i3 = ((length * 8) + 6) / 7;
-            int i4 = (i3 * 7) - (length * 8);
-            String str = userData.payloadStr;
-            int length2 = str.length();
-            if (i4 <= 0) {
-                i = 0;
-            }
-            BitwiseOutputStream bitwiseOutputStream = new BitwiseOutputStream(i + length2);
-            bitwiseOutputStream.write(i4, 0);
-            while (i2 < length2) {
-                i = UserData.charToAscii.get(str.charAt(i2), -1);
-                if (i != -1) {
-                    bitwiseOutputStream.write(7, i);
-                } else if (z) {
-                    bitwiseOutputStream.write(7, 32);
-                } else {
-                    throw new CodingException("cannot ASCII encode (" + str.charAt(i2) + ")");
-                }
-                i2++;
-            }
-            byte[] toByteArray = bitwiseOutputStream.toByteArray();
-            userData.msgEncoding = 2;
-            userData.msgEncodingSet = true;
-            userData.numFields = userData.payloadStr.length() + i3;
-            userData.payload = new byte[(toByteArray.length + length)];
-            userData.payload[0] = (byte) bArr.length;
-            System.arraycopy(bArr, 0, userData.payload, 1, bArr.length);
-            System.arraycopy(toByteArray, 0, userData.payload, length, toByteArray.length);
-        } catch (BitwiseOutputStream.AccessException e) {
-            throw new CodingException("7bit ASCII encode failed: " + e);
-        }
-    }
-
-    private static void encode7bitEms(UserData userData, byte[] bArr, boolean z) throws CodingException {
-        Gsm7bitCodingResult encode7bitGsm = encode7bitGsm(userData.payloadStr, (((bArr.length + 1) * 8) + 6) / 7, z);
-        userData.msgEncoding = 9;
-        userData.msgEncodingSet = true;
-        userData.numFields = encode7bitGsm.septets;
-        userData.payload = encode7bitGsm.data;
-        userData.payload[0] = (byte) bArr.length;
-        System.arraycopy(bArr, 0, userData.payload, 1, bArr.length);
-    }
-
-    private static Gsm7bitCodingResult encode7bitGsm(String str, int i, boolean z) throws CodingException {
-        boolean z2 = true;
-        if (z) {
-            z2 = false;
-        }
-        try {
-            byte[] stringToGsm7BitPacked = GsmAlphabet.stringToGsm7BitPacked(str, i, z2, 0, 0);
-            Gsm7bitCodingResult gsm7bitCodingResult = new Gsm7bitCodingResult();
-            gsm7bitCodingResult.data = new byte[(stringToGsm7BitPacked.length - 1)];
-            System.arraycopy(stringToGsm7BitPacked, 1, gsm7bitCodingResult.data, 0, stringToGsm7BitPacked.length - 1);
-            gsm7bitCodingResult.septets = stringToGsm7BitPacked[0] & 255;
-            return gsm7bitCodingResult;
-        } catch (EncodeException e) {
-            throw new CodingException("7bit GSM encode failed: " + e);
-        }
-    }
-
-    private static void encodeCallbackNumber(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException, CodingException {
-        int i;
-        CdmaSmsAddress cdmaSmsAddress = bearerData.callbackNumber;
-        encodeCdmaSmsAddress(cdmaSmsAddress);
-        int i2 = 9;
-        if (cdmaSmsAddress.digitMode == 1) {
-            i2 = 16;
-            i = cdmaSmsAddress.numberOfDigits * 8;
-        } else {
-            i = cdmaSmsAddress.numberOfDigits * 4;
-        }
-        int i3 = i2 + i;
-        i2 = (i3 % 8 > 0 ? 1 : 0) + (i3 / 8);
-        i3 = (i2 * 8) - i3;
-        bitwiseOutputStream.write(8, i2);
-        bitwiseOutputStream.write(1, cdmaSmsAddress.digitMode);
-        if (cdmaSmsAddress.digitMode == 1) {
-            bitwiseOutputStream.write(3, cdmaSmsAddress.ton);
-            bitwiseOutputStream.write(4, cdmaSmsAddress.numberPlan);
-        }
-        bitwiseOutputStream.write(8, cdmaSmsAddress.numberOfDigits);
-        bitwiseOutputStream.writeByteArray(i, cdmaSmsAddress.origBytes);
-        if (i3 > 0) {
-            bitwiseOutputStream.write(i3, 0);
-        }
-    }
-
-    private static void encodeCdmaSmsAddress(CdmaSmsAddress cdmaSmsAddress) throws CodingException {
-        if (cdmaSmsAddress.digitMode == 1) {
-            try {
-                cdmaSmsAddress.origBytes = cdmaSmsAddress.address.getBytes("US-ASCII");
-                return;
-            } catch (UnsupportedEncodingException e) {
-                throw new CodingException("invalid SMS address, cannot convert to ASCII");
-            }
-        }
-        cdmaSmsAddress.origBytes = encodeDtmfSmsAddress(cdmaSmsAddress.address);
-    }
-
-    private static void encodeDisplayMode(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(2, bearerData.displayMode);
-        bitwiseOutputStream.skip(6);
-    }
-
-    private static byte[] encodeDtmfSmsAddress(String str) {
-        int i = 0;
-        int length = str.length();
-        int i2 = length * 4;
-        byte[] bArr = new byte[((i2 % 8 > 0 ? 1 : 0) + (i2 / 8))];
-        while (i < length) {
-            char charAt = str.charAt(i);
-            if (charAt >= '1' && charAt <= '9') {
-                i2 = charAt - 48;
-            } else if (charAt == '0') {
-                i2 = 10;
-            } else if (charAt == '*') {
-                i2 = 11;
-            } else if (charAt != '#') {
-                return null;
-            } else {
-                i2 = 12;
-            }
-            int i3 = i / 2;
-            bArr[i3] = (byte) ((i2 << (4 - ((i % 2) * 4))) | bArr[i3]);
-            i++;
-        }
-        return bArr;
-    }
-
-    private static void encodeEmsUserDataPayload(UserData userData) throws CodingException {
-        byte[] toByteArray = SmsHeader.toByteArray(userData.userDataHeader);
-        if (!userData.msgEncodingSet) {
-            try {
-                encode7bitEms(userData, toByteArray, false);
-            } catch (CodingException e) {
-                encode16bitEms(userData, toByteArray);
-            }
-        } else if (userData.msgEncoding == 9) {
-            encode7bitEms(userData, toByteArray, true);
-        } else if (userData.msgEncoding == 4) {
-            encode16bitEms(userData, toByteArray);
-        } else if (userData.msgEncoding == 2) {
-            encode7bitAsciiEms(userData, toByteArray, true);
-        } else {
-            throw new CodingException("unsupported EMS user data encoding (" + userData.msgEncoding + ")");
-        }
-    }
-
-    private static void encodeLanguageIndicator(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(8, bearerData.language);
-    }
-
-    private static void encodeMessageId(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 3);
-        bitwiseOutputStream.write(4, bearerData.messageType);
-        bitwiseOutputStream.write(8, bearerData.messageId >> 8);
-        bitwiseOutputStream.write(8, bearerData.messageId);
-        bitwiseOutputStream.write(1, bearerData.hasUserDataHeader ? 1 : 0);
-        bitwiseOutputStream.skip(3);
-    }
-
-    private static void encodeMsgCount(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(8, bearerData.numberOfMessages);
-    }
-
-    private static void encodeMsgDeliveryAlert(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(2, bearerData.alert);
-        bitwiseOutputStream.skip(6);
-    }
-
-    private static void encodeMsgStatus(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(2, bearerData.errorClass);
-        bitwiseOutputStream.write(6, bearerData.messageStatus);
-    }
-
-    private static void encodePriorityIndicator(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(2, bearerData.priority);
-        bitwiseOutputStream.skip(6);
-    }
-
-    private static void encodePrivacyIndicator(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(2, bearerData.privacy);
-        bitwiseOutputStream.skip(6);
-    }
-
-    private static void encodeReplyOption(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(1, bearerData.userAckReq ? 1 : 0);
-        bitwiseOutputStream.write(1, bearerData.deliveryAckReq ? 1 : 0);
-        bitwiseOutputStream.write(1, bearerData.readAckReq ? 1 : 0);
-        bitwiseOutputStream.write(1, bearerData.reportReq ? 1 : 0);
-        bitwiseOutputStream.write(4, 0);
-    }
-
-    private static void encodeScpResults(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        ArrayList arrayList = bearerData.serviceCategoryProgramResults;
-        bitwiseOutputStream.write(8, arrayList.size() * 4);
-        Iterator it = arrayList.iterator();
-        while (it.hasNext()) {
-            CdmaSmsCbProgramResults cdmaSmsCbProgramResults = (CdmaSmsCbProgramResults) it.next();
-            int category = cdmaSmsCbProgramResults.getCategory();
-            bitwiseOutputStream.write(8, category >> 8);
-            bitwiseOutputStream.write(8, category);
-            bitwiseOutputStream.write(8, cdmaSmsCbProgramResults.getLanguage());
-            bitwiseOutputStream.write(4, cdmaSmsCbProgramResults.getCategoryResult());
-            bitwiseOutputStream.skip(4);
-        }
-    }
-
-    private static byte[] encodeShiftJis(String str) throws CodingException {
-        try {
-            return str.getBytes("Shift_JIS");
-        } catch (UnsupportedEncodingException e) {
-            throw new CodingException("Shift-JIS encode failed: " + e);
-        }
-    }
-
-    private static void encodeUserData(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException, CodingException {
-        encodeUserDataPayload(bearerData.userData);
-        bearerData.hasUserDataHeader = bearerData.userData.userDataHeader != null;
-        if (bearerData.userData.payload.length > 140) {
-            throw new CodingException("encoded user data too large (" + bearerData.userData.payload.length + " > " + 140 + " bytes)");
-        }
-        int length = (bearerData.userData.payload.length * 8) - bearerData.userData.paddingBits;
-        int i = length + 13;
-        if (bearerData.userData.msgEncoding == 1 || bearerData.userData.msgEncoding == 10) {
-            i += 8;
-        }
-        int i2 = (i % 8 > 0 ? 1 : 0) + (i / 8);
-        i = (i2 * 8) - i;
-        bitwiseOutputStream.write(8, i2);
-        bitwiseOutputStream.write(5, bearerData.userData.msgEncoding);
-        if (bearerData.userData.msgEncoding == 1 || bearerData.userData.msgEncoding == 10) {
-            bitwiseOutputStream.write(8, bearerData.userData.msgType);
-        }
-        bitwiseOutputStream.write(8, bearerData.userData.numFields);
-        bitwiseOutputStream.writeByteArray(length, bearerData.userData.payload);
-        if (i > 0) {
-            bitwiseOutputStream.write(i, 0);
-        }
-    }
-
-    private static void encodeUserDataPayload(UserData userData) throws CodingException {
-        if (userData.payloadStr == null && userData.msgEncoding != 0) {
-            Rlog.e(LOG_TAG, "user data with null payloadStr");
-            userData.payloadStr = "";
-        }
-        if (userData.userDataHeader != null) {
-            encodeEmsUserDataPayload(userData);
-        } else if (!userData.msgEncodingSet) {
-            try {
-                userData.payload = encode7bitAscii(userData.payloadStr, false);
-                userData.msgEncoding = 2;
-            } catch (CodingException e) {
-                userData.payload = encodeUtf16(userData.payloadStr);
-                userData.msgEncoding = 4;
-            }
-            userData.numFields = userData.payloadStr.length();
-            userData.msgEncodingSet = true;
-        } else if (userData.msgEncoding != 0) {
-            if (userData.payloadStr == null) {
-                Rlog.e(LOG_TAG, "non-octet user data with null payloadStr");
-                userData.payloadStr = "";
-            }
-            if (userData.msgEncoding == 9) {
-                Gsm7bitCodingResult encode7bitGsm = encode7bitGsm(userData.payloadStr, 0, true);
-                userData.payload = encode7bitGsm.data;
-                userData.numFields = encode7bitGsm.septets;
-            } else if (userData.msgEncoding == 2) {
-                userData.payload = encode7bitAscii(userData.payloadStr, true);
-                userData.numFields = userData.payloadStr.length();
-            } else if (userData.msgEncoding == 4) {
-                userData.payload = encodeUtf16(userData.payloadStr);
-                userData.numFields = userData.payloadStr.length();
-            } else if (userData.msgEncoding == 5) {
-                userData.payload = encodeShiftJis(userData.payloadStr);
-                userData.numFields = userData.payload.length;
-            } else {
-                throw new CodingException("unsupported user data encoding (" + userData.msgEncoding + ")");
-            }
-        } else if (userData.payload == null) {
-            Rlog.e(LOG_TAG, "user data with octet encoding but null payload");
-            userData.payload = new byte[0];
-            userData.numFields = 0;
-        } else {
-            userData.numFields = userData.payload.length;
-        }
-    }
-
-    private static byte[] encodeUtf16(String str) throws CodingException {
-        try {
-            return str.getBytes("utf-16be");
-        } catch (UnsupportedEncodingException e) {
-            throw new CodingException("UTF-16 encode failed: " + e);
-        }
-    }
-
-    private static void encodeValidityPeriodRel(BearerData bearerData, BitwiseOutputStream bitwiseOutputStream) throws BitwiseOutputStream.AccessException {
-        bitwiseOutputStream.write(8, 1);
-        bitwiseOutputStream.write(8, bearerData.validityPeriodRelative);
-    }
-
-    private static int getBitsForNumFields(int i, int i2) throws CodingException {
-        switch (i) {
-            case 0:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-                return i2 * 8;
-            case 2:
-            case 3:
-            case 9:
-                return i2 * 7;
-            case 4:
-                return i2 * 16;
-            default:
-                throw new CodingException("unsupported message encoding (" + i + ')');
-        }
+    public String getLanguage() {
+        return getLanguageCodeForValue(this.language);
     }
 
-    private static String getLanguageCodeForValue(int i) {
-        switch (i) {
+    private static String getLanguageCodeForValue(int languageValue) {
+        switch (languageValue) {
             case 1:
                 return "en";
             case 2:
@@ -1518,15 +228,1117 @@ public final class BearerData {
         }
     }
 
-    private static boolean isCmasAlertCategory(int i) {
-        return i >= 4096 && i <= SmsEnvelope.SERVICE_CATEGORY_CMAS_LAST_RESERVED_VALUE;
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("BearerData ");
+        builder.append("{ messageType=" + this.messageType);
+        builder.append(", messageId=" + this.messageId);
+        builder.append(", priority=" + (this.priorityIndicatorSet ? Integer.valueOf(this.priority) : "unset"));
+        builder.append(", privacy=" + (this.privacyIndicatorSet ? Integer.valueOf(this.privacy) : "unset"));
+        builder.append(", alert=" + (this.alertIndicatorSet ? Integer.valueOf(this.alert) : "unset"));
+        builder.append(", displayMode=" + (this.displayModeSet ? Integer.valueOf(this.displayMode) : "unset"));
+        builder.append(", language=" + (this.languageIndicatorSet ? Integer.valueOf(this.language) : "unset"));
+        builder.append(", errorClass=" + (this.messageStatusSet ? Integer.valueOf(this.errorClass) : "unset"));
+        builder.append(", msgStatus=" + (this.messageStatusSet ? Integer.valueOf(this.messageStatus) : "unset"));
+        builder.append(", msgCenterTimeStamp=" + (this.msgCenterTimeStamp != null ? this.msgCenterTimeStamp : "unset"));
+        builder.append(", validityPeriodAbsolute=" + (this.validityPeriodAbsolute != null ? this.validityPeriodAbsolute : "unset"));
+        builder.append(", validityPeriodRelative=" + (this.validityPeriodRelativeSet ? Integer.valueOf(this.validityPeriodRelative) : "unset"));
+        builder.append(", deferredDeliveryTimeAbsolute=" + (this.deferredDeliveryTimeAbsolute != null ? this.deferredDeliveryTimeAbsolute : "unset"));
+        builder.append(", deferredDeliveryTimeRelative=" + (this.deferredDeliveryTimeRelativeSet ? Integer.valueOf(this.deferredDeliveryTimeRelative) : "unset"));
+        builder.append(", userAckReq=" + this.userAckReq);
+        builder.append(", deliveryAckReq=" + this.deliveryAckReq);
+        builder.append(", readAckReq=" + this.readAckReq);
+        builder.append(", reportReq=" + this.reportReq);
+        builder.append(", numberOfMessages=" + this.numberOfMessages);
+        builder.append(", callbackNumber=" + this.callbackNumber);
+        builder.append(", depositIndex=" + this.depositIndex);
+        builder.append(", hasUserDataHeader=" + this.hasUserDataHeader);
+        builder.append(", userData=" + this.userData);
+        builder.append(" }");
+        return builder.toString();
     }
 
-    private static int serviceCategoryToCmasMessageClass(int i) {
-        switch (i) {
+    private static void encodeMessageId(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 3);
+        outStream.write(4, bData.messageType);
+        outStream.write(8, bData.messageId >> 8);
+        outStream.write(8, bData.messageId);
+        outStream.write(1, bData.hasUserDataHeader ? 1 : 0);
+        outStream.skip(3);
+    }
+
+    private static int countAsciiSeptets(CharSequence msg, boolean force) {
+        int msgLen = msg.length();
+        if (force) {
+            return msgLen;
+        }
+        for (int i = 0; i < msgLen; i++) {
+            if (UserData.charToAscii.get(msg.charAt(i), -1) == -1) {
+                return -1;
+            }
+        }
+        return msgLen;
+    }
+
+    public static GsmAlphabet.TextEncodingDetails calcTextEncodingDetails(CharSequence msg, boolean force7BitEncoding) {
+        int septets = countAsciiSeptets(msg, force7BitEncoding);
+        if (septets == -1 || septets > 160) {
+            GsmAlphabet.TextEncodingDetails ted = SmsMessage.calculateLength(msg, force7BitEncoding);
+            if (ted.msgCount != 1 || ted.codeUnitSize != 1) {
+                return ted;
+            }
+            ted.codeUnitCount = msg.length();
+            int octets = ted.codeUnitCount * 2;
+            if (octets > 140) {
+                int max_user_data_bytes_with_header = 134;
+                if (!android.telephony.SmsMessage.hasEmsSupport() && octets <= 1188) {
+                    max_user_data_bytes_with_header = 134 - 2;
+                }
+                ted.msgCount = ((max_user_data_bytes_with_header - 1) + octets) / max_user_data_bytes_with_header;
+                ted.codeUnitsRemaining = ((ted.msgCount * max_user_data_bytes_with_header) - octets) / 2;
+            } else {
+                ted.msgCount = 1;
+                ted.codeUnitsRemaining = (140 - octets) / 2;
+            }
+            ted.codeUnitSize = 3;
+            return ted;
+        }
+        GsmAlphabet.TextEncodingDetails ted2 = new GsmAlphabet.TextEncodingDetails();
+        ted2.msgCount = 1;
+        ted2.codeUnitCount = septets;
+        ted2.codeUnitsRemaining = 160 - septets;
+        ted2.codeUnitSize = 1;
+        return ted2;
+    }
+
+    private static byte[] encode7bitAscii(String msg, boolean force) throws CodingException {
+        try {
+            BitwiseOutputStream outStream = new BitwiseOutputStream(msg.length());
+            int msgLen = msg.length();
+            for (int i = 0; i < msgLen; i++) {
+                int charCode = UserData.charToAscii.get(msg.charAt(i), -1);
+                if (charCode != -1) {
+                    outStream.write(7, charCode);
+                } else if (force) {
+                    outStream.write(7, 32);
+                } else {
+                    throw new CodingException("cannot ASCII encode (" + msg.charAt(i) + ")");
+                }
+            }
+            return outStream.toByteArray();
+        } catch (BitwiseOutputStream.AccessException ex) {
+            throw new CodingException("7bit ASCII encode failed: " + ex);
+        }
+    }
+
+    private static byte[] encodeUtf16(String msg) throws CodingException {
+        try {
+            return msg.getBytes("utf-16be");
+        } catch (UnsupportedEncodingException ex) {
+            throw new CodingException("UTF-16 encode failed: " + ex);
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class Gsm7bitCodingResult {
+        byte[] data;
+        int septets;
+
+        private Gsm7bitCodingResult() {
+        }
+    }
+
+    private static Gsm7bitCodingResult encode7bitGsm(String msg, int septetOffset, boolean force) throws CodingException {
+        boolean z = true;
+        if (force) {
+            z = false;
+        }
+        try {
+            byte[] fullData = GsmAlphabet.stringToGsm7BitPacked(msg, septetOffset, z, 0, 0);
+            Gsm7bitCodingResult result = new Gsm7bitCodingResult();
+            result.data = new byte[fullData.length - 1];
+            System.arraycopy(fullData, 1, result.data, 0, fullData.length - 1);
+            result.septets = fullData[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+            return result;
+        } catch (EncodeException ex) {
+            throw new CodingException("7bit GSM encode failed: " + ex);
+        }
+    }
+
+    private static void encode7bitEms(UserData uData, byte[] udhData, boolean force) throws CodingException {
+        Gsm7bitCodingResult gcr = encode7bitGsm(uData.payloadStr, (((udhData.length + 1) * 8) + 6) / 7, force);
+        uData.msgEncoding = 9;
+        uData.msgEncodingSet = true;
+        uData.numFields = gcr.septets;
+        uData.payload = gcr.data;
+        uData.payload[0] = (byte) udhData.length;
+        System.arraycopy(udhData, 0, uData.payload, 1, udhData.length);
+    }
+
+    private static void encode16bitEms(UserData uData, byte[] udhData) throws CodingException {
+        byte[] payload = encodeUtf16(uData.payloadStr);
+        int udhBytes = udhData.length + 1;
+        uData.msgEncoding = 4;
+        uData.msgEncodingSet = true;
+        uData.numFields = ((udhBytes + 1) / 2) + (payload.length / 2);
+        uData.payload = new byte[uData.numFields * 2];
+        uData.payload[0] = (byte) udhData.length;
+        System.arraycopy(udhData, 0, uData.payload, 1, udhData.length);
+        System.arraycopy(payload, 0, uData.payload, udhBytes, payload.length);
+    }
+
+    private static void encode7bitAsciiEms(UserData uData, byte[] udhData, boolean force) throws CodingException {
+        try {
+            Rlog.d(LOG_TAG, "encode7bitAsciiEms");
+            int udhBytes = udhData.length + 1;
+            int udhSeptets = ((udhBytes * 8) + 6) / 7;
+            int paddingBits = (udhSeptets * 7) - (udhBytes * 8);
+            String msg = uData.payloadStr;
+            int msgLen = msg.length();
+            BitwiseOutputStream outStream = new BitwiseOutputStream((paddingBits > 0 ? 1 : 0) + msgLen);
+            outStream.write(paddingBits, 0);
+            for (int i = 0; i < msgLen; i++) {
+                int charCode = UserData.charToAscii.get(msg.charAt(i), -1);
+                if (charCode != -1) {
+                    outStream.write(7, charCode);
+                } else if (force) {
+                    outStream.write(7, 32);
+                } else {
+                    throw new CodingException("cannot ASCII encode (" + msg.charAt(i) + ")");
+                }
+            }
+            byte[] payload = outStream.toByteArray();
+            uData.msgEncoding = 2;
+            uData.msgEncodingSet = true;
+            uData.numFields = uData.payloadStr.length() + udhSeptets;
+            uData.payload = new byte[payload.length + udhBytes];
+            uData.payload[0] = (byte) udhData.length;
+            System.arraycopy(udhData, 0, uData.payload, 1, udhData.length);
+            System.arraycopy(payload, 0, uData.payload, udhBytes, payload.length);
+        } catch (BitwiseOutputStream.AccessException ex) {
+            throw new CodingException("7bit ASCII encode failed: " + ex);
+        }
+    }
+
+    private static void encodeEmsUserDataPayload(UserData uData) throws CodingException {
+        byte[] headerData = SmsHeader.toByteArray(uData.userDataHeader);
+        if (!uData.msgEncodingSet) {
+            try {
+                encode7bitEms(uData, headerData, false);
+            } catch (CodingException e) {
+                encode16bitEms(uData, headerData);
+            }
+        } else if (uData.msgEncoding == 9) {
+            encode7bitEms(uData, headerData, true);
+        } else if (uData.msgEncoding == 4) {
+            encode16bitEms(uData, headerData);
+        } else if (uData.msgEncoding == 2) {
+            encode7bitAsciiEms(uData, headerData, true);
+        } else {
+            throw new CodingException("unsupported EMS user data encoding (" + uData.msgEncoding + ")");
+        }
+    }
+
+    private static byte[] encodeShiftJis(String msg) throws CodingException {
+        try {
+            return msg.getBytes("Shift_JIS");
+        } catch (UnsupportedEncodingException ex) {
+            throw new CodingException("Shift-JIS encode failed: " + ex);
+        }
+    }
+
+    private static void encodeUserDataPayload(UserData uData) throws CodingException {
+        if (uData.payloadStr == null && uData.msgEncoding != 0) {
+            Rlog.e(LOG_TAG, "user data with null payloadStr");
+            uData.payloadStr = "";
+        }
+        if (uData.userDataHeader != null) {
+            encodeEmsUserDataPayload(uData);
+        } else if (!uData.msgEncodingSet) {
+            try {
+                uData.payload = encode7bitAscii(uData.payloadStr, false);
+                uData.msgEncoding = 2;
+            } catch (CodingException e) {
+                uData.payload = encodeUtf16(uData.payloadStr);
+                uData.msgEncoding = 4;
+            }
+            uData.numFields = uData.payloadStr.length();
+            uData.msgEncodingSet = true;
+        } else if (uData.msgEncoding != 0) {
+            if (uData.payloadStr == null) {
+                Rlog.e(LOG_TAG, "non-octet user data with null payloadStr");
+                uData.payloadStr = "";
+            }
+            if (uData.msgEncoding == 9) {
+                Gsm7bitCodingResult gcr = encode7bitGsm(uData.payloadStr, 0, true);
+                uData.payload = gcr.data;
+                uData.numFields = gcr.septets;
+            } else if (uData.msgEncoding == 2) {
+                uData.payload = encode7bitAscii(uData.payloadStr, true);
+                uData.numFields = uData.payloadStr.length();
+            } else if (uData.msgEncoding == 4) {
+                uData.payload = encodeUtf16(uData.payloadStr);
+                uData.numFields = uData.payloadStr.length();
+            } else if (uData.msgEncoding == 5) {
+                uData.payload = encodeShiftJis(uData.payloadStr);
+                uData.numFields = uData.payload.length;
+            } else {
+                throw new CodingException("unsupported user data encoding (" + uData.msgEncoding + ")");
+            }
+        } else if (uData.payload == null) {
+            Rlog.e(LOG_TAG, "user data with octet encoding but null payload");
+            uData.payload = new byte[0];
+            uData.numFields = 0;
+        } else {
+            uData.numFields = uData.payload.length;
+        }
+    }
+
+    private static void encodeUserData(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException, CodingException {
+        encodeUserDataPayload(bData.userData);
+        bData.hasUserDataHeader = bData.userData.userDataHeader != null;
+        if (bData.userData.payload.length > 140) {
+            throw new CodingException("encoded user data too large (" + bData.userData.payload.length + " > 140 bytes)");
+        }
+        int dataBits = (bData.userData.payload.length * 8) - bData.userData.paddingBits;
+        int paramBits = dataBits + 13;
+        if (bData.userData.msgEncoding == 1 || bData.userData.msgEncoding == 10) {
+            paramBits += 8;
+        }
+        int paramBytes = (paramBits / 8) + (paramBits % 8 > 0 ? 1 : 0);
+        int paddingBits = (paramBytes * 8) - paramBits;
+        outStream.write(8, paramBytes);
+        outStream.write(5, bData.userData.msgEncoding);
+        if (bData.userData.msgEncoding == 1 || bData.userData.msgEncoding == 10) {
+            outStream.write(8, bData.userData.msgType);
+        }
+        outStream.write(8, bData.userData.numFields);
+        outStream.writeByteArray(dataBits, bData.userData.payload);
+        if (paddingBits > 0) {
+            outStream.write(paddingBits, 0);
+        }
+    }
+
+    private static void encodeReplyOption(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(1, bData.userAckReq ? 1 : 0);
+        outStream.write(1, bData.deliveryAckReq ? 1 : 0);
+        outStream.write(1, bData.readAckReq ? 1 : 0);
+        outStream.write(1, bData.reportReq ? 1 : 0);
+        outStream.write(4, 0);
+    }
+
+    private static byte[] encodeDtmfSmsAddress(String address) {
+        int val;
+        int digits = address.length();
+        int dataBits = digits * 4;
+        byte[] rawData = new byte[(dataBits / 8) + (dataBits % 8 > 0 ? 1 : 0)];
+        for (int i = 0; i < digits; i++) {
+            char c = address.charAt(i);
+            if (c >= '1' && c <= '9') {
+                val = c - '0';
+            } else if (c == '0') {
+                val = 10;
+            } else if (c == '*') {
+                val = 11;
+            } else if (c != '#') {
+                return null;
+            } else {
+                val = 12;
+            }
+            int i2 = i / 2;
+            rawData[i2] = (byte) (rawData[i2] | (val << (4 - ((i % 2) * 4))));
+        }
+        return rawData;
+    }
+
+    private static void encodeCdmaSmsAddress(CdmaSmsAddress addr) throws CodingException {
+        if (addr.digitMode == 1) {
+            try {
+                addr.origBytes = addr.address.getBytes("US-ASCII");
+            } catch (UnsupportedEncodingException e) {
+                throw new CodingException("invalid SMS address, cannot convert to ASCII");
+            }
+        } else {
+            addr.origBytes = encodeDtmfSmsAddress(addr.address);
+        }
+    }
+
+    private static void encodeCallbackNumber(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException, CodingException {
+        int dataBits;
+        CdmaSmsAddress addr = bData.callbackNumber;
+        encodeCdmaSmsAddress(addr);
+        int paramBits = 9;
+        if (addr.digitMode == 1) {
+            paramBits = 9 + 7;
+            dataBits = addr.numberOfDigits * 8;
+        } else {
+            dataBits = addr.numberOfDigits * 4;
+        }
+        int paramBits2 = paramBits + dataBits;
+        int paramBytes = (paramBits2 / 8) + (paramBits2 % 8 > 0 ? 1 : 0);
+        int paddingBits = (paramBytes * 8) - paramBits2;
+        outStream.write(8, paramBytes);
+        outStream.write(1, addr.digitMode);
+        if (addr.digitMode == 1) {
+            outStream.write(3, addr.ton);
+            outStream.write(4, addr.numberPlan);
+        }
+        outStream.write(8, addr.numberOfDigits);
+        outStream.writeByteArray(dataBits, addr.origBytes);
+        if (paddingBits > 0) {
+            outStream.write(paddingBits, 0);
+        }
+    }
+
+    private static void encodeMsgStatus(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(2, bData.errorClass);
+        outStream.write(6, bData.messageStatus);
+    }
+
+    private static void encodeMsgCount(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(8, bData.numberOfMessages);
+    }
+
+    private static void encodeValidityPeriodRel(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(8, bData.validityPeriodRelative);
+    }
+
+    private static void encodePrivacyIndicator(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(2, bData.privacy);
+        outStream.skip(6);
+    }
+
+    private static void encodeLanguageIndicator(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(8, bData.language);
+    }
+
+    private static void encodeDisplayMode(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(2, bData.displayMode);
+        outStream.skip(6);
+    }
+
+    private static void encodePriorityIndicator(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(2, bData.priority);
+        outStream.skip(6);
+    }
+
+    private static void encodeMsgDeliveryAlert(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        outStream.write(8, 1);
+        outStream.write(2, bData.alert);
+        outStream.skip(6);
+    }
+
+    private static void encodeScpResults(BearerData bData, BitwiseOutputStream outStream) throws BitwiseOutputStream.AccessException {
+        ArrayList<CdmaSmsCbProgramResults> results = bData.serviceCategoryProgramResults;
+        outStream.write(8, results.size() * 4);
+        Iterator i$ = results.iterator();
+        while (i$.hasNext()) {
+            CdmaSmsCbProgramResults result = i$.next();
+            int category = result.getCategory();
+            outStream.write(8, category >> 8);
+            outStream.write(8, category);
+            outStream.write(8, result.getLanguage());
+            outStream.write(4, result.getCategoryResult());
+            outStream.skip(4);
+        }
+    }
+
+    public static byte[] encode(BearerData bData) {
+        boolean z = true;
+        z = false;
+        if (bData.userData == null || bData.userData.userDataHeader == null) {
+        }
+        bData.hasUserDataHeader = z;
+        try {
+            BitwiseOutputStream outStream = new BitwiseOutputStream((int) PduPart.P_CONTENT_TRANSFER_ENCODING);
+            outStream.write(8, 0);
+            encodeMessageId(bData, outStream);
+            if (bData.userData != null) {
+                outStream.write(8, 1);
+                encodeUserData(bData, outStream);
+            }
+            if (bData.callbackNumber != null) {
+                outStream.write(8, 14);
+                encodeCallbackNumber(bData, outStream);
+            }
+            if (bData.userAckReq || bData.deliveryAckReq || bData.readAckReq || bData.reportReq) {
+                outStream.write(8, 10);
+                encodeReplyOption(bData, outStream);
+            }
+            if (bData.numberOfMessages != 0) {
+                outStream.write(8, 11);
+                encodeMsgCount(bData, outStream);
+            }
+            if (bData.validityPeriodRelativeSet) {
+                outStream.write(8, 5);
+                encodeValidityPeriodRel(bData, outStream);
+            }
+            if (bData.privacyIndicatorSet) {
+                outStream.write(8, 9);
+                encodePrivacyIndicator(bData, outStream);
+            }
+            if (bData.languageIndicatorSet) {
+                outStream.write(8, 13);
+                encodeLanguageIndicator(bData, outStream);
+            }
+            if (bData.displayModeSet) {
+                outStream.write(8, 15);
+                encodeDisplayMode(bData, outStream);
+            }
+            if (bData.priorityIndicatorSet) {
+                outStream.write(8, 8);
+                encodePriorityIndicator(bData, outStream);
+            }
+            if (bData.alertIndicatorSet) {
+                outStream.write(8, 12);
+                encodeMsgDeliveryAlert(bData, outStream);
+            }
+            if (bData.messageStatusSet) {
+                outStream.write(8, 20);
+                encodeMsgStatus(bData, outStream);
+            }
+            if (bData.serviceCategoryProgramResults != null) {
+                outStream.write(8, 19);
+                encodeScpResults(bData, outStream);
+            }
+            return outStream.toByteArray();
+        } catch (BitwiseOutputStream.AccessException ex) {
+            Rlog.e(LOG_TAG, "BearerData encode failed: " + ex);
+            return null;
+        } catch (CodingException ex2) {
+            Rlog.e(LOG_TAG, "BearerData encode failed: " + ex2);
+            return null;
+        }
+    }
+
+    private static boolean decodeMessageId(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean z = true;
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 24) {
+            paramBits -= 24;
+            decodeSuccess = true;
+            bData.messageType = inStream.read(4);
+            bData.messageId = inStream.read(8) << 8;
+            bData.messageId |= inStream.read(8);
+            if (inStream.read(1) != 1) {
+                z = false;
+            }
+            bData.hasUserDataHeader = z;
+            inStream.skip(3);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "MESSAGE_IDENTIFIER decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static boolean decodeReserved(BearerData bData, BitwiseInputStream inStream, int subparamId) throws BitwiseInputStream.AccessException, CodingException {
+        boolean decodeSuccess = false;
+        int subparamLen = inStream.read(8);
+        int paramBits = subparamLen * 8;
+        if (paramBits <= inStream.available()) {
+            decodeSuccess = true;
+            inStream.skip(paramBits);
+        }
+        Rlog.d(LOG_TAG, "RESERVED bearer data subparameter " + subparamId + " decode " + (decodeSuccess ? "succeeded" : "failed") + " (param bits = " + paramBits + ")");
+        if (decodeSuccess) {
+            return decodeSuccess;
+        }
+        throw new CodingException("RESERVED bearer data subparameter " + subparamId + " had invalid SUBPARAM_LEN " + subparamLen);
+    }
+
+    private static boolean decodeUserData(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        int paramBits = inStream.read(8) * 8;
+        bData.userData = new UserData();
+        bData.userData.msgEncoding = inStream.read(5);
+        bData.userData.msgEncodingSet = true;
+        bData.userData.msgType = 0;
+        int consumedBits = 5;
+        if (bData.userData.msgEncoding == 1 || bData.userData.msgEncoding == 10) {
+            bData.userData.msgType = inStream.read(8);
+            consumedBits = 5 + 8;
+        }
+        bData.userData.numFields = inStream.read(8);
+        bData.userData.payload = inStream.readByteArray(paramBits - (consumedBits + 8));
+        return true;
+    }
+
+    private static String decodeUtf8(byte[] data, int offset, int numFields) throws CodingException {
+        return decodeCharset(data, offset, numFields, 1, "UTF-8");
+    }
+
+    private static String decodeUtf16(byte[] data, int offset, int numFields) throws CodingException {
+        return decodeCharset(data, offset, numFields - ((offset + (offset % 2)) / 2), 2, "utf-16be");
+    }
+
+    private static String decodeCharset(byte[] data, int offset, int numFields, int width, String charset) throws CodingException {
+        if (numFields < 0 || (numFields * width) + offset > data.length) {
+            int maxNumFields = ((data.length - offset) - (offset % width)) / width;
+            if (maxNumFields < 0) {
+                throw new CodingException(charset + " decode failed: offset out of range");
+            }
+            Rlog.e(LOG_TAG, charset + " decode error: offset = " + offset + " numFields = " + numFields + " data.length = " + data.length + " maxNumFields = " + maxNumFields);
+            numFields = maxNumFields;
+        }
+        try {
+            return new String(data, offset, numFields * width, charset);
+        } catch (UnsupportedEncodingException ex) {
+            throw new CodingException(charset + " decode failed: " + ex);
+        }
+    }
+
+    private static String decode7bitAscii(byte[] data, int offset, int numFields) throws CodingException {
+        int offsetBits = offset * 8;
+        try {
+            int offsetSeptets = (offsetBits + 6) / 7;
+            int numFields2 = numFields - offsetSeptets;
+            int paddingBits = (offsetSeptets * 7) - offsetBits;
+            StringBuffer strBuf = new StringBuffer(numFields2);
+            BitwiseInputStream inStream = new BitwiseInputStream(data);
+            int wantedBits = (offsetSeptets * 7) + (numFields2 * 7);
+            if (inStream.available() < wantedBits) {
+                throw new CodingException("insufficient data (wanted " + wantedBits + " bits, but only have " + inStream.available() + ")");
+            }
+            inStream.skip(offsetBits + paddingBits);
+            for (int i = 0; i < numFields2; i++) {
+                int charCode = inStream.read(7);
+                if (charCode >= 32 && charCode <= UserData.ASCII_MAP_MAX_INDEX) {
+                    strBuf.append(UserData.ASCII_MAP[charCode - 32]);
+                } else if (charCode == 10) {
+                    strBuf.append('\n');
+                } else if (charCode == 13) {
+                    strBuf.append('\r');
+                } else {
+                    strBuf.append(' ');
+                }
+            }
+            return strBuf.toString();
+        } catch (BitwiseInputStream.AccessException ex) {
+            throw new CodingException("7bit ASCII decode failed: " + ex);
+        }
+    }
+
+    private static String decode7bitGsm(byte[] data, int offset, int numFields) throws CodingException {
+        int offsetBits = offset * 8;
+        int offsetSeptets = (offsetBits + 6) / 7;
+        String result = GsmAlphabet.gsm7BitPackedToString(data, offset, numFields - offsetSeptets, (offsetSeptets * 7) - offsetBits, 0, 0);
+        if (result != null) {
+            return result;
+        }
+        throw new CodingException("7bit GSM decoding failed");
+    }
+
+    private static String decodeLatin(byte[] data, int offset, int numFields) throws CodingException {
+        return decodeCharset(data, offset, numFields, 1, "ISO-8859-1");
+    }
+
+    private static String decodeShiftJis(byte[] data, int offset, int numFields) throws CodingException {
+        return decodeCharset(data, offset, numFields, 1, "Shift_JIS");
+    }
+
+    private static String decodeGsmDcs(byte[] data, int offset, int numFields, int msgType) throws CodingException {
+        switch ((msgType >> 2) & 3) {
+            case 0:
+                return decode7bitGsm(data, offset, numFields);
+            case 1:
+                return decodeUtf8(data, offset, numFields);
+            case 2:
+                return decodeUtf16(data, offset, numFields);
+            default:
+                throw new CodingException("unsupported user msgType encoding (" + msgType + ")");
+        }
+    }
+
+    private static void decodeUserDataPayload(UserData userData, boolean hasUserDataHeader) throws CodingException {
+        int offset = 0;
+        if (hasUserDataHeader) {
+            int udhLen = userData.payload[0] & 255;
+            offset = 0 + udhLen + 1;
+            byte[] headerData = new byte[udhLen];
+            System.arraycopy(userData.payload, 1, headerData, 0, udhLen);
+            userData.userDataHeader = SmsHeader.fromByteArray(headerData);
+        }
+        switch (userData.msgEncoding) {
+            case 0:
+                boolean decodingtypeUTF8 = Resources.getSystem().getBoolean(17956956);
+                byte[] payload = new byte[userData.numFields];
+                System.arraycopy(userData.payload, 0, payload, 0, userData.numFields < userData.payload.length ? userData.numFields : userData.payload.length);
+                userData.payload = payload;
+                if (!decodingtypeUTF8) {
+                    userData.payloadStr = decodeLatin(userData.payload, offset, userData.numFields);
+                    return;
+                } else {
+                    userData.payloadStr = decodeUtf8(userData.payload, offset, userData.numFields);
+                    return;
+                }
+            case 1:
+            case 6:
+            case 7:
+            default:
+                throw new CodingException("unsupported user data encoding (" + userData.msgEncoding + ")");
+            case 2:
+            case 3:
+                userData.payloadStr = decode7bitAscii(userData.payload, offset, userData.numFields);
+                return;
+            case 4:
+                userData.payloadStr = decodeUtf16(userData.payload, offset, userData.numFields);
+                return;
+            case 5:
+                userData.payloadStr = decodeShiftJis(userData.payload, offset, userData.numFields);
+                return;
+            case 8:
+                userData.payloadStr = decodeLatin(userData.payload, offset, userData.numFields);
+                return;
+            case 9:
+                userData.payloadStr = decode7bitGsm(userData.payload, offset, userData.numFields);
+                return;
+            case 10:
+                userData.payloadStr = decodeGsmDcs(userData.payload, offset, userData.numFields, userData.msgType);
+                return;
+        }
+    }
+
+    private static void decodeIs91VoicemailStatus(BearerData bData) throws BitwiseInputStream.AccessException, CodingException {
+        BitwiseInputStream inStream = new BitwiseInputStream(bData.userData.payload);
+        int dataLen = inStream.available() / 6;
+        int numFields = bData.userData.numFields;
+        if (dataLen > 14 || dataLen < 3 || dataLen < numFields) {
+            throw new CodingException("IS-91 voicemail status decoding failed");
+        }
+        try {
+            StringBuffer strbuf = new StringBuffer(dataLen);
+            while (inStream.available() >= 6) {
+                strbuf.append(UserData.ASCII_MAP[inStream.read(6)]);
+            }
+            String data = strbuf.toString();
+            bData.numberOfMessages = Integer.parseInt(data.substring(0, 2));
+            char prioCode = data.charAt(2);
+            if (prioCode == ' ') {
+                bData.priority = 0;
+            } else if (prioCode == '!') {
+                bData.priority = 2;
+            } else {
+                throw new CodingException("IS-91 voicemail status decoding failed: illegal priority setting (" + prioCode + ")");
+            }
+            bData.priorityIndicatorSet = true;
+            bData.userData.payloadStr = data.substring(3, numFields - 3);
+        } catch (IndexOutOfBoundsException ex) {
+            throw new CodingException("IS-91 voicemail status decoding failed: " + ex);
+        } catch (NumberFormatException ex2) {
+            throw new CodingException("IS-91 voicemail status decoding failed: " + ex2);
+        }
+    }
+
+    private static void decodeIs91ShortMessage(BearerData bData) throws BitwiseInputStream.AccessException, CodingException {
+        BitwiseInputStream inStream = new BitwiseInputStream(bData.userData.payload);
+        int dataLen = inStream.available() / 6;
+        int numFields = bData.userData.numFields;
+        if (numFields > 14 || dataLen < numFields) {
+            throw new CodingException("IS-91 short message decoding failed");
+        }
+        StringBuffer strbuf = new StringBuffer(dataLen);
+        for (int i = 0; i < numFields; i++) {
+            strbuf.append(UserData.ASCII_MAP[inStream.read(6)]);
+        }
+        bData.userData.payloadStr = strbuf.toString();
+    }
+
+    private static void decodeIs91Cli(BearerData bData) throws CodingException {
+        int dataLen = new BitwiseInputStream(bData.userData.payload).available() / 4;
+        int numFields = bData.userData.numFields;
+        if (dataLen > 14 || dataLen < 3 || dataLen < numFields) {
+            throw new CodingException("IS-91 voicemail status decoding failed");
+        }
+        CdmaSmsAddress addr = new CdmaSmsAddress();
+        addr.digitMode = 0;
+        addr.origBytes = bData.userData.payload;
+        addr.numberOfDigits = (byte) numFields;
+        decodeSmsAddress(addr);
+        bData.callbackNumber = addr;
+    }
+
+    private static void decodeIs91(BearerData bData) throws BitwiseInputStream.AccessException, CodingException {
+        switch (bData.userData.msgType) {
+            case 130:
+                decodeIs91VoicemailStatus(bData);
+                return;
+            case 131:
+            case 133:
+                decodeIs91ShortMessage(bData);
+                return;
+            case 132:
+                decodeIs91Cli(bData);
+                return;
+            default:
+                throw new CodingException("unsupported IS-91 message type (" + bData.userData.msgType + ")");
+        }
+    }
+
+    private static boolean decodeReplyOption(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean z = true;
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.userAckReq = inStream.read(1) == 1;
+            bData.deliveryAckReq = inStream.read(1) == 1;
+            bData.readAckReq = inStream.read(1) == 1;
+            if (inStream.read(1) != 1) {
+                z = false;
+            }
+            bData.reportReq = z;
+            inStream.skip(4);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "REPLY_OPTION decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static boolean decodeMsgCount(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.numberOfMessages = IccUtils.cdmaBcdByteToInt((byte) inStream.read(8));
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "NUMBER_OF_MESSAGES decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static boolean decodeDepositIndex(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 16) {
+            paramBits -= 16;
+            decodeSuccess = true;
+            bData.depositIndex = (inStream.read(8) << 8) | inStream.read(8);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "MESSAGE_DEPOSIT_INDEX decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static String decodeDtmfSmsAddress(byte[] rawData, int numFields) throws CodingException {
+        StringBuffer strBuf = new StringBuffer(numFields);
+        for (int i = 0; i < numFields; i++) {
+            int val = (rawData[i / 2] >>> (4 - ((i % 2) * 4))) & 15;
+            if (val >= 1 && val <= 9) {
+                strBuf.append(Integer.toString(val, 10));
+            } else if (val == 10) {
+                strBuf.append('0');
+            } else if (val == 11) {
+                strBuf.append('*');
+            } else if (val == 12) {
+                strBuf.append('#');
+            } else {
+                throw new CodingException("invalid SMS address DTMF code (" + val + ")");
+            }
+        }
+        return strBuf.toString();
+    }
+
+    private static void decodeSmsAddress(CdmaSmsAddress addr) throws CodingException {
+        if (addr.digitMode == 1) {
+            try {
+                addr.address = new String(addr.origBytes, 0, addr.origBytes.length, "US-ASCII");
+            } catch (UnsupportedEncodingException e) {
+                throw new CodingException("invalid SMS address ASCII code");
+            }
+        } else {
+            addr.address = decodeDtmfSmsAddress(addr.origBytes, addr.numberOfDigits);
+        }
+    }
+
+    private static boolean decodeCallbackNumber(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException, CodingException {
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits < 8) {
+            inStream.skip(paramBits);
+            return false;
+        }
+        CdmaSmsAddress addr = new CdmaSmsAddress();
+        addr.digitMode = inStream.read(1);
+        byte fieldBits = SUBPARAM_VALIDITY_PERIOD_ABSOLUTE;
+        byte consumedBits = 1;
+        if (addr.digitMode == 1) {
+            addr.ton = inStream.read(3);
+            addr.numberPlan = inStream.read(4);
+            fieldBits = SUBPARAM_PRIORITY_INDICATOR;
+            consumedBits = (byte) 8;
+        }
+        addr.numberOfDigits = inStream.read(8);
+        int remainingBits = paramBits - ((byte) (consumedBits + SUBPARAM_PRIORITY_INDICATOR));
+        int dataBits = addr.numberOfDigits * fieldBits;
+        int paddingBits = remainingBits - dataBits;
+        if (remainingBits < dataBits) {
+            throw new CodingException("CALLBACK_NUMBER subparam encoding size error (remainingBits + " + remainingBits + ", dataBits + " + dataBits + ", paddingBits + " + paddingBits + ")");
+        }
+        addr.origBytes = inStream.readByteArray(dataBits);
+        inStream.skip(paddingBits);
+        decodeSmsAddress(addr);
+        bData.callbackNumber = addr;
+        return true;
+    }
+
+    private static boolean decodeMsgStatus(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.errorClass = inStream.read(2);
+            bData.messageStatus = inStream.read(6);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "MESSAGE_STATUS decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.messageStatusSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeMsgCenterTimeStamp(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 48) {
+            paramBits -= 48;
+            decodeSuccess = true;
+            bData.msgCenterTimeStamp = TimeStamp.fromByteArray(inStream.readByteArray(48));
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "MESSAGE_CENTER_TIME_STAMP decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static boolean decodeValidityAbs(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 48) {
+            paramBits -= 48;
+            decodeSuccess = true;
+            bData.validityPeriodAbsolute = TimeStamp.fromByteArray(inStream.readByteArray(48));
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "VALIDITY_PERIOD_ABSOLUTE decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static boolean decodeDeferredDeliveryAbs(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 48) {
+            paramBits -= 48;
+            decodeSuccess = true;
+            bData.deferredDeliveryTimeAbsolute = TimeStamp.fromByteArray(inStream.readByteArray(48));
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "DEFERRED_DELIVERY_TIME_ABSOLUTE decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        return decodeSuccess;
+    }
+
+    private static boolean decodeValidityRel(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.deferredDeliveryTimeRelative = inStream.read(8);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "VALIDITY_PERIOD_RELATIVE decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.deferredDeliveryTimeRelativeSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeDeferredDeliveryRel(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.validityPeriodRelative = inStream.read(8);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "DEFERRED_DELIVERY_TIME_RELATIVE decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.validityPeriodRelativeSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodePrivacyIndicator(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.privacy = inStream.read(2);
+            inStream.skip(6);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "PRIVACY_INDICATOR decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.privacyIndicatorSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeLanguageIndicator(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.language = inStream.read(8);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "LANGUAGE_INDICATOR decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.languageIndicatorSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeDisplayMode(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.displayMode = inStream.read(2);
+            inStream.skip(6);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "DISPLAY_MODE decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.displayModeSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodePriorityIndicator(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.priority = inStream.read(2);
+            inStream.skip(6);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "PRIORITY_INDICATOR decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.priorityIndicatorSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeMsgDeliveryAlert(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.alert = inStream.read(2);
+            inStream.skip(6);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "ALERT_ON_MESSAGE_DELIVERY decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.alertIndicatorSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeUserResponseCode(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException {
+        boolean decodeSuccess = false;
+        int paramBits = inStream.read(8) * 8;
+        if (paramBits >= 8) {
+            paramBits -= 8;
+            decodeSuccess = true;
+            bData.userResponseCode = inStream.read(8);
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "USER_RESPONSE_CODE decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ")");
+        }
+        inStream.skip(paramBits);
+        bData.userResponseCodeSet = decodeSuccess;
+        return decodeSuccess;
+    }
+
+    private static boolean decodeServiceCategoryProgramData(BearerData bData, BitwiseInputStream inStream) throws BitwiseInputStream.AccessException, CodingException {
+        if (inStream.available() < 13) {
+            throw new CodingException("SERVICE_CATEGORY_PROGRAM_DATA decode failed: only " + inStream.available() + " bits available");
+        }
+        int msgEncoding = inStream.read(5);
+        int paramBits = (inStream.read(8) * 8) - 5;
+        if (inStream.available() < paramBits) {
+            throw new CodingException("SERVICE_CATEGORY_PROGRAM_DATA decode failed: only " + inStream.available() + " bits available (" + paramBits + " bits expected)");
+        }
+        ArrayList<CdmaSmsCbProgramData> programDataList = new ArrayList<>();
+        boolean decodeSuccess = false;
+        while (paramBits >= 48) {
+            int operation = inStream.read(4);
+            int category = (inStream.read(8) << 8) | inStream.read(8);
+            int language = inStream.read(8);
+            int maxMessages = inStream.read(8);
+            int alertOption = inStream.read(4);
+            int numFields = inStream.read(8);
+            int paramBits2 = paramBits - 48;
+            int textBits = getBitsForNumFields(msgEncoding, numFields);
+            if (paramBits2 < textBits) {
+                throw new CodingException("category name is " + textBits + " bits in length, but there are only " + paramBits2 + " bits available");
+            }
+            UserData userData = new UserData();
+            userData.msgEncoding = msgEncoding;
+            userData.msgEncodingSet = true;
+            userData.numFields = numFields;
+            userData.payload = inStream.readByteArray(textBits);
+            paramBits = paramBits2 - textBits;
+            decodeUserDataPayload(userData, false);
+            programDataList.add(new CdmaSmsCbProgramData(operation, category, language, maxMessages, alertOption, userData.payloadStr));
+            decodeSuccess = true;
+        }
+        if (!decodeSuccess || paramBits > 0) {
+            Rlog.d(LOG_TAG, "SERVICE_CATEGORY_PROGRAM_DATA decode " + (decodeSuccess ? "succeeded" : "failed") + " (extra bits = " + paramBits + ')');
+        }
+        inStream.skip(paramBits);
+        bData.serviceCategoryProgramData = programDataList;
+        return decodeSuccess;
+    }
+
+    private static int serviceCategoryToCmasMessageClass(int serviceCategory) {
+        switch (serviceCategory) {
             case 4096:
                 return 0;
-            case SmsEnvelope.SERVICE_CATEGORY_CMAS_EXTREME_THREAT /*4097*/:
+            case SmsEnvelope.SERVICE_CATEGORY_CMAS_EXTREME_THREAT /* 4097 */:
                 return 1;
             case 4098:
                 return 2;
@@ -1539,37 +1351,208 @@ public final class BearerData {
         }
     }
 
-    public String getLanguage() {
-        return getLanguageCodeForValue(this.language);
+    private static int getBitsForNumFields(int msgEncoding, int numFields) throws CodingException {
+        switch (msgEncoding) {
+            case 0:
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+                return numFields * 8;
+            case 1:
+            default:
+                throw new CodingException("unsupported message encoding (" + msgEncoding + ')');
+            case 2:
+            case 3:
+            case 9:
+                return numFields * 7;
+            case 4:
+                return numFields * 16;
+        }
     }
 
-    public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("BearerData ");
-        stringBuilder.append("{ messageType=" + this.messageType);
-        stringBuilder.append(", messageId=" + this.messageId);
-        stringBuilder.append(", priority=" + (this.priorityIndicatorSet ? Integer.valueOf(this.priority) : "unset"));
-        stringBuilder.append(", privacy=" + (this.privacyIndicatorSet ? Integer.valueOf(this.privacy) : "unset"));
-        stringBuilder.append(", alert=" + (this.alertIndicatorSet ? Integer.valueOf(this.alert) : "unset"));
-        stringBuilder.append(", displayMode=" + (this.displayModeSet ? Integer.valueOf(this.displayMode) : "unset"));
-        stringBuilder.append(", language=" + (this.languageIndicatorSet ? Integer.valueOf(this.language) : "unset"));
-        stringBuilder.append(", errorClass=" + (this.messageStatusSet ? Integer.valueOf(this.errorClass) : "unset"));
-        stringBuilder.append(", msgStatus=" + (this.messageStatusSet ? Integer.valueOf(this.messageStatus) : "unset"));
-        stringBuilder.append(", msgCenterTimeStamp=" + (this.msgCenterTimeStamp != null ? this.msgCenterTimeStamp : "unset"));
-        stringBuilder.append(", validityPeriodAbsolute=" + (this.validityPeriodAbsolute != null ? this.validityPeriodAbsolute : "unset"));
-        stringBuilder.append(", validityPeriodRelative=" + (this.validityPeriodRelativeSet ? Integer.valueOf(this.validityPeriodRelative) : "unset"));
-        stringBuilder.append(", deferredDeliveryTimeAbsolute=" + (this.deferredDeliveryTimeAbsolute != null ? this.deferredDeliveryTimeAbsolute : "unset"));
-        stringBuilder.append(", deferredDeliveryTimeRelative=" + (this.deferredDeliveryTimeRelativeSet ? Integer.valueOf(this.deferredDeliveryTimeRelative) : "unset"));
-        stringBuilder.append(", userAckReq=" + this.userAckReq);
-        stringBuilder.append(", deliveryAckReq=" + this.deliveryAckReq);
-        stringBuilder.append(", readAckReq=" + this.readAckReq);
-        stringBuilder.append(", reportReq=" + this.reportReq);
-        stringBuilder.append(", numberOfMessages=" + this.numberOfMessages);
-        stringBuilder.append(", callbackNumber=" + this.callbackNumber);
-        stringBuilder.append(", depositIndex=" + this.depositIndex);
-        stringBuilder.append(", hasUserDataHeader=" + this.hasUserDataHeader);
-        stringBuilder.append(", userData=" + this.userData);
-        stringBuilder.append(" }");
-        return stringBuilder.toString();
+    private static void decodeCmasUserData(BearerData bData, int serviceCategory) throws BitwiseInputStream.AccessException, CodingException {
+        int numFields;
+        BitwiseInputStream inStream = new BitwiseInputStream(bData.userData.payload);
+        if (inStream.available() < 8) {
+            throw new CodingException("emergency CB with no CMAE_protocol_version");
+        }
+        int protocolVersion = inStream.read(8);
+        if (protocolVersion != 0) {
+            throw new CodingException("unsupported CMAE_protocol_version " + protocolVersion);
+        }
+        int messageClass = serviceCategoryToCmasMessageClass(serviceCategory);
+        int category = -1;
+        int responseType = -1;
+        int severity = -1;
+        int urgency = -1;
+        int certainty = -1;
+        while (inStream.available() >= 16) {
+            int recordType = inStream.read(8);
+            int recordLen = inStream.read(8);
+            switch (recordType) {
+                case 0:
+                    UserData alertUserData = new UserData();
+                    alertUserData.msgEncoding = inStream.read(5);
+                    alertUserData.msgEncodingSet = true;
+                    alertUserData.msgType = 0;
+                    switch (alertUserData.msgEncoding) {
+                        case 0:
+                        case 8:
+                            numFields = recordLen - 1;
+                            break;
+                        case 1:
+                        case 5:
+                        case 6:
+                        case 7:
+                        default:
+                            numFields = 0;
+                            break;
+                        case 2:
+                        case 3:
+                        case 9:
+                            numFields = ((recordLen * 8) - 5) / 7;
+                            break;
+                        case 4:
+                            numFields = (recordLen - 1) / 2;
+                            break;
+                    }
+                    alertUserData.numFields = numFields;
+                    alertUserData.payload = inStream.readByteArray((recordLen * 8) - 5);
+                    decodeUserDataPayload(alertUserData, false);
+                    bData.userData = alertUserData;
+                    break;
+                case 1:
+                    category = inStream.read(8);
+                    responseType = inStream.read(8);
+                    severity = inStream.read(4);
+                    urgency = inStream.read(4);
+                    certainty = inStream.read(4);
+                    inStream.skip((recordLen * 8) - 28);
+                    break;
+                default:
+                    Rlog.w(LOG_TAG, "skipping unsupported CMAS record type " + recordType);
+                    inStream.skip(recordLen * 8);
+                    break;
+            }
+        }
+        bData.cmasWarningInfo = new SmsCbCmasInfo(messageClass, category, responseType, severity, urgency, certainty);
+    }
+
+    public static BearerData decode(byte[] smsData) {
+        return decode(smsData, 0);
+    }
+
+    private static boolean isCmasAlertCategory(int category) {
+        return category >= 4096 && category <= 4351;
+    }
+
+    public static BearerData decode(byte[] smsData, int serviceCategory) {
+        boolean decodeSuccess;
+        try {
+            BitwiseInputStream inStream = new BitwiseInputStream(smsData);
+            BearerData bData = new BearerData();
+            int foundSubparamMask = 0;
+            while (inStream.available() > 0) {
+                int subparamId = inStream.read(8);
+                int subparamIdBit = 1 << subparamId;
+                if ((foundSubparamMask & subparamIdBit) == 0 || subparamId < 0 || subparamId > 23) {
+                    switch (subparamId) {
+                        case 0:
+                            decodeSuccess = decodeMessageId(bData, inStream);
+                            break;
+                        case 1:
+                            decodeSuccess = decodeUserData(bData, inStream);
+                            break;
+                        case 2:
+                            decodeSuccess = decodeUserResponseCode(bData, inStream);
+                            break;
+                        case 3:
+                            decodeSuccess = decodeMsgCenterTimeStamp(bData, inStream);
+                            break;
+                        case 4:
+                            decodeSuccess = decodeValidityAbs(bData, inStream);
+                            break;
+                        case 5:
+                            decodeSuccess = decodeValidityRel(bData, inStream);
+                            break;
+                        case 6:
+                            decodeSuccess = decodeDeferredDeliveryAbs(bData, inStream);
+                            break;
+                        case 7:
+                            decodeSuccess = decodeDeferredDeliveryRel(bData, inStream);
+                            break;
+                        case 8:
+                            decodeSuccess = decodePriorityIndicator(bData, inStream);
+                            break;
+                        case 9:
+                            decodeSuccess = decodePrivacyIndicator(bData, inStream);
+                            break;
+                        case 10:
+                            decodeSuccess = decodeReplyOption(bData, inStream);
+                            break;
+                        case 11:
+                            decodeSuccess = decodeMsgCount(bData, inStream);
+                            break;
+                        case 12:
+                            decodeSuccess = decodeMsgDeliveryAlert(bData, inStream);
+                            break;
+                        case 13:
+                            decodeSuccess = decodeLanguageIndicator(bData, inStream);
+                            break;
+                        case 14:
+                            decodeSuccess = decodeCallbackNumber(bData, inStream);
+                            break;
+                        case 15:
+                            decodeSuccess = decodeDisplayMode(bData, inStream);
+                            break;
+                        case 16:
+                        case 19:
+                        default:
+                            decodeSuccess = decodeReserved(bData, inStream, subparamId);
+                            break;
+                        case 17:
+                            decodeSuccess = decodeDepositIndex(bData, inStream);
+                            break;
+                        case 18:
+                            decodeSuccess = decodeServiceCategoryProgramData(bData, inStream);
+                            break;
+                        case 20:
+                            decodeSuccess = decodeMsgStatus(bData, inStream);
+                            break;
+                    }
+                    if (decodeSuccess && subparamId >= 0 && subparamId <= 23) {
+                        foundSubparamMask |= subparamIdBit;
+                    }
+                } else {
+                    throw new CodingException("illegal duplicate subparameter (" + subparamId + ")");
+                }
+            }
+            if ((foundSubparamMask & 1) == 0) {
+                throw new CodingException("missing MESSAGE_IDENTIFIER subparam");
+            } else if (bData.userData == null) {
+                return bData;
+            } else {
+                if (isCmasAlertCategory(serviceCategory)) {
+                    decodeCmasUserData(bData, serviceCategory);
+                    return bData;
+                } else if (bData.userData.msgEncoding == 1) {
+                    if (((foundSubparamMask ^ 1) ^ 2) != 0) {
+                        Rlog.e(LOG_TAG, "IS-91 must occur without extra subparams (" + foundSubparamMask + ")");
+                    }
+                    decodeIs91(bData);
+                    return bData;
+                } else {
+                    decodeUserDataPayload(bData.userData, bData.hasUserDataHeader);
+                    return bData;
+                }
+            }
+        } catch (BitwiseInputStream.AccessException ex) {
+            Rlog.e(LOG_TAG, "BearerData decode failed: " + ex);
+            return null;
+        } catch (CodingException ex2) {
+            Rlog.e(LOG_TAG, "BearerData decode failed: " + ex2);
+            return null;
+        }
     }
 }

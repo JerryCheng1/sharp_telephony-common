@@ -9,6 +9,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.util.LinkedList;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsDuplicate {
     public static final int INVALIDATE_MESSAGE_ID = -1;
     private static final int MESSAGE_DATA_MAX_SIZE = 200;
@@ -24,29 +25,180 @@ public class SmsDuplicate {
     private SMSDispatcher mSmsDispatcher;
     private boolean mUseFile;
 
-    public class ResultJudgeDuplicate {
-        public int mErrorCode = -1;
-        public boolean mIsReply = false;
-        public boolean mIsSame = false;
-        public boolean mResponse = true;
+    public SmsDuplicate(Context context, int checkedNum, boolean useFile) {
+        this.mContext = context;
+        this.mCheckedNum = checkedNum;
+        this.mUseFile = useFile;
+    }
 
-        public ResultJudgeDuplicate(boolean z, boolean z2, int i, boolean z3) {
-            this.mIsSame = z;
-            this.mResponse = z2;
-            this.mErrorCode = i;
-            this.mIsReply = z3;
+    public ResultJudgeDuplicate checkSmsDuplicate(int messageId, byte[] messageData) {
+        boolean sameData = false;
+        int listNum = 0;
+        ResultJudgeDuplicate info = new ResultJudgeDuplicate(false, true, -1, true);
+        if (this.mDuplicateList == null && this.mUseFile && !readDuplicateFile()) {
+            Rlog.e(TAG, "readDuplicateFile() failed to read duplicate_file ");
+            return info;
+        }
+        if (this.mDuplicateList != null) {
+            while (true) {
+                if (listNum >= this.mDuplicateList.size()) {
+                    break;
+                }
+                SmsDuplicateInfo duplicateInfo = this.mDuplicateList.get(listNum);
+                if (duplicateInfo.mMessageID == messageId) {
+                    byte[] message = duplicateInfo.mMessageData;
+                    if (duplicateInfo.mMessageDataLength == messageData.length) {
+                        int index = 0;
+                        while (true) {
+                            if (index < duplicateInfo.mMessageDataLength) {
+                                if (message[index] != messageData[index]) {
+                                    sameData = false;
+                                    Rlog.d(TAG, "sameData is false, notificate this sms.");
+                                    break;
+                                }
+                                sameData = true;
+                                index++;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (sameData) {
+                    Rlog.d(TAG, "sameData is true, discard this sms.");
+                    break;
+                }
+                listNum++;
+            }
+            if (sameData) {
+                info = this.mDuplicateList.get(listNum).mAck == 0 ? new ResultJudgeDuplicate(sameData, true, -1, true) : this.mDuplicateList.get(listNum).mAck == 1 ? new ResultJudgeDuplicate(sameData, false, 3, true) : new ResultJudgeDuplicate(sameData, true, -1, false);
+            }
+        }
+        return info;
+    }
+
+    private boolean readDuplicateFile() {
+        boolean result = false;
+        this.mDuplicateList = new LinkedList<>();
+        try {
+            DataInputStream din = new DataInputStream(this.mContext.openFileInput(this.DUPLICATE_FILENAME));
+            while (true) {
+                try {
+                    int messageId = din.readInt();
+                    int sendAck = din.readInt();
+                    int length = din.readInt();
+                    if (length > 200) {
+                        length = 200;
+                    }
+                    byte[] data = new byte[length];
+                    din.read(data, 0, length);
+                    this.mDuplicateList.offer(new SmsDuplicateInfo(messageId, sendAck, length, data));
+                } catch (EOFException e) {
+                    Rlog.i(TAG, "checkSmsDuplicate() duplicate_file reached EOF ");
+                    din.close();
+                    result = true;
+                    return true;
+                }
+            }
+        } catch (IOException e2) {
+            Rlog.e(TAG, "checkSmsDuplicate() failed to read duplicate_file ");
+            e2.printStackTrace();
+            return result;
         }
     }
 
+    public void updateSmsDuplicate(int messageID, byte[] messageData, SmsAccessory accessory) {
+        if (this.mDuplicateList == null) {
+            this.mDuplicateList = new LinkedList<>();
+        }
+        SmsDuplicateInfo duplicateInfo = new SmsDuplicateInfo(messageID, accessory.getResponse(), messageData.length, messageData);
+        if (this.mDuplicateList.size() >= this.mCheckedNum) {
+            int exceedsNum = (this.mDuplicateList.size() - this.mCheckedNum) + 1;
+            for (int i = 0; i < exceedsNum; i++) {
+                this.mDuplicateList.poll();
+            }
+        }
+        this.mDuplicateList.offer(duplicateInfo);
+        if (duplicateInfo.mAck != 2 && this.mUseFile) {
+            updateSmsDuplicateFile(duplicateInfo.mAck, duplicateInfo.mMessageID);
+        }
+    }
+
+    public void updateSmsDuplicateFile(int sendAck, int messageId) {
+        try {
+            if (this.mDuplicateList.getLast().mMessageID == messageId) {
+                if (this.mDuplicateList.getLast().mAck == 2) {
+                    this.mDuplicateList.getLast().mAck = sendAck;
+                }
+                DataOutputStream dout = new DataOutputStream(this.mContext.openFileOutput(this.DUPLICATE_FILENAME, 0));
+                for (int i = 0; i < this.mDuplicateList.size(); i++) {
+                    dout.writeInt(this.mDuplicateList.get(i).mMessageID);
+                    dout.writeInt(this.mDuplicateList.get(i).mAck);
+                    dout.writeInt(this.mDuplicateList.get(i).mMessageDataLength);
+                    dout.write(this.mDuplicateList.get(i).mMessageData);
+                }
+                dout.flush();
+                dout.close();
+                return;
+            }
+            Rlog.e(TAG, "updateSmsDuplicateFile() MessageID is different ");
+        } catch (IOException e) {
+            Rlog.e(TAG, "updateSmsDuplicateFile() failed to update duplicate_file ");
+            e.printStackTrace();
+        } catch (NullPointerException e2) {
+            Rlog.e(TAG, "updateSmsDuplicateFile() the error by NullPointerException ");
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class SmsDuplicateInfo {
+        public int mAck;
+        public byte[] mMessageData;
+        public int mMessageDataLength;
+        public int mMessageID;
+
+        protected SmsDuplicateInfo(int messageId, int sendAck, int length, byte[] messageData) {
+            this.mMessageID = messageId;
+            this.mAck = sendAck;
+            this.mMessageDataLength = length;
+            this.mMessageData = messageData;
+        }
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class ResultJudgeDuplicate {
+        public int mErrorCode;
+        public boolean mIsReply;
+        public boolean mIsSame;
+        public boolean mResponse;
+
+        public ResultJudgeDuplicate(boolean isSame, boolean response, int errorCode, boolean isReply) {
+            this.mIsSame = false;
+            this.mResponse = true;
+            this.mErrorCode = -1;
+            this.mIsReply = false;
+            this.mIsSame = isSame;
+            this.mResponse = response;
+            this.mErrorCode = errorCode;
+            this.mIsReply = isReply;
+        }
+    }
+
+    public SmsAccessory SmsAccessory(String action, String permission, int response) {
+        return new SmsAccessory(action, permission, 0);
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public class SmsAccessory {
         private String mAction;
         private String mPermission;
         private int mResponse;
 
-        public SmsAccessory(String str, String str2, int i) {
-            this.mAction = str;
-            this.mPermission = str2;
-            this.mResponse = i;
+        public SmsAccessory(String action, String permission, int response) {
+            this.mAction = action;
+            this.mPermission = permission;
+            this.mResponse = response;
         }
 
         public String getAction() {
@@ -59,150 +211,6 @@ public class SmsDuplicate {
 
         public int getResponse() {
             return this.mResponse;
-        }
-    }
-
-    protected class SmsDuplicateInfo {
-        public int mAck;
-        public byte[] mMessageData;
-        public int mMessageDataLength;
-        public int mMessageID;
-
-        protected SmsDuplicateInfo(int i, int i2, int i3, byte[] bArr) {
-            this.mMessageID = i;
-            this.mAck = i2;
-            this.mMessageDataLength = i3;
-            this.mMessageData = bArr;
-        }
-    }
-
-    public SmsDuplicate(Context context, int i, boolean z) {
-        this.mContext = context;
-        this.mCheckedNum = i;
-        this.mUseFile = z;
-    }
-
-    private boolean readDuplicateFile() {
-        IOException e;
-        boolean z;
-        this.mDuplicateList = new LinkedList();
-        try {
-            DataInputStream dataInputStream = new DataInputStream(this.mContext.openFileInput(this.DUPLICATE_FILENAME));
-            while (true) {
-                try {
-                    int readInt = dataInputStream.readInt();
-                    int readInt2 = dataInputStream.readInt();
-                    int readInt3 = dataInputStream.readInt();
-                    if (readInt3 > 200) {
-                        readInt3 = 200;
-                    }
-                    byte[] bArr = new byte[readInt3];
-                    dataInputStream.read(bArr, 0, readInt3);
-                    this.mDuplicateList.offer(new SmsDuplicateInfo(readInt, readInt2, readInt3, bArr));
-                } catch (EOFException e2) {
-                    Rlog.i(TAG, "checkSmsDuplicate() duplicate_file reached EOF ");
-                    return true;
-                } finally {
-                    dataInputStream.close();
-                    try {
-                    } catch (IOException e3) {
-                        e = e3;
-                        z = true;
-                    }
-                }
-            }
-        } catch (IOException e4) {
-            e = e4;
-            z = false;
-        }
-        Rlog.e(TAG, "checkSmsDuplicate() failed to read duplicate_file ");
-        e.printStackTrace();
-        return z;
-    }
-
-    public SmsAccessory SmsAccessory(String str, String str2, int i) {
-        return new SmsAccessory(str, str2, 0);
-    }
-
-    public ResultJudgeDuplicate checkSmsDuplicate(int i, byte[] bArr) {
-        ResultJudgeDuplicate resultJudgeDuplicate = new ResultJudgeDuplicate(false, true, -1, true);
-        if (this.mDuplicateList == null && this.mUseFile && !readDuplicateFile()) {
-            Rlog.e(TAG, "readDuplicateFile() failed to read duplicate_file ");
-            return resultJudgeDuplicate;
-        } else if (this.mDuplicateList == null) {
-            return resultJudgeDuplicate;
-        } else {
-            boolean z = false;
-            int i2 = 0;
-            while (i2 < this.mDuplicateList.size()) {
-                SmsDuplicateInfo smsDuplicateInfo = (SmsDuplicateInfo) this.mDuplicateList.get(i2);
-                if (smsDuplicateInfo.mMessageID == i) {
-                    byte[] bArr2 = smsDuplicateInfo.mMessageData;
-                    if (smsDuplicateInfo.mMessageDataLength == bArr.length) {
-                        int i3 = 0;
-                        while (i3 < smsDuplicateInfo.mMessageDataLength) {
-                            if (bArr2[i3] != bArr[i3]) {
-                                Rlog.d(TAG, "sameData is false, notificate this sms.");
-                                z = false;
-                                break;
-                            }
-                            i3++;
-                            z = true;
-                        }
-                    }
-                }
-                if (z) {
-                    Rlog.d(TAG, "sameData is true, discard this sms.");
-                    break;
-                }
-                i2++;
-            }
-            boolean z2 = z;
-            return z2 ? ((SmsDuplicateInfo) this.mDuplicateList.get(i2)).mAck == 0 ? new ResultJudgeDuplicate(z2, true, -1, true) : ((SmsDuplicateInfo) this.mDuplicateList.get(i2)).mAck == 1 ? new ResultJudgeDuplicate(z2, false, 3, true) : new ResultJudgeDuplicate(z2, true, -1, false) : resultJudgeDuplicate;
-        }
-    }
-
-    public void updateSmsDuplicate(int i, byte[] bArr, SmsAccessory smsAccessory) {
-        if (this.mDuplicateList == null) {
-            this.mDuplicateList = new LinkedList();
-        }
-        SmsDuplicateInfo smsDuplicateInfo = new SmsDuplicateInfo(i, smsAccessory.getResponse(), bArr.length, bArr);
-        if (this.mDuplicateList.size() >= this.mCheckedNum) {
-            int size = this.mDuplicateList.size();
-            int i2 = this.mCheckedNum;
-            for (int i3 = 0; i3 < (size - i2) + 1; i3++) {
-                this.mDuplicateList.poll();
-            }
-        }
-        this.mDuplicateList.offer(smsDuplicateInfo);
-        if (smsDuplicateInfo.mAck != 2 && this.mUseFile) {
-            updateSmsDuplicateFile(smsDuplicateInfo.mAck, smsDuplicateInfo.mMessageID);
-        }
-    }
-
-    public void updateSmsDuplicateFile(int i, int i2) {
-        try {
-            if (((SmsDuplicateInfo) this.mDuplicateList.getLast()).mMessageID == i2) {
-                if (((SmsDuplicateInfo) this.mDuplicateList.getLast()).mAck == 2) {
-                    ((SmsDuplicateInfo) this.mDuplicateList.getLast()).mAck = i;
-                }
-                DataOutputStream dataOutputStream = new DataOutputStream(this.mContext.openFileOutput(this.DUPLICATE_FILENAME, 0));
-                for (int i3 = 0; i3 < this.mDuplicateList.size(); i3++) {
-                    dataOutputStream.writeInt(((SmsDuplicateInfo) this.mDuplicateList.get(i3)).mMessageID);
-                    dataOutputStream.writeInt(((SmsDuplicateInfo) this.mDuplicateList.get(i3)).mAck);
-                    dataOutputStream.writeInt(((SmsDuplicateInfo) this.mDuplicateList.get(i3)).mMessageDataLength);
-                    dataOutputStream.write(((SmsDuplicateInfo) this.mDuplicateList.get(i3)).mMessageData);
-                }
-                dataOutputStream.flush();
-                dataOutputStream.close();
-                return;
-            }
-            Rlog.e(TAG, "updateSmsDuplicateFile() MessageID is different ");
-        } catch (IOException e) {
-            Rlog.e(TAG, "updateSmsDuplicateFile() failed to update duplicate_file ");
-            e.printStackTrace();
-        } catch (NullPointerException e2) {
-            Rlog.e(TAG, "updateSmsDuplicateFile() the error by NullPointerException ");
         }
     }
 }

@@ -3,6 +3,8 @@ package com.android.internal.telephony.test;
 import com.android.internal.telephony.ATParseEx;
 import com.android.internal.telephony.DriverCall;
 
+/* compiled from: SimulatedGsmCallState.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 class CallInfo {
     boolean mIsMT;
     boolean mIsMpty;
@@ -10,6 +12,8 @@ class CallInfo {
     State mState;
     int mTOA;
 
+    /* compiled from: SimulatedGsmCallState.java */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     enum State {
         ACTIVE(0),
         HOLDING(1),
@@ -20,8 +24,8 @@ class CallInfo {
         
         private final int mValue;
 
-        private State(int i) {
-            this.mValue = i;
+        State(int value) {
+            this.mValue = value;
         }
 
         public int value() {
@@ -29,61 +33,63 @@ class CallInfo {
         }
     }
 
-    CallInfo(boolean z, State state, boolean z2, String str) {
-        this.mIsMT = z;
+    CallInfo(boolean isMT, State state, boolean isMpty, String number) {
+        this.mIsMT = isMT;
         this.mState = state;
-        this.mIsMpty = z2;
-        this.mNumber = str;
-        if (str.length() <= 0 || str.charAt(0) != '+') {
+        this.mIsMpty = isMpty;
+        this.mNumber = number;
+        if (number.length() <= 0 || number.charAt(0) != '+') {
             this.mTOA = 129;
         } else {
             this.mTOA = 145;
         }
     }
 
-    static CallInfo createIncomingCall(String str) {
-        return new CallInfo(true, State.INCOMING, false, str);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public static CallInfo createOutgoingCall(String number) {
+        return new CallInfo(false, State.DIALING, false, number);
     }
 
-    static CallInfo createOutgoingCall(String str) {
-        return new CallInfo(false, State.DIALING, false, str);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public static CallInfo createIncomingCall(String number) {
+        return new CallInfo(true, State.INCOMING, false, number);
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public String toCLCCLine(int index) {
+        return "+CLCC: " + index + "," + (this.mIsMT ? "1" : "0") + "," + this.mState.value() + ",0," + (this.mIsMpty ? "1" : "0") + ",\"" + this.mNumber + "\"," + this.mTOA;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public DriverCall toDriverCall(int index) {
+        DriverCall ret = new DriverCall();
+        ret.index = index;
+        ret.isMT = this.mIsMT;
+        try {
+            ret.state = DriverCall.stateFromCLCC(this.mState.value());
+            ret.isMpty = this.mIsMpty;
+            ret.number = this.mNumber;
+            ret.TOA = this.mTOA;
+            ret.isVoice = true;
+            ret.als = 0;
+            return ret;
+        } catch (ATParseEx ex) {
+            throw new RuntimeException("should never happen", ex);
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
     public boolean isActiveOrHeld() {
         return this.mState == State.ACTIVE || this.mState == State.HOLDING;
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public boolean isConnecting() {
         return this.mState == State.DIALING || this.mState == State.ALERTING;
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public boolean isRinging() {
         return this.mState == State.INCOMING || this.mState == State.WAITING;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public String toCLCCLine(int i) {
-        return "+CLCC: " + i + "," + (this.mIsMT ? "1" : "0") + "," + this.mState.value() + ",0," + (this.mIsMpty ? "1" : "0") + ",\"" + this.mNumber + "\"," + this.mTOA;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public DriverCall toDriverCall(int i) {
-        DriverCall driverCall = new DriverCall();
-        driverCall.index = i;
-        driverCall.isMT = this.mIsMT;
-        try {
-            driverCall.state = DriverCall.stateFromCLCC(this.mState.value());
-            driverCall.isMpty = this.mIsMpty;
-            driverCall.number = this.mNumber;
-            driverCall.TOA = this.mTOA;
-            driverCall.isVoice = true;
-            driverCall.als = 0;
-            return driverCall;
-        } catch (ATParseEx e) {
-            throw new RuntimeException("should never happen", e);
-        }
     }
 }

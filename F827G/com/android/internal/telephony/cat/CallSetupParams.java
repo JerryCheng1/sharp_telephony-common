@@ -2,27 +2,34 @@ package com.android.internal.telephony.cat;
 
 import android.graphics.Bitmap;
 
-class CallSetupParams extends CommandParams {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* compiled from: CommandParams.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class CallSetupParams extends CommandParams {
     TextMessage mCallMsg;
     TextMessage mConfirmMsg;
 
-    CallSetupParams(CommandDetails commandDetails, TextMessage textMessage, TextMessage textMessage2) {
-        super(commandDetails);
-        this.mConfirmMsg = textMessage;
-        this.mCallMsg = textMessage2;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public CallSetupParams(CommandDetails cmdDet, TextMessage confirmMsg, TextMessage callMsg) {
+        super(cmdDet);
+        this.mConfirmMsg = confirmMsg;
+        this.mCallMsg = callMsg;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean setIcon(Bitmap bitmap) {
-        if (bitmap != null) {
-            if (this.mConfirmMsg != null && this.mConfirmMsg.icon == null) {
-                this.mConfirmMsg.icon = bitmap;
-                return true;
-            } else if (this.mCallMsg != null && this.mCallMsg.icon == null) {
-                this.mCallMsg.icon = bitmap;
-                return true;
-            }
+    /* JADX INFO: Access modifiers changed from: package-private */
+    @Override // com.android.internal.telephony.cat.CommandParams
+    public boolean setIcon(Bitmap icon) {
+        if (icon == null) {
+            return false;
         }
-        return false;
+        if (this.mConfirmMsg != null && this.mConfirmMsg.icon == null) {
+            this.mConfirmMsg.icon = icon;
+            return true;
+        } else if (this.mCallMsg == null || this.mCallMsg.icon != null) {
+            return false;
+        } else {
+            this.mCallMsg.icon = icon;
+            return true;
+        }
     }
 }

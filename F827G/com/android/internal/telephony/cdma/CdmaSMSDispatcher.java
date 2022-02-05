@@ -1,185 +1,181 @@
 package com.android.internal.telephony.cdma;
 
 import android.app.PendingIntent;
-import android.app.PendingIntent.CanceledException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Message;
 import android.os.SystemProperties;
-import android.provider.Telephony.CellBroadcasts;
+import android.provider.Telephony;
 import android.telephony.Rlog;
 import android.telephony.SmsMessage;
-import com.android.internal.telephony.GsmAlphabet.TextEncodingDetails;
+import com.android.internal.telephony.GsmAlphabet;
 import com.android.internal.telephony.ImsSMSDispatcher;
 import com.android.internal.telephony.PhoneBase;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.SMSDispatcher;
 import com.android.internal.telephony.SmsHeader;
 import com.android.internal.telephony.SmsUsageMonitor;
-import com.android.internal.telephony.cdma.SmsMessage.SubmitPdu;
+import com.android.internal.telephony.cdma.SmsMessage;
 import com.android.internal.telephony.cdma.sms.UserData;
-import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class CdmaSMSDispatcher extends SMSDispatcher {
     private static final String TAG = "CdmaSMSDispatcher";
     private static final boolean VDBG = false;
 
-    public CdmaSMSDispatcher(PhoneBase phoneBase, SmsUsageMonitor smsUsageMonitor, ImsSMSDispatcher imsSMSDispatcher) {
-        super(phoneBase, smsUsageMonitor, imsSMSDispatcher);
+    public CdmaSMSDispatcher(PhoneBase phone, SmsUsageMonitor usageMonitor, ImsSMSDispatcher imsSMSDispatcher) {
+        super(phone, usageMonitor, imsSMSDispatcher);
         Rlog.d(TAG, "CdmaSMSDispatcher created");
     }
 
-    /* Access modifiers changed, original: protected */
-    public TextEncodingDetails calculateLength(CharSequence charSequence, boolean z) {
-        return SmsMessage.calculateLength(charSequence, z);
-    }
-
-    /* Access modifiers changed, original: protected */
+    /* JADX INFO: Access modifiers changed from: protected */
+    @Override // com.android.internal.telephony.SMSDispatcher
     public String getFormat() {
         return SmsMessage.FORMAT_3GPP2;
     }
 
-    /* Access modifiers changed, original: protected */
-    public SmsTracker getNewSubmitPduTracker(String str, String str2, String str3, SmsHeader smsHeader, int i, PendingIntent pendingIntent, PendingIntent pendingIntent2, boolean z, int i2, boolean z2, int i3, AtomicInteger atomicInteger, AtomicBoolean atomicBoolean, Uri uri, String str4) {
-        boolean z3;
-        UserData userData = new UserData();
-        userData.payloadStr = str3;
-        userData.userDataHeader = smsHeader;
-        if (i == 1) {
-            userData.msgEncoding = 9;
-            z3 = this.mPhone.getContext().getResources().getBoolean(17957011);
-            if (z3) {
-                Rlog.d(TAG, "ascii7bitForLongMsg = " + z3);
-                userData.msgEncoding = 2;
-            }
-        } else {
-            userData.msgEncoding = 4;
-        }
-        userData.msgEncodingSet = true;
-        z3 = pendingIntent2 != null && z;
-        HashMap smsTrackerMap = getSmsTrackerMap(str, str2, str3, SmsMessage.getSubmitPdu(str, userData, z3, i2));
-        String format = getFormat();
-        boolean z4 = !z || z2;
-        return getSmsTracker(smsTrackerMap, pendingIntent, pendingIntent2, format, atomicInteger, atomicBoolean, uri, smsHeader, z4, str4, true, i3);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public void sendStatusReportMessage(SmsMessage sms) {
+        sendMessage(obtainMessage(10, sms));
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void handleCdmaStatusReport(SmsMessage smsMessage) {
-        int size = this.deliveryPendingList.size();
-        for (int i = 0; i < size; i++) {
-            SmsTracker smsTracker = (SmsTracker) this.deliveryPendingList.get(i);
-            if (smsTracker.mMessageRef == smsMessage.mMessageRef) {
+    @Override // com.android.internal.telephony.SMSDispatcher
+    protected void handleStatusReport(Object o) {
+        if (o instanceof SmsMessage) {
+            handleCdmaStatusReport((SmsMessage) o);
+        } else {
+            Rlog.e(TAG, "handleStatusReport() called for object type " + o.getClass().getName());
+        }
+    }
+
+    void handleCdmaStatusReport(SmsMessage sms) {
+        int count = this.deliveryPendingList.size();
+        for (int i = 0; i < count; i++) {
+            SMSDispatcher.SmsTracker tracker = (SMSDispatcher.SmsTracker) this.deliveryPendingList.get(i);
+            if (tracker.mMessageRef == sms.mMessageRef) {
                 this.deliveryPendingList.remove(i);
-                smsTracker.updateSentMessageStatus(this.mContext, 0);
-                PendingIntent pendingIntent = smsTracker.mDeliveryIntent;
-                Intent intent = new Intent();
-                intent.putExtra("pdu", smsMessage.getPdu());
-                intent.putExtra(CellBroadcasts.MESSAGE_FORMAT, getFormat());
+                tracker.updateSentMessageStatus(this.mContext, 0);
+                PendingIntent intent = tracker.mDeliveryIntent;
+                Intent fillIn = new Intent();
+                fillIn.putExtra("pdu", sms.getPdu());
+                fillIn.putExtra(Telephony.CellBroadcasts.MESSAGE_FORMAT, getFormat());
                 try {
-                    pendingIntent.send(this.mContext, -1, intent);
+                    intent.send(this.mContext, -1, fillIn);
                     return;
-                } catch (CanceledException e) {
+                } catch (PendingIntent.CanceledException e) {
                     return;
                 }
             }
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void handleStatusReport(Object obj) {
-        if (obj instanceof SmsMessage) {
-            handleCdmaStatusReport((SmsMessage) obj);
-        } else {
-            Rlog.e(TAG, "handleStatusReport() called for object type " + obj.getClass().getName());
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void injectSmsPdu(byte[] bArr, String str, PendingIntent pendingIntent) {
-        throw new IllegalStateException("This method must be called only on ImsSMSDispatcher");
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void sendData(String str, String str2, int i, int i2, byte[] bArr, PendingIntent pendingIntent, PendingIntent pendingIntent2) {
-        SmsTracker smsTracker = getSmsTracker(getSmsTrackerMap(str, str2, i, i2, bArr, SmsMessage.getSubmitPdu(str2, str, i, i2, bArr, pendingIntent2 != null)), pendingIntent, pendingIntent2, getFormat(), null, false, null, false);
-        String carrierAppPackageName = getCarrierAppPackageName();
-        if (carrierAppPackageName != null) {
+    /* JADX INFO: Access modifiers changed from: protected */
+    @Override // com.android.internal.telephony.SMSDispatcher
+    public void sendData(String destAddr, String scAddr, int destPort, int origPort, byte[] data, PendingIntent sentIntent, PendingIntent deliveryIntent) {
+        SMSDispatcher.SmsTracker tracker = getSmsTracker(getSmsTrackerMap(destAddr, scAddr, destPort, origPort, data, SmsMessage.getSubmitPdu(scAddr, destAddr, destPort, origPort, data, deliveryIntent != null)), sentIntent, deliveryIntent, getFormat(), null, false, null, false);
+        String carrierPackage = getCarrierAppPackageName();
+        if (carrierPackage != null) {
             Rlog.d(TAG, "Found carrier package.");
-            DataSmsSender dataSmsSender = new DataSmsSender(smsTracker);
-            dataSmsSender.sendSmsByCarrierApp(carrierAppPackageName, new SmsSenderCallback(dataSmsSender));
+            SMSDispatcher.DataSmsSender smsSender = new SMSDispatcher.DataSmsSender(tracker);
+            smsSender.sendSmsByCarrierApp(carrierPackage, new SMSDispatcher.SmsSenderCallback(smsSender));
             return;
         }
         Rlog.v(TAG, "No carrier package.");
-        sendSubmitPdu(smsTracker);
+        sendSubmitPdu(tracker);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void sendSms(SmsTracker smsTracker) {
-        byte[] bArr = (byte[]) smsTracker.mData.get("pdu");
-        Rlog.d(TAG, "sendSms:  isIms()=" + isIms() + " mRetryCount=" + smsTracker.mRetryCount + " mImsRetry=" + smsTracker.mImsRetry + " mMessageRef=" + smsTracker.mMessageRef + " SS=" + this.mPhone.getServiceState().getState());
-        sendSmsByPstn(smsTracker);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void sendSmsByPstn(SmsTracker smsTracker) {
-        int state = this.mPhone.getServiceState().getState();
-        int voiceRegState = this.mPhone.getServiceState().getVoiceRegState();
-        int dataRegState = this.mPhone.getServiceState().getDataRegState();
-        Rlog.d(TAG, "isIms = " + isIms() + ", ssVoice = " + voiceRegState + ", ssData = " + dataRegState);
-        if (isIms() || voiceRegState == 0 || dataRegState == 0) {
-            Message obtainMessage = obtainMessage(2, smsTracker);
-            byte[] bArr = (byte[]) smsTracker.mData.get("pdu");
-            voiceRegState = this.mPhone.getServiceState().getDataNetworkType();
-            if ((voiceRegState == 14 || (voiceRegState == 13 && !this.mPhone.getServiceStateTracker().isConcurrentVoiceAndDataAllowed())) && this.mPhone.getServiceState().getVoiceNetworkType() == 7 && ((CDMAPhone) this.mPhone).mCT.mState != State.IDLE) {
-            }
-            if (smsTracker.mImsRetry == 0 && !isIms()) {
-                this.mCi.sendCdmaSms(bArr, obtainMessage);
-                return;
-            } else if (this.mImsSMSDispatcher.isImsSmsEnabled()) {
-                this.mCi.sendImsCdmaSms(bArr, smsTracker.mImsRetry, smsTracker.mMessageRef, obtainMessage);
-                smsTracker.mImsRetry++;
-                return;
-            } else {
-                this.mCi.sendCdmaSms(bArr, obtainMessage);
-                this.mImsSMSDispatcher.enableSendSmsOverIms(true);
-                return;
-            }
-        }
-        smsTracker.onFailed(this.mContext, SMSDispatcher.getNotInServiceError(state), 0);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendStatusReportMessage(SmsMessage smsMessage) {
-        sendMessage(obtainMessage(10, smsMessage));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void sendSubmitPdu(SmsTracker smsTracker) {
-        if (SystemProperties.getBoolean("ril.cdma.inecmmode", false)) {
-            smsTracker.onFailed(this.mContext, 4, 0);
-        } else {
-            sendRawPdu(smsTracker);
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void sendText(String str, String str2, String str3, PendingIntent pendingIntent, PendingIntent pendingIntent2, Uri uri, String str4, int i, boolean z, int i2) {
-        SubmitPdu submitPdu = SmsMessage.getSubmitPdu(str2, str, str3, pendingIntent2 != null, null, i);
-        if (submitPdu != null) {
-            SmsTracker smsTracker = getSmsTracker(getSmsTrackerMap(str, str2, str3, submitPdu), pendingIntent, pendingIntent2, getFormat(), uri, z, str3, true, i2);
-            String carrierAppPackageName = getCarrierAppPackageName();
-            if (carrierAppPackageName != null) {
+    /* JADX INFO: Access modifiers changed from: protected */
+    @Override // com.android.internal.telephony.SMSDispatcher
+    public void sendText(String destAddr, String scAddr, String text, PendingIntent sentIntent, PendingIntent deliveryIntent, Uri messageUri, String callingPkg, int priority, boolean isExpectMore, int validityPeriod) {
+        SmsMessage.SubmitPdu pdu = SmsMessage.getSubmitPdu(scAddr, destAddr, text, deliveryIntent != null, (SmsHeader) null, priority);
+        if (pdu != null) {
+            SMSDispatcher.SmsTracker tracker = getSmsTracker(getSmsTrackerMap(destAddr, scAddr, text, pdu), sentIntent, deliveryIntent, getFormat(), messageUri, isExpectMore, text, true, validityPeriod);
+            String carrierPackage = getCarrierAppPackageName();
+            if (carrierPackage != null) {
                 Rlog.d(TAG, "Found carrier package.");
-                TextSmsSender textSmsSender = new TextSmsSender(smsTracker);
-                textSmsSender.sendSmsByCarrierApp(carrierAppPackageName, new SmsSenderCallback(textSmsSender));
+                SMSDispatcher.TextSmsSender smsSender = new SMSDispatcher.TextSmsSender(tracker);
+                smsSender.sendSmsByCarrierApp(carrierPackage, new SMSDispatcher.SmsSenderCallback(smsSender));
                 return;
             }
             Rlog.v(TAG, "No carrier package.");
-            sendSubmitPdu(smsTracker);
+            sendSubmitPdu(tracker);
             return;
         }
         Rlog.e(TAG, "CdmaSMSDispatcher.sendText(): getSubmitPdu() returned null");
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    @Override // com.android.internal.telephony.SMSDispatcher
+    public void injectSmsPdu(byte[] pdu, String format, PendingIntent receivedIntent) {
+        throw new IllegalStateException("This method must be called only on ImsSMSDispatcher");
+    }
+
+    @Override // com.android.internal.telephony.SMSDispatcher
+    protected GsmAlphabet.TextEncodingDetails calculateLength(CharSequence messageBody, boolean use7bitOnly) {
+        return SmsMessage.calculateLength(messageBody, use7bitOnly);
+    }
+
+    @Override // com.android.internal.telephony.SMSDispatcher
+    protected SMSDispatcher.SmsTracker getNewSubmitPduTracker(String destinationAddress, String scAddress, String message, SmsHeader smsHeader, int encoding, PendingIntent sentIntent, PendingIntent deliveryIntent, boolean lastPart, int priority, boolean isExpectMore, int validityPeriod, AtomicInteger unsentPartCount, AtomicBoolean anyPartFailed, Uri messageUri, String fullMessageText) {
+        UserData uData = new UserData();
+        uData.payloadStr = message;
+        uData.userDataHeader = smsHeader;
+        if (encoding == 1) {
+            uData.msgEncoding = 9;
+            boolean ascii7bitForLongMsg = this.mPhone.getContext().getResources().getBoolean(17957011);
+            if (ascii7bitForLongMsg) {
+                Rlog.d(TAG, "ascii7bitForLongMsg = " + ascii7bitForLongMsg);
+                uData.msgEncoding = 2;
+            }
+        } else {
+            uData.msgEncoding = 4;
+        }
+        uData.msgEncodingSet = true;
+        return getSmsTracker(getSmsTrackerMap(destinationAddress, scAddress, message, SmsMessage.getSubmitPdu(destinationAddress, uData, deliveryIntent != null && lastPart, priority)), sentIntent, deliveryIntent, getFormat(), unsentPartCount, anyPartFailed, messageUri, smsHeader, !lastPart || isExpectMore, fullMessageText, true, validityPeriod);
+    }
+
+    @Override // com.android.internal.telephony.SMSDispatcher
+    protected void sendSubmitPdu(SMSDispatcher.SmsTracker tracker) {
+        if (SystemProperties.getBoolean("ril.cdma.inecmmode", false)) {
+            tracker.onFailed(this.mContext, 4, 0);
+        } else {
+            sendRawPdu(tracker);
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    @Override // com.android.internal.telephony.SMSDispatcher
+    public void sendSms(SMSDispatcher.SmsTracker tracker) {
+        byte[] bArr = (byte[]) tracker.mData.get("pdu");
+        Rlog.d(TAG, "sendSms:  isIms()=" + isIms() + " mRetryCount=" + tracker.mRetryCount + " mImsRetry=" + tracker.mImsRetry + " mMessageRef=" + tracker.mMessageRef + " SS=" + this.mPhone.getServiceState().getState());
+        sendSmsByPstn(tracker);
+    }
+
+    @Override // com.android.internal.telephony.SMSDispatcher
+    protected void sendSmsByPstn(SMSDispatcher.SmsTracker tracker) {
+        int ss = this.mPhone.getServiceState().getState();
+        int ssVoice = this.mPhone.getServiceState().getVoiceRegState();
+        int ssData = this.mPhone.getServiceState().getDataRegState();
+        Rlog.d(TAG, "isIms = " + isIms() + ", ssVoice = " + ssVoice + ", ssData = " + ssData);
+        if (isIms() || ssVoice == 0 || ssData == 0) {
+            Message reply = obtainMessage(2, tracker);
+            byte[] pdu = (byte[]) tracker.mData.get("pdu");
+            int currentDataNetwork = this.mPhone.getServiceState().getDataNetworkType();
+            if ((currentDataNetwork == 14 || (currentDataNetwork == 13 && !this.mPhone.getServiceStateTracker().isConcurrentVoiceAndDataAllowed())) && this.mPhone.getServiceState().getVoiceNetworkType() == 7 && ((CDMAPhone) this.mPhone).mCT.mState != PhoneConstants.State.IDLE) {
+            }
+            if (tracker.mImsRetry == 0 && !isIms()) {
+                this.mCi.sendCdmaSms(pdu, reply);
+            } else if (!this.mImsSMSDispatcher.isImsSmsEnabled()) {
+                this.mCi.sendCdmaSms(pdu, reply);
+                this.mImsSMSDispatcher.enableSendSmsOverIms(true);
+            } else {
+                this.mCi.sendImsCdmaSms(pdu, tracker.mImsRetry, tracker.mMessageRef, reply);
+                tracker.mImsRetry++;
+            }
+        } else {
+            tracker.onFailed(this.mContext, getNotInServiceError(ss), 0);
+        }
     }
 }

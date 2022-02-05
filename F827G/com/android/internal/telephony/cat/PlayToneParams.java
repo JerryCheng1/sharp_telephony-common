@@ -2,22 +2,27 @@ package com.android.internal.telephony.cat;
 
 import android.graphics.Bitmap;
 
-class PlayToneParams extends CommandParams {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* compiled from: CommandParams.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class PlayToneParams extends CommandParams {
     ToneSettings mSettings;
     TextMessage mTextMsg;
 
-    PlayToneParams(CommandDetails commandDetails, TextMessage textMessage, Tone tone, Duration duration, boolean z) {
-        super(commandDetails);
-        this.mTextMsg = textMessage;
-        this.mSettings = new ToneSettings(duration, tone, z);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public PlayToneParams(CommandDetails cmdDet, TextMessage textMsg, Tone tone, Duration duration, boolean vibrate) {
+        super(cmdDet);
+        this.mTextMsg = textMsg;
+        this.mSettings = new ToneSettings(duration, tone, vibrate);
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean setIcon(Bitmap bitmap) {
-        if (bitmap == null || this.mTextMsg == null) {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    @Override // com.android.internal.telephony.cat.CommandParams
+    public boolean setIcon(Bitmap icon) {
+        if (icon == null || this.mTextMsg == null) {
             return false;
         }
-        this.mTextMsg.icon = bitmap;
+        this.mTextMsg.icon = icon;
         return true;
     }
 }

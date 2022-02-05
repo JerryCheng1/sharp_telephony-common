@@ -1,9 +1,9 @@
 package com.android.internal.telephony.uicc;
 
 import android.app.AlertDialog;
-import android.app.AlertDialog.Builder;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.res.Resources;
@@ -22,16 +22,17 @@ import android.telephony.ServiceState;
 import android.telephony.TelephonyManager;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.Phone;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.SubscriptionController;
 import com.android.internal.telephony.TelBrand;
-import com.android.internal.telephony.uicc.IccCardStatus.CardState;
-import com.nttdocomo.android.portablesim.service.IPortableSimAppService.Stub;
+import com.android.internal.telephony.uicc.IccCardStatus;
+import com.nttdocomo.android.portablesim.service.IPortableSimAppService;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class UiccController extends Handler {
     public static final int APP_FAM_3GPP = 1;
     public static final int APP_FAM_3GPP2 = 2;
@@ -62,93 +63,42 @@ public class UiccController extends Handler {
     private static final Object mLock = new Object();
     private CommandsInterface[] mCis;
     private Context mContext;
-    private boolean mFatalSimMsgFlag = false;
-    protected RegistrantList mIccChangedRegistrants = new RegistrantList();
-    private boolean mOEMHookSimRefresh = false;
+    private boolean mOEMHookSimRefresh;
+    private UiccCard[] mUiccCards = new UiccCard[TelephonyManager.getDefault().getPhoneCount()];
     private Phone mPhone = null;
     private boolean mResetFlag = false;
-    private UiccCard[] mUiccCards = new UiccCard[TelephonyManager.getDefault().getPhoneCount()];
+    private boolean mFatalSimMsgFlag = false;
+    protected RegistrantList mIccChangedRegistrants = new RegistrantList();
 
-    private abstract class PSimServiceConnection implements ServiceConnection {
-        protected Object mParam = null;
-
-        PSimServiceConnection(Object obj) {
-            this.mParam = obj;
-        }
-
-        public void getPSimState() {
-            Intent intent = new Intent();
-            intent.setClassName("com.nttdocomo.android.portablesim", "com.nttdocomo.android.portablesim.service.PortableSimAppService");
-            if (!UiccController.this.mContext.bindService(intent, this, 1)) {
-                onFailedToConnectService();
+    public static UiccController make(Context c, CommandsInterface[] ci) {
+        UiccController uiccController;
+        synchronized (mLock) {
+            if (mInstance != null) {
+                throw new RuntimeException("MSimUiccController.make() should only be called once");
             }
+            mInstance = new UiccController(c, ci);
+            uiccController = mInstance;
         }
-
-        public abstract void onFailedToConnectService();
-
-        public abstract void onFailedToGetState();
-
-        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            try {
-                onSucceededToGetState(Stub.asInterface(iBinder).getConnetionState());
-            } catch (RemoteException e) {
-                onFailedToGetState();
-            }
-        }
-
-        public void onServiceDisconnected(ComponentName componentName) {
-        }
-
-        public abstract void onSucceededToGetState(int i);
+        return uiccController;
     }
 
-    private UiccController(Context context, CommandsInterface[] commandsInterfaceArr) {
-        int i = 0;
+    private UiccController(Context c, CommandsInterface[] ci) {
+        this.mOEMHookSimRefresh = false;
         log("Creating UiccController");
-        this.mContext = context;
-        this.mCis = commandsInterfaceArr;
+        this.mContext = c;
+        this.mCis = ci;
         this.mOEMHookSimRefresh = this.mContext.getResources().getBoolean(17957016);
-        while (i < this.mCis.length) {
-            Integer num = new Integer(i);
-            this.mCis[i].registerForIccStatusChanged(this, 1, num);
-            this.mCis[i].registerForAvailable(this, 1, num);
-            this.mCis[i].registerForNotAvailable(this, 3, num);
+        for (int i = 0; i < this.mCis.length; i++) {
+            Integer index = new Integer(i);
+            this.mCis[i].registerForIccStatusChanged(this, 1, index);
+            this.mCis[i].registerForAvailable(this, 1, index);
+            this.mCis[i].registerForNotAvailable(this, 3, index);
             if (this.mOEMHookSimRefresh) {
-                this.mCis[i].registerForSimRefreshEvent(this, 5, num);
+                this.mCis[i].registerForSimRefreshEvent(this, 5, index);
             } else {
-                this.mCis[i].registerForIccRefresh(this, 4, num);
-            }
-            i++;
-        }
-    }
-
-    private void dispFatalSimMsg() {
-        this.mFatalSimMsgFlag = true;
-        AlertDialog create = new Builder(this.mContext).setMessage(Resources.getSystem().getString(17041205)).setPositiveButton(17039370, null).create();
-        create.getWindow().setType(2009);
-        create.setCanceledOnTouchOutside(false);
-        create.show();
-        create.getWindow().addFlags(2621440);
-    }
-
-    private Integer getCiIndex(Message message) {
-        Integer num = new Integer(0);
-        if (message != null) {
-            if (message.obj != null && (message.obj instanceof Integer)) {
-                return (Integer) message.obj;
-            }
-            if (message.obj != null && (message.obj instanceof AsyncResult)) {
-                AsyncResult asyncResult = (AsyncResult) message.obj;
-                if (asyncResult.userObj != null && (asyncResult.userObj instanceof Integer)) {
-                    return (Integer) asyncResult.userObj;
-                }
+                this.mCis[i].registerForIccRefresh(this, 4, index);
             }
         }
-        return num;
-    }
-
-    public static int getFamilyFromRadioTechnology(int i) {
-        return (ServiceState.isGsm(i) || i == 13) ? 1 : ServiceState.isCdma(i) ? 2 : -1;
     }
 
     public static UiccController getInstance() {
@@ -162,203 +112,342 @@ public class UiccController extends Handler {
         return uiccController;
     }
 
-    private void gotoReset(boolean z) {
-        if (Build.IS_DEBUGGABLE && Build.ID.startsWith("F")) {
-            log("Manufacturing build. Not reboot.");
-        } else if (this.mPhone != null) {
-            Phone imsPhone = this.mPhone.getImsPhone();
-            if (this.mPhone.getState() == State.OFFHOOK) {
-                log("Wait for EVENT_DISCONNECT ");
-                this.mPhone.registerForDisconnect(this, 8, null);
-            } else if (imsPhone == null || imsPhone.getState() != State.OFFHOOK) {
-                log("PhoneConstants.State OFFHOOK onIccSwap()");
-                onIccSwap(z);
-            } else {
-                log("Wait for EVENT_DISCONNECT ");
-                imsPhone.registerForDisconnect(this, 8, null);
-            }
-        } else {
-            Rlog.e(LOG_TAG, "mPhone NULL calling onIccSwap ");
-            onIccSwap(z);
+    public UiccCard getUiccCard() {
+        return getUiccCard(0);
+    }
+
+    public UiccCard getUiccCard(int phoneId) {
+        UiccCard uiccCard;
+        synchronized (mLock) {
+            uiccCard = isValidCardIndex(phoneId) ? this.mUiccCards[phoneId] : null;
+        }
+        return uiccCard;
+    }
+
+    public UiccCard[] getUiccCards() {
+        UiccCard[] uiccCardArr;
+        synchronized (mLock) {
+            uiccCardArr = (UiccCard[]) this.mUiccCards.clone();
+        }
+        return uiccCardArr;
+    }
+
+    public UiccCardApplication getUiccCardApplication(int family) {
+        return getUiccCardApplication(SubscriptionController.getInstance().getPhoneId(SubscriptionController.getInstance().getDefaultSubId()), family);
+    }
+
+    public IccRecords getIccRecords(int phoneId, int family) {
+        IccRecords iccRecords;
+        synchronized (mLock) {
+            UiccCardApplication app = getUiccCardApplication(phoneId, family);
+            iccRecords = app != null ? app.getIccRecords() : null;
+        }
+        return iccRecords;
+    }
+
+    public IccFileHandler getIccFileHandler(int phoneId, int family) {
+        IccFileHandler iccFileHandler;
+        synchronized (mLock) {
+            UiccCardApplication app = getUiccCardApplication(phoneId, family);
+            iccFileHandler = app != null ? app.getIccFileHandler() : null;
+        }
+        return iccFileHandler;
+    }
+
+    public static int getFamilyFromRadioTechnology(int radioTechnology) {
+        if (ServiceState.isGsm(radioTechnology) || radioTechnology == 13) {
+            return 1;
+        }
+        if (ServiceState.isCdma(radioTechnology)) {
+            return 2;
+        }
+        return -1;
+    }
+
+    public void registerForIccChanged(Handler h, int what, Object obj) {
+        synchronized (mLock) {
+            Registrant r = new Registrant(h, what, obj);
+            this.mIccChangedRegistrants.add(r);
+            r.notifyRegistrant();
         }
     }
 
-    private void handleRefresh(IccRefreshResponse iccRefreshResponse, int i) {
-        if (iccRefreshResponse == null) {
+    public void unregisterForIccChanged(Handler h) {
+        synchronized (mLock) {
+            this.mIccChangedRegistrants.remove(h);
+        }
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        synchronized (mLock) {
+            Integer index = getCiIndex(msg);
+            if (index.intValue() < 0 || index.intValue() >= this.mCis.length) {
+                Rlog.e(LOG_TAG, "Invalid index : " + index + " received with event " + msg.what);
+                return;
+            }
+            switch (msg.what) {
+                case 1:
+                    log("Received EVENT_ICC_STATUS_CHANGED, calling getIccCardStatus");
+                    this.mCis[index.intValue()].getIccCardStatus(obtainMessage(2, index));
+                    String hotswap = SystemProperties.get(PROPERTY_SIM_HOTSWAP);
+                    if (!SIM_HOTSWAP_ADDED.equals(hotswap)) {
+                        if (!SIM_HOTSWAP_REMOVED.equals(hotswap)) {
+                            if (SIM_HOTSWAP_NONE.equals(hotswap)) {
+                                break;
+                            }
+                        } else if (!TelBrand.IS_DCM) {
+                            log("SystemProperties : " + hotswap + " calling gotoReset(false)");
+                            gotoReset(false);
+                            break;
+                        } else {
+                            new PSimServiceConnection(hotswap) { // from class: com.android.internal.telephony.uicc.UiccController.2
+                                @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                                protected void onFailedToConnectService() {
+                                    UiccController.this.log("cannot connect to PortableSimAppService");
+                                    UiccController.this.log("SystemProperties : " + ((String) this.mParam) + " calling gotoReset(false)");
+                                    UiccController.this.gotoReset(false);
+                                }
+
+                                @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                                protected void onSucceededToGetState(int connState) {
+                                    if ((connState & 2) != 0) {
+                                        SystemProperties.set(UiccController.PROPERTY_SIM_HOTSWAP, UiccController.SIM_HOTSWAP_NONE);
+                                        UiccController.this.log("switching sim and psim. avoid rebooting.");
+                                        return;
+                                    }
+                                    UiccController.this.log("SystemProperties : " + ((String) this.mParam) + " calling gotoReset(false)");
+                                    UiccController.this.gotoReset(false);
+                                }
+
+                                @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                                protected void onFailedToGetState() {
+                                    UiccController.this.log("SystemProperties : " + ((String) this.mParam) + " calling gotoReset(false)");
+                                    UiccController.this.gotoReset(false);
+                                }
+                            }.getPSimState();
+                            break;
+                        }
+                    } else if (!TelBrand.IS_DCM) {
+                        log("SystemProperties : " + hotswap + " calling gotoReset(ture)");
+                        gotoReset(true);
+                        break;
+                    } else {
+                        new PSimServiceConnection(hotswap) { // from class: com.android.internal.telephony.uicc.UiccController.1
+                            @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                            protected void onFailedToConnectService() {
+                                UiccController.this.log("cannot connect to PortableSimAppService");
+                                UiccController.this.log("SystemProperties : " + ((String) this.mParam) + " calling gotoReset(ture)");
+                                UiccController.this.gotoReset(true);
+                            }
+
+                            @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                            protected void onSucceededToGetState(int connState) {
+                                if ((connState & 2) != 0) {
+                                    SystemProperties.set(UiccController.PROPERTY_SIM_HOTSWAP, UiccController.SIM_HOTSWAP_NONE);
+                                    UiccController.this.log("switching sim and psim. avoid rebooting.");
+                                    return;
+                                }
+                                UiccController.this.log("SystemProperties : " + ((String) this.mParam) + " calling gotoReset(ture)");
+                                UiccController.this.gotoReset(true);
+                            }
+
+                            @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                            protected void onFailedToGetState() {
+                                UiccController.this.log("SystemProperties : " + ((String) this.mParam) + " calling gotoReset(ture)");
+                                UiccController.this.gotoReset(true);
+                            }
+                        }.getPSimState();
+                        break;
+                    }
+                    break;
+                case 2:
+                    log("Received EVENT_GET_ICC_STATUS_DONE");
+                    onGetIccCardStatusDone((AsyncResult) msg.obj, index);
+                    break;
+                case 3:
+                    log("EVENT_RADIO_UNAVAILABLE, dispose card");
+                    if (this.mUiccCards[index.intValue()] != null) {
+                        this.mUiccCards[index.intValue()].dispose();
+                    }
+                    this.mUiccCards[index.intValue()] = null;
+                    this.mIccChangedRegistrants.notifyRegistrants(new AsyncResult((Object) null, index, (Throwable) null));
+                    break;
+                case 4:
+                    AsyncResult ar = (AsyncResult) msg.obj;
+                    log("Sim REFRESH received");
+                    if (ar.exception != null) {
+                        log("Exception on refresh " + ar.exception);
+                        break;
+                    } else {
+                        handleRefresh((IccRefreshResponse) ar.result, index.intValue());
+                        break;
+                    }
+                case 5:
+                    AsyncResult ar2 = (AsyncResult) msg.obj;
+                    log("Sim REFRESH OEM received");
+                    if (ar2.exception != null) {
+                        log("Exception on refresh " + ar2.exception);
+                        break;
+                    } else {
+                        handleRefresh(parseOemSimRefresh(ByteBuffer.wrap((byte[]) ar2.result)), index.intValue());
+                        break;
+                    }
+                case 6:
+                case 9:
+                case 10:
+                default:
+                    Rlog.e(LOG_TAG, " Unknown Event " + msg.what);
+                    break;
+                case 7:
+                    resetAtNewThread();
+                    break;
+                case 8:
+                    log("Received EVENT_DISCONNECT calling gotoReset(false) ");
+                    gotoReset(false);
+                    break;
+                case 11:
+                    if (this.mUiccCards[index.intValue()] == null) {
+                        Rlog.d(LOG_TAG, "Retry getIccCardStatus mUiccCards[index]=" + this.mUiccCards[index.intValue()]);
+                        sendMessage(obtainMessage(1, index));
+                        break;
+                    }
+                    break;
+            }
+        }
+    }
+
+    private Integer getCiIndex(Message msg) {
+        Integer index = new Integer(0);
+        if (msg == null) {
+            return index;
+        }
+        if (msg.obj != null && (msg.obj instanceof Integer)) {
+            return (Integer) msg.obj;
+        }
+        if (msg.obj == null || !(msg.obj instanceof AsyncResult)) {
+            return index;
+        }
+        AsyncResult ar = (AsyncResult) msg.obj;
+        if (ar.userObj == null || !(ar.userObj instanceof Integer)) {
+            return index;
+        }
+        return (Integer) ar.userObj;
+    }
+
+    private void handleRefresh(IccRefreshResponse refreshResponse, int index) {
+        if (refreshResponse == null) {
             log("handleRefresh received without input");
             return;
         }
-        if (this.mUiccCards[i] != null) {
-            this.mUiccCards[i].onRefresh(iccRefreshResponse);
+        if (this.mUiccCards[index] != null) {
+            this.mUiccCards[index].onRefresh(refreshResponse);
         }
-        this.mCis[i].getIccCardStatus(obtainMessage(2, Integer.valueOf(i)));
+        this.mCis[index].getIccCardStatus(obtainMessage(2, Integer.valueOf(index)));
     }
 
-    private boolean isValidCardIndex(int i) {
-        return i >= 0 && i < this.mUiccCards.length;
+    public static IccRefreshResponse parseOemSimRefresh(ByteBuffer payload) {
+        IccRefreshResponse response = new IccRefreshResponse();
+        payload.order(ByteOrder.nativeOrder());
+        response.refreshResult = payload.getInt();
+        response.efId = payload.getInt();
+        int aidLen = payload.getInt();
+        byte[] aid = new byte[44];
+        payload.get(aid, 0, 44);
+        response.aid = aidLen == 0 ? null : new String(aid).substring(0, aidLen);
+        Rlog.d(LOG_TAG, "refresh SIM card , refresh result:" + response.refreshResult + ", ef Id:" + response.efId + ", aid:" + response.aid);
+        return response;
     }
 
-    private void log(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    public static UiccController make(Context context, CommandsInterface[] commandsInterfaceArr) {
-        UiccController uiccController;
+    public UiccCardApplication getUiccCardApplication(int phoneId, int family) {
+        UiccCardApplication application;
         synchronized (mLock) {
-            if (mInstance != null) {
-                throw new RuntimeException("MSimUiccController.make() should only be called once");
-            }
-            mInstance = new UiccController(context, commandsInterfaceArr);
-            uiccController = mInstance;
+            application = (!isValidCardIndex(phoneId) || this.mUiccCards[phoneId] == null) ? null : this.mUiccCards[phoneId].getApplication(family);
         }
-        return uiccController;
+        return application;
     }
 
-    private void onGetIccCardStatusDone(AsyncResult asyncResult, Integer num) {
-        synchronized (this) {
-            if (asyncResult.exception != null) {
-                Rlog.e(LOG_TAG, "Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error", asyncResult.exception);
-            } else if (isValidCardIndex(num.intValue())) {
-                IccCardStatus iccCardStatus = (IccCardStatus) asyncResult.result;
-                if (this.mUiccCards[num.intValue()] != null || iccCardStatus.mCardState != CardState.CARDSTATE_PRESENT || iccCardStatus.mGsmUmtsSubscriptionAppIndex >= 0 || iccCardStatus.mCdmaSubscriptionAppIndex >= 0 || iccCardStatus.mImsSubscriptionAppIndex >= 0) {
-                    if (!this.mFatalSimMsgFlag && !this.mResetFlag && SystemProperties.getInt(PROPERTY_UIM_DET, -1) == 1 && iccCardStatus.mCardState == CardState.CARDSTATE_PRESENT) {
-                        if (TelBrand.IS_DCM) {
-                            new PSimServiceConnection(null) {
-                                /* Access modifiers changed, original: protected */
-                                public void onFailedToConnectService() {
-                                    UiccController.this.log("cannot connect to PortableSimAppService");
-                                    UiccController.this.dispFatalSimMsg();
-                                }
-
-                                /* Access modifiers changed, original: protected */
-                                public void onFailedToGetState() {
-                                    UiccController.this.dispFatalSimMsg();
-                                }
-
-                                /* Access modifiers changed, original: protected */
-                                public void onSucceededToGetState(int i) {
-                                    if ((i & UiccController.PSIM_SLAVE) == 0 || (i & 255) == 0) {
-                                        UiccController.this.dispFatalSimMsg();
-                                    } else {
-                                        UiccController.this.log("psim is enabled. avoid showing uim unstable message.");
-                                    }
-                                }
-                            }.getPSimState();
-                        } else {
-                            dispFatalSimMsg();
-                        }
-                    }
-                    if (this.mUiccCards[num.intValue()] == null) {
-                        this.mUiccCards[num.intValue()] = new UiccCard(this.mContext, this.mCis[num.intValue()], iccCardStatus, num.intValue());
-                    } else {
-                        this.mUiccCards[num.intValue()].update(this.mContext, this.mCis[num.intValue()], iccCardStatus);
-                    }
-                    log("Notifying IccChangedRegistrants");
-                    this.mIccChangedRegistrants.notifyRegistrants(new AsyncResult(null, num, null));
-                } else {
-                    sendMessageDelayed(obtainMessage(11, num), 15000);
-                    Rlog.d(LOG_TAG, "sendMessageDelayed 15000 msc");
-                }
-            } else {
-                Rlog.e(LOG_TAG, "onGetIccCardStatusDone: invalid index : " + num);
-            }
-        }
-    }
-
-    private void onIccSwap(boolean z) {
-        String str = SystemProperties.get("sys.shutdown.requested", "");
-        if (str != null && str.length() > 0) {
-            log("shutdown was started");
-        } else if (this.mResetFlag) {
-            log("onIccSwap is executed");
+    private synchronized void onGetIccCardStatusDone(AsyncResult ar, Integer index) {
+        if (ar.exception != null) {
+            Rlog.e(LOG_TAG, "Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error", ar.exception);
+        } else if (!isValidCardIndex(index.intValue())) {
+            Rlog.e(LOG_TAG, "onGetIccCardStatusDone: invalid index : " + index);
         } else {
-            CharSequence string;
-            this.mResetFlag = true;
-            Resources system = Resources.getSystem();
-            if (z) {
-                string = system.getString(17040694);
+            IccCardStatus status = (IccCardStatus) ar.result;
+            if (this.mUiccCards[index.intValue()] != null || status.mCardState != IccCardStatus.CardState.CARDSTATE_PRESENT || status.mGsmUmtsSubscriptionAppIndex >= 0 || status.mCdmaSubscriptionAppIndex >= 0 || status.mImsSubscriptionAppIndex >= 0) {
+                if (!this.mFatalSimMsgFlag && !this.mResetFlag && SystemProperties.getInt(PROPERTY_UIM_DET, -1) == 1 && status.mCardState == IccCardStatus.CardState.CARDSTATE_PRESENT) {
+                    if (TelBrand.IS_DCM) {
+                        new PSimServiceConnection(null) { // from class: com.android.internal.telephony.uicc.UiccController.3
+                            @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                            protected void onFailedToConnectService() {
+                                UiccController.this.log("cannot connect to PortableSimAppService");
+                                UiccController.this.dispFatalSimMsg();
+                            }
+
+                            @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                            protected void onSucceededToGetState(int connState) {
+                                if ((connState & UiccController.PSIM_SLAVE) == 0 || (connState & 255) == 0) {
+                                    UiccController.this.dispFatalSimMsg();
+                                } else {
+                                    UiccController.this.log("psim is enabled. avoid showing uim unstable message.");
+                                }
+                            }
+
+                            @Override // com.android.internal.telephony.uicc.UiccController.PSimServiceConnection
+                            protected void onFailedToGetState() {
+                                UiccController.this.dispFatalSimMsg();
+                            }
+                        }.getPSimState();
+                    } else {
+                        dispFatalSimMsg();
+                    }
+                }
+                if (this.mUiccCards[index.intValue()] == null) {
+                    this.mUiccCards[index.intValue()] = new UiccCard(this.mContext, this.mCis[index.intValue()], status, index.intValue());
+                } else {
+                    this.mUiccCards[index.intValue()].update(this.mContext, this.mCis[index.intValue()], status);
+                }
+                log("Notifying IccChangedRegistrants");
+                this.mIccChangedRegistrants.notifyRegistrants(new AsyncResult((Object) null, index, (Throwable) null));
             } else {
-                Object string2 = system.getString(17040691);
+                sendMessageDelayed(obtainMessage(11, index), 15000L);
+                Rlog.d(LOG_TAG, "sendMessageDelayed 15000 msc");
             }
-            CharSequence string3 = z ? system.getString(17040695) : system.getString(17040692);
-            system.getString(17040696);
-            AlertDialog create = new Builder(this.mContext).setTitle(string2).setMessage(string3).create();
-            create.getWindow().setType(2009);
-            create.setCanceledOnTouchOutside(false);
-            create.show();
-            create.getWindow().addFlags(2621440);
-            sendMessageDelayed(obtainMessage(7), 5000);
         }
     }
 
-    public static IccRefreshResponse parseOemSimRefresh(ByteBuffer byteBuffer) {
-        IccRefreshResponse iccRefreshResponse = new IccRefreshResponse();
-        byteBuffer.order(ByteOrder.nativeOrder());
-        iccRefreshResponse.refreshResult = byteBuffer.getInt();
-        iccRefreshResponse.efId = byteBuffer.getInt();
-        int i = byteBuffer.getInt();
-        byte[] bArr = new byte[44];
-        byteBuffer.get(bArr, 0, 44);
-        iccRefreshResponse.aid = i == 0 ? null : new String(bArr).substring(0, i);
-        Rlog.d(LOG_TAG, "refresh SIM card , refresh result:" + iccRefreshResponse.refreshResult + ", ef Id:" + iccRefreshResponse.efId + ", aid:" + iccRefreshResponse.aid);
-        return iccRefreshResponse;
+    private boolean isValidCardIndex(int index) {
+        return index >= 0 && index < this.mUiccCards.length;
     }
 
-    private void reboot() {
-        log("Reboot due to SIM swap");
-        ((PowerManager) this.mContext.getSystemService("power")).reboot("SIM is hotswap.");
+    public void log(String string) {
+        Rlog.d(LOG_TAG, string);
     }
 
-    private void resetAtNewThread() {
-        new Thread() {
-            public void run() {
-                UiccController.this.reboot();
-            }
-        }.start();
-    }
-
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        int i = 0;
-        printWriter.println("UiccController: " + this);
-        printWriter.println(" mContext=" + this.mContext);
-        printWriter.println(" mInstance=" + mInstance);
-        printWriter.println(" mIccChangedRegistrants: size=" + this.mIccChangedRegistrants.size());
-        for (int i2 = 0; i2 < this.mIccChangedRegistrants.size(); i2++) {
-            printWriter.println("  mIccChangedRegistrants[" + i2 + "]=" + ((Registrant) this.mIccChangedRegistrants.get(i2)).getHandler());
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("UiccController: " + this);
+        pw.println(" mContext=" + this.mContext);
+        pw.println(" mInstance=" + mInstance);
+        pw.println(" mIccChangedRegistrants: size=" + this.mIccChangedRegistrants.size());
+        for (int i = 0; i < this.mIccChangedRegistrants.size(); i++) {
+            pw.println("  mIccChangedRegistrants[" + i + "]=" + ((Registrant) this.mIccChangedRegistrants.get(i)).getHandler());
         }
-        printWriter.println();
-        printWriter.flush();
-        printWriter.println(" mUiccCards: size=" + this.mUiccCards.length);
-        while (i < this.mUiccCards.length) {
-            if (this.mUiccCards[i] == null) {
-                printWriter.println("  mUiccCards[" + i + "]=null");
+        pw.println();
+        pw.flush();
+        pw.println(" mUiccCards: size=" + this.mUiccCards.length);
+        for (int i2 = 0; i2 < this.mUiccCards.length; i2++) {
+            if (this.mUiccCards[i2] == null) {
+                pw.println("  mUiccCards[" + i2 + "]=null");
             } else {
-                printWriter.println("  mUiccCards[" + i + "]=" + this.mUiccCards[i]);
-                this.mUiccCards[i].dump(fileDescriptor, printWriter, strArr);
+                pw.println("  mUiccCards[" + i2 + "]=" + this.mUiccCards[i2]);
+                this.mUiccCards[i2].dump(fd, pw, args);
             }
-            i++;
         }
     }
 
-    public IccFileHandler getIccFileHandler(int i, int i2) {
+    public void setPhone(Phone phone) {
         synchronized (mLock) {
-            UiccCardApplication uiccCardApplication = getUiccCardApplication(i, i2);
-            if (uiccCardApplication != null) {
-                IccFileHandler iccFileHandler = uiccCardApplication.getIccFileHandler();
-                return iccFileHandler;
-            }
-            return null;
-        }
-    }
-
-    public IccRecords getIccRecords(int i, int i2) {
-        synchronized (mLock) {
-            UiccCardApplication uiccCardApplication = getUiccCardApplication(i, i2);
-            if (uiccCardApplication != null) {
-                IccRecords iccRecords = uiccCardApplication.getIccRecords();
-                return iccRecords;
-            }
-            return null;
+            this.mPhone = phone;
         }
     }
 
@@ -370,327 +459,106 @@ public class UiccController extends Handler {
         return phone;
     }
 
-    public UiccCard getUiccCard() {
-        return getUiccCard(0);
+    private void onIccSwap(boolean isAdded) {
+        String shutdownAction = SystemProperties.get("sys.shutdown.requested", "");
+        if (shutdownAction != null && shutdownAction.length() > 0) {
+            log("shutdown was started");
+        } else if (this.mResetFlag) {
+            log("onIccSwap is executed");
+        } else {
+            this.mResetFlag = true;
+            Resources r = Resources.getSystem();
+            String title = isAdded ? r.getString(17040694) : r.getString(17040691);
+            String message = isAdded ? r.getString(17040695) : r.getString(17040692);
+            r.getString(17040696);
+            AlertDialog dialog = new AlertDialog.Builder(this.mContext).setTitle(title).setMessage(message).create();
+            dialog.getWindow().setType(2009);
+            dialog.setCanceledOnTouchOutside(false);
+            dialog.show();
+            dialog.getWindow().addFlags(2621440);
+            sendMessageDelayed(obtainMessage(7), 5000L);
+        }
     }
 
-    public UiccCard getUiccCard(int i) {
-        synchronized (mLock) {
-            if (isValidCardIndex(i)) {
-                UiccCard uiccCard = this.mUiccCards[i];
-                return uiccCard;
+    public void reboot() {
+        log("Reboot due to SIM swap");
+        ((PowerManager) this.mContext.getSystemService("power")).reboot("SIM is hotswap.");
+    }
+
+    private void resetAtNewThread() {
+        new Thread() { // from class: com.android.internal.telephony.uicc.UiccController.4
+            @Override // java.lang.Thread, java.lang.Runnable
+            public void run() {
+                UiccController.this.reboot();
             }
-            return null;
+        }.start();
+    }
+
+    public void gotoReset(boolean isAdded) {
+        if (Build.IS_DEBUGGABLE && Build.ID.startsWith("F")) {
+            log("Manufacturing build. Not reboot.");
+        } else if (this.mPhone != null) {
+            Phone imsphone = this.mPhone.getImsPhone();
+            if (this.mPhone.getState() == PhoneConstants.State.OFFHOOK) {
+                log("Wait for EVENT_DISCONNECT ");
+                this.mPhone.registerForDisconnect(this, 8, null);
+            } else if (imsphone == null || imsphone.getState() != PhoneConstants.State.OFFHOOK) {
+                log("PhoneConstants.State OFFHOOK onIccSwap()");
+                onIccSwap(isAdded);
+            } else {
+                log("Wait for EVENT_DISCONNECT ");
+                imsphone.registerForDisconnect(this, 8, null);
+            }
+        } else {
+            Rlog.e(LOG_TAG, "mPhone NULL calling onIccSwap ");
+            onIccSwap(isAdded);
         }
     }
 
-    public UiccCardApplication getUiccCardApplication(int i) {
-        return getUiccCardApplication(SubscriptionController.getInstance().getPhoneId(SubscriptionController.getInstance().getDefaultSubId()), i);
+    public void dispFatalSimMsg() {
+        this.mFatalSimMsgFlag = true;
+        AlertDialog dialog = new AlertDialog.Builder(this.mContext).setMessage(Resources.getSystem().getString(17041205)).setPositiveButton(17039370, (DialogInterface.OnClickListener) null).create();
+        dialog.getWindow().setType(2009);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+        dialog.getWindow().addFlags(2621440);
     }
 
-    /* JADX WARNING: Missing block: B:15:?, code skipped:
-            return null;
-     */
-    public com.android.internal.telephony.uicc.UiccCardApplication getUiccCardApplication(int r3, int r4) {
-        /*
-        r2 = this;
-        r1 = mLock;
-        monitor-enter(r1);
-        r0 = r2.isValidCardIndex(r3);	 Catch:{ all -> 0x001c }
-        if (r0 == 0) goto L_0x0019;
-    L_0x0009:
-        r0 = r2.mUiccCards;	 Catch:{ all -> 0x001c }
-        r0 = r0[r3];	 Catch:{ all -> 0x001c }
-        if (r0 == 0) goto L_0x0019;
-    L_0x000f:
-        r0 = r2.mUiccCards;	 Catch:{ all -> 0x001c }
-        r0 = r0[r3];	 Catch:{ all -> 0x001c }
-        r0 = r0.getApplication(r4);	 Catch:{ all -> 0x001c }
-        monitor-exit(r1);	 Catch:{ all -> 0x001c }
-    L_0x0018:
-        return r0;
-    L_0x0019:
-        monitor-exit(r1);	 Catch:{ all -> 0x001c }
-        r0 = 0;
-        goto L_0x0018;
-    L_0x001c:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x001c }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.UiccController.getUiccCardApplication(int, int):com.android.internal.telephony.uicc.UiccCardApplication");
-    }
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public abstract class PSimServiceConnection implements ServiceConnection {
+        protected Object mParam;
 
-    public UiccCard[] getUiccCards() {
-        UiccCard[] uiccCardArr;
-        synchronized (mLock) {
-            uiccCardArr = (UiccCard[]) this.mUiccCards.clone();
+        abstract void onFailedToConnectService();
+
+        abstract void onFailedToGetState();
+
+        abstract void onSucceededToGetState(int i);
+
+        PSimServiceConnection(Object param) {
+            UiccController.this = r2;
+            this.mParam = null;
+            this.mParam = param;
         }
-        return uiccCardArr;
-    }
 
-    /* JADX WARNING: Missing block: B:52:?, code skipped:
-            return;
-     */
-    public void handleMessage(android.os.Message r7) {
-        /*
-        r6 = this;
-        r1 = mLock;
-        monitor-enter(r1);
-        r2 = r6.getCiIndex(r7);	 Catch:{ all -> 0x005d }
-        r0 = r2.intValue();	 Catch:{ all -> 0x005d }
-        if (r0 < 0) goto L_0x0016;
-    L_0x000d:
-        r0 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r3 = r6.mCis;	 Catch:{ all -> 0x005d }
-        r3 = r3.length;	 Catch:{ all -> 0x005d }
-        if (r0 < r3) goto L_0x003c;
-    L_0x0016:
-        r0 = "UiccController";
-        r3 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r3.<init>();	 Catch:{ all -> 0x005d }
-        r4 = "Invalid index : ";
-        r3 = r3.append(r4);	 Catch:{ all -> 0x005d }
-        r2 = r3.append(r2);	 Catch:{ all -> 0x005d }
-        r3 = " received with event ";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r3 = r7.what;	 Catch:{ all -> 0x005d }
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r2 = r2.toString();	 Catch:{ all -> 0x005d }
-        android.telephony.Rlog.e(r0, r2);	 Catch:{ all -> 0x005d }
-        monitor-exit(r1);	 Catch:{ all -> 0x005d }
-    L_0x003b:
-        return;
-    L_0x003c:
-        r0 = r7.what;	 Catch:{ all -> 0x005d }
-        switch(r0) {
-            case 1: goto L_0x0060;
-            case 2: goto L_0x00f2;
-            case 3: goto L_0x0134;
-            case 4: goto L_0x0165;
-            case 5: goto L_0x0199;
-            case 6: goto L_0x0041;
-            case 7: goto L_0x01e2;
-            case 8: goto L_0x01d7;
-            case 9: goto L_0x0041;
-            case 10: goto L_0x0041;
-            case 11: goto L_0x0100;
-            default: goto L_0x0041;
-        };	 Catch:{ all -> 0x005d }
-    L_0x0041:
-        r0 = "UiccController";
-        r2 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r2.<init>();	 Catch:{ all -> 0x005d }
-        r3 = " Unknown Event ";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r3 = r7.what;	 Catch:{ all -> 0x005d }
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r2 = r2.toString();	 Catch:{ all -> 0x005d }
-        android.telephony.Rlog.e(r0, r2);	 Catch:{ all -> 0x005d }
-    L_0x005b:
-        monitor-exit(r1);	 Catch:{ all -> 0x005d }
-        goto L_0x003b;
-    L_0x005d:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x005d }
-        throw r0;
-    L_0x0060:
-        r0 = "Received EVENT_ICC_STATUS_CHANGED, calling getIccCardStatus";
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        r0 = r6.mCis;	 Catch:{ all -> 0x005d }
-        r3 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r0 = r0[r3];	 Catch:{ all -> 0x005d }
-        r3 = 2;
-        r2 = r6.obtainMessage(r3, r2);	 Catch:{ all -> 0x005d }
-        r0.getIccCardStatus(r2);	 Catch:{ all -> 0x005d }
-        r0 = "ril.uim.hotswap";
-        r0 = android.os.SystemProperties.get(r0);	 Catch:{ all -> 0x005d }
-        r2 = "ADDED";
-        r2 = r2.equals(r0);	 Catch:{ all -> 0x005d }
-        if (r2 == 0) goto L_0x00b1;
-    L_0x0083:
-        r2 = com.android.internal.telephony.TelBrand.IS_DCM;	 Catch:{ all -> 0x005d }
-        if (r2 == 0) goto L_0x0090;
-    L_0x0087:
-        r2 = new com.android.internal.telephony.uicc.UiccController$1;	 Catch:{ all -> 0x005d }
-        r2.<init>(r0);	 Catch:{ all -> 0x005d }
-        r2.getPSimState();	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x0090:
-        r2 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r2.<init>();	 Catch:{ all -> 0x005d }
-        r3 = "SystemProperties : ";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r0 = r2.append(r0);	 Catch:{ all -> 0x005d }
-        r2 = " calling gotoReset(ture)";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x005d }
-        r0 = r0.toString();	 Catch:{ all -> 0x005d }
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        r0 = 1;
-        r6.gotoReset(r0);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x00b1:
-        r2 = "REMOVED";
-        r2 = r2.equals(r0);	 Catch:{ all -> 0x005d }
-        if (r2 == 0) goto L_0x00e8;
-    L_0x00b9:
-        r2 = com.android.internal.telephony.TelBrand.IS_DCM;	 Catch:{ all -> 0x005d }
-        if (r2 == 0) goto L_0x00c6;
-    L_0x00bd:
-        r2 = new com.android.internal.telephony.uicc.UiccController$2;	 Catch:{ all -> 0x005d }
-        r2.<init>(r0);	 Catch:{ all -> 0x005d }
-        r2.getPSimState();	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x00c6:
-        r2 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r2.<init>();	 Catch:{ all -> 0x005d }
-        r3 = "SystemProperties : ";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r0 = r2.append(r0);	 Catch:{ all -> 0x005d }
-        r2 = " calling gotoReset(false)";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x005d }
-        r0 = r0.toString();	 Catch:{ all -> 0x005d }
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        r0 = 0;
-        r6.gotoReset(r0);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x00e8:
-        r2 = "NONE";
-        r0 = r2.equals(r0);	 Catch:{ all -> 0x005d }
-        if (r0 == 0) goto L_0x005b;
-    L_0x00f0:
-        goto L_0x005b;
-    L_0x00f2:
-        r0 = "Received EVENT_GET_ICC_STATUS_DONE";
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        r0 = r7.obj;	 Catch:{ all -> 0x005d }
-        r0 = (android.os.AsyncResult) r0;	 Catch:{ all -> 0x005d }
-        r6.onGetIccCardStatusDone(r0, r2);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x0100:
-        r0 = r6.mUiccCards;	 Catch:{ all -> 0x005d }
-        r3 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r0 = r0[r3];	 Catch:{ all -> 0x005d }
-        if (r0 != 0) goto L_0x005b;
-    L_0x010a:
-        r0 = "UiccController";
-        r3 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r3.<init>();	 Catch:{ all -> 0x005d }
-        r4 = "Retry getIccCardStatus mUiccCards[index]=";
-        r3 = r3.append(r4);	 Catch:{ all -> 0x005d }
-        r4 = r6.mUiccCards;	 Catch:{ all -> 0x005d }
-        r5 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r4 = r4[r5];	 Catch:{ all -> 0x005d }
-        r3 = r3.append(r4);	 Catch:{ all -> 0x005d }
-        r3 = r3.toString();	 Catch:{ all -> 0x005d }
-        android.telephony.Rlog.d(r0, r3);	 Catch:{ all -> 0x005d }
-        r0 = 1;
-        r0 = r6.obtainMessage(r0, r2);	 Catch:{ all -> 0x005d }
-        r6.sendMessage(r0);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x0134:
-        r0 = "EVENT_RADIO_UNAVAILABLE, dispose card";
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        r0 = r6.mUiccCards;	 Catch:{ all -> 0x005d }
-        r3 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r0 = r0[r3];	 Catch:{ all -> 0x005d }
-        if (r0 == 0) goto L_0x014e;
-    L_0x0143:
-        r0 = r6.mUiccCards;	 Catch:{ all -> 0x005d }
-        r3 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r0 = r0[r3];	 Catch:{ all -> 0x005d }
-        r0.dispose();	 Catch:{ all -> 0x005d }
-    L_0x014e:
-        r0 = r6.mUiccCards;	 Catch:{ all -> 0x005d }
-        r3 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r4 = 0;
-        r0[r3] = r4;	 Catch:{ all -> 0x005d }
-        r0 = r6.mIccChangedRegistrants;	 Catch:{ all -> 0x005d }
-        r3 = new android.os.AsyncResult;	 Catch:{ all -> 0x005d }
-        r4 = 0;
-        r5 = 0;
-        r3.<init>(r4, r2, r5);	 Catch:{ all -> 0x005d }
-        r0.notifyRegistrants(r3);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x0165:
-        r0 = r7.obj;	 Catch:{ all -> 0x005d }
-        r0 = (android.os.AsyncResult) r0;	 Catch:{ all -> 0x005d }
-        r3 = "Sim REFRESH received";
-        r6.log(r3);	 Catch:{ all -> 0x005d }
-        r3 = r0.exception;	 Catch:{ all -> 0x005d }
-        if (r3 != 0) goto L_0x017f;
-    L_0x0172:
-        r0 = r0.result;	 Catch:{ all -> 0x005d }
-        r0 = (com.android.internal.telephony.uicc.IccRefreshResponse) r0;	 Catch:{ all -> 0x005d }
-        r2 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r6.handleRefresh(r0, r2);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x017f:
-        r2 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r2.<init>();	 Catch:{ all -> 0x005d }
-        r3 = "Exception on refresh ";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r0 = r0.exception;	 Catch:{ all -> 0x005d }
-        r0 = r2.append(r0);	 Catch:{ all -> 0x005d }
-        r0 = r0.toString();	 Catch:{ all -> 0x005d }
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x0199:
-        r0 = r7.obj;	 Catch:{ all -> 0x005d }
-        r0 = (android.os.AsyncResult) r0;	 Catch:{ all -> 0x005d }
-        r3 = "Sim REFRESH OEM received";
-        r6.log(r3);	 Catch:{ all -> 0x005d }
-        r3 = r0.exception;	 Catch:{ all -> 0x005d }
-        if (r3 != 0) goto L_0x01bd;
-    L_0x01a6:
-        r0 = r0.result;	 Catch:{ all -> 0x005d }
-        r0 = (byte[]) r0;	 Catch:{ all -> 0x005d }
-        r0 = (byte[]) r0;	 Catch:{ all -> 0x005d }
-        r0 = java.nio.ByteBuffer.wrap(r0);	 Catch:{ all -> 0x005d }
-        r0 = parseOemSimRefresh(r0);	 Catch:{ all -> 0x005d }
-        r2 = r2.intValue();	 Catch:{ all -> 0x005d }
-        r6.handleRefresh(r0, r2);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x01bd:
-        r2 = new java.lang.StringBuilder;	 Catch:{ all -> 0x005d }
-        r2.<init>();	 Catch:{ all -> 0x005d }
-        r3 = "Exception on refresh ";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x005d }
-        r0 = r0.exception;	 Catch:{ all -> 0x005d }
-        r0 = r2.append(r0);	 Catch:{ all -> 0x005d }
-        r0 = r0.toString();	 Catch:{ all -> 0x005d }
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x01d7:
-        r0 = "Received EVENT_DISCONNECT calling gotoReset(false) ";
-        r6.log(r0);	 Catch:{ all -> 0x005d }
-        r0 = 0;
-        r6.gotoReset(r0);	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-    L_0x01e2:
-        r6.resetAtNewThread();	 Catch:{ all -> 0x005d }
-        goto L_0x005b;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.UiccController.handleMessage(android.os.Message):void");
-    }
-
-    public void registerForIccChanged(Handler handler, int i, Object obj) {
-        synchronized (mLock) {
-            Registrant registrant = new Registrant(handler, i, obj);
-            this.mIccChangedRegistrants.add(registrant);
-            registrant.notifyRegistrant();
+        @Override // android.content.ServiceConnection
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            try {
+                onSucceededToGetState(IPortableSimAppService.Stub.asInterface(service).getConnetionState());
+            } catch (RemoteException e) {
+                onFailedToGetState();
+            }
         }
-    }
 
-    public void setPhone(Phone phone) {
-        synchronized (mLock) {
-            this.mPhone = phone;
+        @Override // android.content.ServiceConnection
+        public void onServiceDisconnected(ComponentName name) {
         }
-    }
 
-    public void unregisterForIccChanged(Handler handler) {
-        synchronized (mLock) {
-            this.mIccChangedRegistrants.remove(handler);
+        public void getPSimState() {
+            Intent intent = new Intent();
+            intent.setClassName("com.nttdocomo.android.portablesim", "com.nttdocomo.android.portablesim.service.PortableSimAppService");
+            if (!UiccController.this.mContext.bindService(intent, this, 1)) {
+                onFailedToConnectService();
+            }
         }
     }
 }

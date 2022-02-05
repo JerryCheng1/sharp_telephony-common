@@ -2,6 +2,7 @@ package com.android.internal.telephony.cdma;
 
 import java.util.HashMap;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SignalToneUtil {
     public static final int CDMA_INVALID_TONE = -1;
     public static final int IS95_CONST_IR_ALERT_HIGH = 1;
@@ -46,83 +47,86 @@ public class SignalToneUtil {
     public static final int IS95_CONST_IR_SIG_TONE_REORDER = 4;
     public static final int IS95_CONST_IR_SIG_TONE_RING = 1;
     public static final int TAPIAMSSCDMA_SIGNAL_PITCH_UNKNOWN = 0;
-    private static HashMap<Integer, Integer> mHm = new HashMap();
+    private static HashMap<Integer, Integer> mHm = new HashMap<>();
 
     static {
-        mHm.put(signalParamHash(1, 0, 0), Integer.valueOf(45));
-        mHm.put(signalParamHash(1, 0, 1), Integer.valueOf(46));
-        mHm.put(signalParamHash(1, 0, 2), Integer.valueOf(47));
-        mHm.put(signalParamHash(1, 0, 3), Integer.valueOf(48));
-        mHm.put(signalParamHash(1, 0, 4), Integer.valueOf(49));
-        mHm.put(signalParamHash(1, 0, 5), Integer.valueOf(50));
-        mHm.put(signalParamHash(1, 0, 6), Integer.valueOf(51));
-        mHm.put(signalParamHash(1, 0, 7), Integer.valueOf(52));
-        mHm.put(signalParamHash(1, 0, 15), Integer.valueOf(98));
-        mHm.put(signalParamHash(0, 0, 0), Integer.valueOf(34));
-        mHm.put(signalParamHash(0, 0, 1), Integer.valueOf(35));
-        mHm.put(signalParamHash(0, 0, 2), Integer.valueOf(29));
-        mHm.put(signalParamHash(0, 0, 3), Integer.valueOf(30));
-        mHm.put(signalParamHash(0, 0, 4), Integer.valueOf(38));
-        mHm.put(signalParamHash(0, 0, 5), Integer.valueOf(39));
-        mHm.put(signalParamHash(0, 0, 6), Integer.valueOf(40));
-        mHm.put(signalParamHash(0, 0, 7), Integer.valueOf(32));
-        mHm.put(signalParamHash(0, 0, 8), Integer.valueOf(42));
-        mHm.put(signalParamHash(0, 0, 9), Integer.valueOf(43));
-        mHm.put(signalParamHash(0, 0, 10), Integer.valueOf(44));
-        mHm.put(signalParamHash(0, 0, 63), Integer.valueOf(98));
-        mHm.put(signalParamHash(2, 1, 1), Integer.valueOf(53));
-        mHm.put(signalParamHash(2, 0, 1), Integer.valueOf(54));
-        mHm.put(signalParamHash(2, 2, 1), Integer.valueOf(55));
-        mHm.put(signalParamHash(2, 1, 2), Integer.valueOf(56));
-        mHm.put(signalParamHash(2, 0, 2), Integer.valueOf(57));
-        mHm.put(signalParamHash(2, 2, 2), Integer.valueOf(58));
-        mHm.put(signalParamHash(2, 1, 3), Integer.valueOf(59));
-        mHm.put(signalParamHash(2, 0, 3), Integer.valueOf(60));
-        mHm.put(signalParamHash(2, 2, 3), Integer.valueOf(61));
-        mHm.put(signalParamHash(2, 1, 4), Integer.valueOf(62));
-        mHm.put(signalParamHash(2, 0, 4), Integer.valueOf(63));
-        mHm.put(signalParamHash(2, 2, 4), Integer.valueOf(64));
-        mHm.put(signalParamHash(2, 1, 5), Integer.valueOf(65));
-        mHm.put(signalParamHash(2, 0, 5), Integer.valueOf(66));
-        mHm.put(signalParamHash(2, 2, 5), Integer.valueOf(67));
-        mHm.put(signalParamHash(2, 1, 6), Integer.valueOf(68));
-        mHm.put(signalParamHash(2, 0, 6), Integer.valueOf(69));
-        mHm.put(signalParamHash(2, 2, 6), Integer.valueOf(70));
-        mHm.put(signalParamHash(2, 1, 7), Integer.valueOf(71));
-        mHm.put(signalParamHash(2, 0, 7), Integer.valueOf(72));
-        mHm.put(signalParamHash(2, 2, 7), Integer.valueOf(73));
-        mHm.put(signalParamHash(2, 1, 8), Integer.valueOf(74));
-        mHm.put(signalParamHash(2, 0, 8), Integer.valueOf(75));
-        mHm.put(signalParamHash(2, 2, 8), Integer.valueOf(76));
-        mHm.put(signalParamHash(2, 1, 9), Integer.valueOf(77));
-        mHm.put(signalParamHash(2, 0, 9), Integer.valueOf(78));
-        mHm.put(signalParamHash(2, 2, 9), Integer.valueOf(79));
-        mHm.put(signalParamHash(2, 1, 10), Integer.valueOf(80));
-        mHm.put(signalParamHash(2, 0, 10), Integer.valueOf(81));
-        mHm.put(signalParamHash(2, 2, 10), Integer.valueOf(82));
-        mHm.put(signalParamHash(2, 1, 11), Integer.valueOf(83));
-        mHm.put(signalParamHash(2, 0, 11), Integer.valueOf(84));
-        mHm.put(signalParamHash(2, 2, 11), Integer.valueOf(85));
-        mHm.put(signalParamHash(2, 0, 0), Integer.valueOf(98));
-        mHm.put(signalParamHash(4, 0, 0), Integer.valueOf(97));
-        mHm.put(signalParamHash(4, 0, 63), Integer.valueOf(97));
+        mHm.put(signalParamHash(1, 0, 0), 45);
+        mHm.put(signalParamHash(1, 0, 1), 46);
+        mHm.put(signalParamHash(1, 0, 2), 47);
+        mHm.put(signalParamHash(1, 0, 3), 48);
+        mHm.put(signalParamHash(1, 0, 4), 49);
+        mHm.put(signalParamHash(1, 0, 5), 50);
+        mHm.put(signalParamHash(1, 0, 6), 51);
+        mHm.put(signalParamHash(1, 0, 7), 52);
+        mHm.put(signalParamHash(1, 0, 15), 98);
+        mHm.put(signalParamHash(0, 0, 0), 34);
+        mHm.put(signalParamHash(0, 0, 1), 35);
+        mHm.put(signalParamHash(0, 0, 2), 29);
+        mHm.put(signalParamHash(0, 0, 3), 30);
+        mHm.put(signalParamHash(0, 0, 4), 38);
+        mHm.put(signalParamHash(0, 0, 5), 39);
+        mHm.put(signalParamHash(0, 0, 6), 40);
+        mHm.put(signalParamHash(0, 0, 7), 32);
+        mHm.put(signalParamHash(0, 0, 8), 42);
+        mHm.put(signalParamHash(0, 0, 9), 43);
+        mHm.put(signalParamHash(0, 0, 10), 44);
+        mHm.put(signalParamHash(0, 0, 63), 98);
+        mHm.put(signalParamHash(2, 1, 1), 53);
+        mHm.put(signalParamHash(2, 0, 1), 54);
+        mHm.put(signalParamHash(2, 2, 1), 55);
+        mHm.put(signalParamHash(2, 1, 2), 56);
+        mHm.put(signalParamHash(2, 0, 2), 57);
+        mHm.put(signalParamHash(2, 2, 2), 58);
+        mHm.put(signalParamHash(2, 1, 3), 59);
+        mHm.put(signalParamHash(2, 0, 3), 60);
+        mHm.put(signalParamHash(2, 2, 3), 61);
+        mHm.put(signalParamHash(2, 1, 4), 62);
+        mHm.put(signalParamHash(2, 0, 4), 63);
+        mHm.put(signalParamHash(2, 2, 4), 64);
+        mHm.put(signalParamHash(2, 1, 5), 65);
+        mHm.put(signalParamHash(2, 0, 5), 66);
+        mHm.put(signalParamHash(2, 2, 5), 67);
+        mHm.put(signalParamHash(2, 1, 6), 68);
+        mHm.put(signalParamHash(2, 0, 6), 69);
+        mHm.put(signalParamHash(2, 2, 6), 70);
+        mHm.put(signalParamHash(2, 1, 7), 71);
+        mHm.put(signalParamHash(2, 0, 7), 72);
+        mHm.put(signalParamHash(2, 2, 7), 73);
+        mHm.put(signalParamHash(2, 1, 8), 74);
+        mHm.put(signalParamHash(2, 0, 8), 75);
+        mHm.put(signalParamHash(2, 2, 8), 76);
+        mHm.put(signalParamHash(2, 1, 9), 77);
+        mHm.put(signalParamHash(2, 0, 9), 78);
+        mHm.put(signalParamHash(2, 2, 9), 79);
+        mHm.put(signalParamHash(2, 1, 10), 80);
+        mHm.put(signalParamHash(2, 0, 10), 81);
+        mHm.put(signalParamHash(2, 2, 10), 82);
+        mHm.put(signalParamHash(2, 1, 11), 83);
+        mHm.put(signalParamHash(2, 0, 11), 84);
+        mHm.put(signalParamHash(2, 2, 11), 85);
+        mHm.put(signalParamHash(2, 0, 0), 98);
+        mHm.put(signalParamHash(4, 0, 0), 97);
+        mHm.put(signalParamHash(4, 0, 63), 97);
+    }
+
+    private static Integer signalParamHash(int signalType, int alertPitch, int signal) {
+        if (signalType < 0 || signalType > 256 || alertPitch > 256 || alertPitch < 0 || signal > 256 || signal < 0) {
+            return new Integer(-1);
+        }
+        if (signalType != 2) {
+            alertPitch = 0;
+        }
+        return new Integer((signalType * 256 * 256) + (alertPitch * 256) + signal);
+    }
+
+    public static int getAudioToneFromSignalInfo(int signalType, int alertPitch, int signal) {
+        Integer result = mHm.get(signalParamHash(signalType, alertPitch, signal));
+        if (result == null) {
+            return -1;
+        }
+        return result.intValue();
     }
 
     private SignalToneUtil() {
-    }
-
-    public static int getAudioToneFromSignalInfo(int i, int i2, int i3) {
-        Integer num = (Integer) mHm.get(signalParamHash(i, i2, i3));
-        return num == null ? -1 : num.intValue();
-    }
-
-    private static Integer signalParamHash(int i, int i2, int i3) {
-        if (i < 0 || i > 256 || i2 > 256 || i2 < 0 || i3 > 256 || i3 < 0) {
-            return new Integer(-1);
-        }
-        if (i != 2) {
-            i2 = 0;
-        }
-        return new Integer((((i * 256) * 256) + (i2 * 256)) + i3);
     }
 }

@@ -5,6 +5,7 @@ import android.os.RemoteException;
 import com.android.internal.telephony.uicc.AdnRecord;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class IccPhoneBookInterfaceManagerProxy {
     private IccPhoneBookInterfaceManager mIccPhoneBookInterfaceManager;
 
@@ -12,16 +13,32 @@ public class IccPhoneBookInterfaceManagerProxy {
         this.mIccPhoneBookInterfaceManager = iccPhoneBookInterfaceManager;
     }
 
+    public void setmIccPhoneBookInterfaceManager(IccPhoneBookInterfaceManager iccPhoneBookInterfaceManager) {
+        this.mIccPhoneBookInterfaceManager = iccPhoneBookInterfaceManager;
+    }
+
+    public boolean updateAdnRecordsInEfBySearch(int efid, String oldTag, String oldPhoneNumber, String newTag, String newPhoneNumber, String pin2) {
+        return this.mIccPhoneBookInterfaceManager.updateAdnRecordsInEfBySearch(efid, oldTag, oldPhoneNumber, newTag, newPhoneNumber, pin2);
+    }
+
+    public boolean updateAdnRecordsWithContentValuesInEfBySearch(int efid, ContentValues values, String pin2) throws RemoteException {
+        return this.mIccPhoneBookInterfaceManager.updateAdnRecordsWithContentValuesInEfBySearch(efid, values, pin2);
+    }
+
+    public boolean updateAdnRecordsInEfByIndex(int efid, String newTag, String newPhoneNumber, int index, String pin2) {
+        return this.mIccPhoneBookInterfaceManager.updateAdnRecordsInEfByIndex(efid, newTag, newPhoneNumber, index, pin2);
+    }
+
+    public int[] getAdnRecordsSize(int efid) {
+        return this.mIccPhoneBookInterfaceManager.getAdnRecordsSize(efid);
+    }
+
+    public List<AdnRecord> getAdnRecordsInEf(int efid) {
+        return this.mIccPhoneBookInterfaceManager.getAdnRecordsInEf(efid);
+    }
+
     public int getAdnCount() {
         return this.mIccPhoneBookInterfaceManager.getAdnCount();
-    }
-
-    public List<AdnRecord> getAdnRecordsInEf(int i) {
-        return this.mIccPhoneBookInterfaceManager.getAdnRecordsInEf(i);
-    }
-
-    public int[] getAdnRecordsSize(int i) {
-        return this.mIccPhoneBookInterfaceManager.getAdnRecordsSize(i);
     }
 
     public int getAnrCount() {
@@ -38,21 +55,5 @@ public class IccPhoneBookInterfaceManagerProxy {
 
     public int getSpareEmailCount() {
         return this.mIccPhoneBookInterfaceManager.getSpareEmailCount();
-    }
-
-    public void setmIccPhoneBookInterfaceManager(IccPhoneBookInterfaceManager iccPhoneBookInterfaceManager) {
-        this.mIccPhoneBookInterfaceManager = iccPhoneBookInterfaceManager;
-    }
-
-    public boolean updateAdnRecordsInEfByIndex(int i, String str, String str2, int i2, String str3) {
-        return this.mIccPhoneBookInterfaceManager.updateAdnRecordsInEfByIndex(i, str, str2, i2, str3);
-    }
-
-    public boolean updateAdnRecordsInEfBySearch(int i, String str, String str2, String str3, String str4, String str5) {
-        return this.mIccPhoneBookInterfaceManager.updateAdnRecordsInEfBySearch(i, str, str2, str3, str4, str5);
-    }
-
-    public boolean updateAdnRecordsWithContentValuesInEfBySearch(int i, ContentValues contentValues, String str) throws RemoteException {
-        return this.mIccPhoneBookInterfaceManager.updateAdnRecordsWithContentValuesInEfBySearch(i, contentValues, str);
     }
 }

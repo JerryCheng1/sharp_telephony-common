@@ -3,16 +3,20 @@ package com.android.internal.telephony.cat;
 import android.graphics.Bitmap;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class Input implements Parcelable {
-    public static final Creator<Input> CREATOR = new Creator<Input>() {
-        public Input createFromParcel(Parcel parcel) {
-            return new Input(parcel, null);
+    public static final Parcelable.Creator<Input> CREATOR = new Parcelable.Creator<Input>() { // from class: com.android.internal.telephony.cat.Input.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public Input createFromParcel(Parcel in) {
+            return new Input(in);
         }
 
-        public Input[] newArray(int i) {
-            return new Input[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public Input[] newArray(int size) {
+            return new Input[size];
         }
     };
     public String defaultText;
@@ -28,7 +32,8 @@ public class Input implements Parcelable {
     public boolean ucs2;
     public boolean yesNo;
 
-    Input() {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public Input() {
         this.text = "";
         this.defaultText = null;
         this.icon = null;
@@ -43,54 +48,48 @@ public class Input implements Parcelable {
         this.duration = null;
     }
 
-    private Input(Parcel parcel) {
+    private Input(Parcel in) {
         boolean z = true;
-        this.text = parcel.readString();
-        this.defaultText = parcel.readString();
-        this.icon = (Bitmap) parcel.readParcelable(null);
-        this.minLen = parcel.readInt();
-        this.maxLen = parcel.readInt();
-        this.ucs2 = parcel.readInt() == 1;
-        this.packed = parcel.readInt() == 1;
-        this.digitOnly = parcel.readInt() == 1;
-        this.echo = parcel.readInt() == 1;
-        this.yesNo = parcel.readInt() == 1;
-        if (parcel.readInt() != 1) {
-            z = false;
-        }
-        this.helpAvailable = z;
-        this.duration = (Duration) parcel.readParcelable(null);
+        this.text = in.readString();
+        this.defaultText = in.readString();
+        this.icon = (Bitmap) in.readParcelable(null);
+        this.minLen = in.readInt();
+        this.maxLen = in.readInt();
+        this.ucs2 = in.readInt() == 1;
+        this.packed = in.readInt() == 1;
+        this.digitOnly = in.readInt() == 1;
+        this.echo = in.readInt() == 1;
+        this.yesNo = in.readInt() == 1;
+        this.helpAvailable = in.readInt() != 1 ? false : z;
+        this.duration = (Duration) in.readParcelable(null);
     }
 
-    /* synthetic */ Input(Parcel parcel, AnonymousClass1 anonymousClass1) {
-        this(parcel);
-    }
-
+    @Override // android.os.Parcelable
     public int describeContents() {
         return 0;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean setIcon(Bitmap bitmap) {
-        return true;
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        int i = 1;
+        dest.writeString(this.text);
+        dest.writeString(this.defaultText);
+        dest.writeParcelable(this.icon, 0);
+        dest.writeInt(this.minLen);
+        dest.writeInt(this.maxLen);
+        dest.writeInt(this.ucs2 ? 1 : 0);
+        dest.writeInt(this.packed ? 1 : 0);
+        dest.writeInt(this.digitOnly ? 1 : 0);
+        dest.writeInt(this.echo ? 1 : 0);
+        dest.writeInt(this.yesNo ? 1 : 0);
+        if (!this.helpAvailable) {
+            i = 0;
+        }
+        dest.writeInt(i);
+        dest.writeParcelable(this.duration, 0);
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        int i2 = 1;
-        parcel.writeString(this.text);
-        parcel.writeString(this.defaultText);
-        parcel.writeParcelable(this.icon, 0);
-        parcel.writeInt(this.minLen);
-        parcel.writeInt(this.maxLen);
-        parcel.writeInt(this.ucs2 ? 1 : 0);
-        parcel.writeInt(this.packed ? 1 : 0);
-        parcel.writeInt(this.digitOnly ? 1 : 0);
-        parcel.writeInt(this.echo ? 1 : 0);
-        parcel.writeInt(this.yesNo ? 1 : 0);
-        if (!this.helpAvailable) {
-            i2 = 0;
-        }
-        parcel.writeInt(i2);
-        parcel.writeParcelable(this.duration, 0);
+    boolean setIcon(Bitmap Icon) {
+        return true;
     }
 }

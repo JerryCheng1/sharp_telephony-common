@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
 import android.os.Registrant;
 import android.os.RegistrantList;
 import android.os.SystemProperties;
@@ -27,27 +26,23 @@ import com.android.ims.ImsException;
 import com.android.ims.ImsManager;
 import com.android.ims.ImsReasonInfo;
 import com.android.ims.ImsSsInfo;
-import com.android.internal.telephony.Call.SrvccState;
-import com.android.internal.telephony.Call.State;
+import com.android.internal.telephony.Call;
 import com.android.internal.telephony.CallForwardInfo;
 import com.android.internal.telephony.CallStateException;
 import com.android.internal.telephony.CallTracker;
 import com.android.internal.telephony.CommandException;
-import com.android.internal.telephony.CommandException.Error;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.Connection;
 import com.android.internal.telephony.IccCard;
 import com.android.internal.telephony.IccPhoneBookInterfaceManager;
 import com.android.internal.telephony.OperatorInfo;
 import com.android.internal.telephony.Phone;
-import com.android.internal.telephony.Phone.DataActivityState;
-import com.android.internal.telephony.Phone.SuppService;
 import com.android.internal.telephony.PhoneBase;
 import com.android.internal.telephony.PhoneConstants;
-import com.android.internal.telephony.PhoneConstants.DataState;
 import com.android.internal.telephony.PhoneNotifier;
 import com.android.internal.telephony.PhoneSubInfo;
 import com.android.internal.telephony.TelBrand;
+import com.android.internal.telephony.UUSInfo;
 import com.android.internal.telephony.cdma.CDMAPhone;
 import com.android.internal.telephony.gsm.GSMPhone;
 import com.android.internal.telephony.gsm.SuppServiceNotification;
@@ -55,8 +50,9 @@ import com.android.internal.telephony.uicc.IccFileHandler;
 import com.android.internal.telephony.uicc.IccRecords;
 import java.util.ArrayList;
 import java.util.List;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OEM_RIL_RDE_Data;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ImsPhone extends ImsPhoneBase {
     static final int CANCEL_ECM_TIMER = 1;
     public static final String CS_FALLBACK = "cs_fallback";
@@ -76,16 +72,25 @@ public class ImsPhone extends ImsPhoneBase {
     private static final String LOG_TAG = "ImsPhone";
     static final int RESTART_ECM_TIMER = 0;
     private static final boolean VDBG = false;
-    ImsPhoneCallTracker mCT;
     PhoneBase mDefaultPhone;
     private Registrant mEcmExitRespRegistrant;
-    private Runnable mExitEcmRunnable = new Runnable() {
+    private ImsConfig mImsConfig;
+    private String mLastDialString;
+    Registrant mPostDialHandler;
+    PowerManager.WakeLock mWakeLock;
+    ArrayList<ImsPhoneMmiCode> mPendingMMIs = new ArrayList<>();
+    ServiceState mSS = new ServiceState();
+    private final RegistrantList mSilentRedialRegistrants = new RegistrantList();
+    RegistrantList mSsnRegistrants = new RegistrantList();
+    private boolean mIsVideoCapable = false;
+    private boolean mImsRegistered = false;
+    private Runnable mExitEcmRunnable = new Runnable() { // from class: com.android.internal.telephony.imsphone.ImsPhone.1
+        @Override // java.lang.Runnable
         public void run() {
             ImsPhone.this.exitEmergencyCallbackMode();
         }
     };
-    private ImsConfig mImsConfig;
-    ImsEcbmStateListener mImsEcbmStateListener = new ImsEcbmStateListener() {
+    ImsEcbmStateListener mImsEcbmStateListener = new ImsEcbmStateListener() { // from class: com.android.internal.telephony.imsphone.ImsPhone.2
         public void onECBMEntered() {
             Rlog.d(ImsPhone.LOG_TAG, "onECBMEntered");
             ImsPhone.this.handleEnterEmergencyCallbackMode();
@@ -96,36 +101,327 @@ public class ImsPhone extends ImsPhoneBase {
             ImsPhone.this.handleExitEmergencyCallbackMode();
         }
     };
-    private boolean mImsRegistered = false;
-    protected boolean mIsPhoneInEcmState;
-    private boolean mIsVideoCapable = false;
-    private String mLastDialString;
-    ArrayList<ImsPhoneMmiCode> mPendingMMIs = new ArrayList();
-    Registrant mPostDialHandler;
-    ServiceState mSS = new ServiceState();
-    private final RegistrantList mSilentRedialRegistrants = new RegistrantList();
-    RegistrantList mSsnRegistrants = new RegistrantList();
-    WakeLock mWakeLock;
+    ImsPhoneCallTracker mCT = new ImsPhoneCallTracker(this);
+    protected boolean mIsPhoneInEcmState = SystemProperties.getBoolean("ril.cdma.inecmmode", false);
 
-    private static class Cf {
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void activateCellBroadcastSms(int x0, Message x1) {
+        super.activateCellBroadcastSms(x0, x1);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ Connection dial(String x0, UUSInfo x1, int x2) throws CallStateException {
+        return super.dial(x0, x1, x2);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public /* bridge */ /* synthetic */ boolean disableDataConnectivity() {
+        return super.disableDataConnectivity();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void disableLocationUpdates() {
+        super.disableLocationUpdates();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public /* bridge */ /* synthetic */ boolean enableDataConnectivity() {
+        return super.enableDataConnectivity();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void enableLocationUpdates() {
+        super.enableLocationUpdates();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ List getAllCellInfo() {
+        return super.getAllCellInfo();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void getAvailableNetworks(Message x0) {
+        super.getAvailableNetworks(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void getCellBroadcastSmsConfig(Message x0) {
+        super.getCellBroadcastSmsConfig(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ CellLocation getCellLocation() {
+        return super.getCellLocation();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public /* bridge */ /* synthetic */ List getCurrentDataConnectionList() {
+        return super.getCurrentDataConnectionList();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ Phone.DataActivityState getDataActivityState() {
+        return super.getDataActivityState();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void getDataCallList(Message x0) {
+        super.getDataCallList(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ PhoneConstants.DataState getDataConnectionState() {
+        return super.getDataConnectionState();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ PhoneConstants.DataState getDataConnectionState(String x0) {
+        return super.getDataConnectionState(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean getDataEnabled() {
+        return super.getDataEnabled();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean getDataRoamingEnabled() {
+        return super.getDataRoamingEnabled();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getDeviceId() {
+        return super.getDeviceId();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getDeviceSvn() {
+        return super.getDeviceSvn();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getEsn() {
+        return super.getEsn();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getGroupIdLevel1() {
+        return super.getGroupIdLevel1();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ IccCard getIccCard() {
+        return super.getIccCard();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase
+    public /* bridge */ /* synthetic */ IccFileHandler getIccFileHandler() {
+        return super.getIccFileHandler();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ IccPhoneBookInterfaceManager getIccPhoneBookInterfaceManager() {
+        return super.getIccPhoneBookInterfaceManager();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean getIccRecordsLoaded() {
+        return super.getIccRecordsLoaded();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getIccSerialNumber() {
+        return super.getIccSerialNumber();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getImei() {
+        return super.getImei();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getLine1AlphaTag() {
+        return super.getLine1AlphaTag();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getLine1Number() {
+        return super.getLine1Number();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ LinkProperties getLinkProperties(String x0) {
+        return super.getLinkProperties(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getMeid() {
+        return super.getMeid();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean getMessageWaitingIndicator() {
+        return super.getMessageWaitingIndicator();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void getNeighboringCids(Message x0) {
+        super.getNeighboringCids(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ PhoneSubInfo getPhoneSubInfo() {
+        return super.getPhoneSubInfo();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ int getPhoneType() {
+        return super.getPhoneType();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ SignalStrength getSignalStrength() {
+        return super.getSignalStrength();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getVoiceMailAlphaTag() {
+        return super.getVoiceMailAlphaTag();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ String getVoiceMailNumber() {
+        return super.getVoiceMailNumber();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean handlePinMmi(String x0) {
+        return super.handlePinMmi(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean isDataConnectivityPossible() {
+        return super.isDataConnectivityPossible();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase
+    public /* bridge */ /* synthetic */ void migrateFrom(PhoneBase x0) {
+        super.migrateFrom(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ boolean needsOtaServiceProvisioning() {
+        return super.needsOtaServiceProvisioning();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase
+    public /* bridge */ /* synthetic */ void notifyCallForwardingIndicator() {
+        super.notifyCallForwardingIndicator();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public /* bridge */ /* synthetic */ void onTtyModeReceived(int x0) {
+        super.onTtyModeReceived(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void registerForOnHoldTone(Handler x0, int x1, Object x2) {
+        super.registerForOnHoldTone(x0, x1, x2);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void registerForRingbackTone(Handler x0, int x1, Object x2) {
+        super.registerForRingbackTone(x0, x1, x2);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void registerForTtyModeReceived(Handler x0, int x1, Object x2) {
+        super.registerForTtyModeReceived(x0, x1, x2);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public /* bridge */ /* synthetic */ void saveClirSetting(int x0) {
+        super.saveClirSetting(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void selectNetworkManually(OperatorInfo x0, Message x1) {
+        super.selectNetworkManually(x0, x1);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setCellBroadcastSmsConfig(int[] x0, Message x1) {
+        super.setCellBroadcastSmsConfig(x0, x1);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setDataEnabled(boolean x0) {
+        super.setDataEnabled(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setDataRoamingEnabled(boolean x0) {
+        super.setDataRoamingEnabled(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setLine1Number(String x0, String x1, Message x2) {
+        super.setLine1Number(x0, x1, x2);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setNetworkSelectionModeAutomatic(Message x0) {
+        super.setNetworkSelectionModeAutomatic(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setRadioPower(boolean x0) {
+        super.setRadioPower(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void setVoiceMailNumber(String x0, String x1, Message x2) {
+        super.setVoiceMailNumber(x0, x1, x2);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void unregisterForOnHoldTone(Handler x0) {
+        super.unregisterForOnHoldTone(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void unregisterForRingbackTone(Handler x0) {
+        super.unregisterForRingbackTone(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void unregisterForTtyModeReceived(Handler x0) {
+        super.unregisterForTtyModeReceived(x0);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public /* bridge */ /* synthetic */ void updateServiceLocation() {
+        super.updateServiceLocation();
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class Cf {
         final boolean mIsCfu;
         final Message mOnComplete;
         final String mSetCfNumber;
 
-        Cf(String str, boolean z, Message message) {
-            this.mSetCfNumber = str;
-            this.mIsCfu = z;
-            this.mOnComplete = message;
+        Cf(String cfNumber, boolean isCfu, Message onComplete) {
+            this.mSetCfNumber = cfNumber;
+            this.mIsCfu = isCfu;
+            this.mOnComplete = onComplete;
         }
     }
 
-    ImsPhone(Context context, PhoneNotifier phoneNotifier, Phone phone) {
-        super(LOG_TAG, context, phoneNotifier);
-        this.mDefaultPhone = (PhoneBase) phone;
-        this.mCT = new ImsPhoneCallTracker(this);
+    public ImsPhone(Context context, PhoneNotifier notifier, Phone defaultPhone) {
+        super(LOG_TAG, context, notifier);
+        this.mDefaultPhone = (PhoneBase) defaultPhone;
         this.mSS.setStateOff();
         this.mPhoneId = this.mDefaultPhone.getPhoneId();
-        this.mIsPhoneInEcmState = SystemProperties.getBoolean("ril.cdma.inecmmode", false);
         this.mWakeLock = ((PowerManager) context.getSystemService("power")).newWakeLock(1, LOG_TAG);
         this.mWakeLock.setReferenceCounted(false);
         if (TelBrand.IS_SBM) {
@@ -142,125 +438,158 @@ public class ImsPhone extends ImsPhoneBase {
         updateDataServiceState();
     }
 
-    private int getActionFromCFAction(int i) {
-        switch (i) {
-            case 0:
-                return 0;
-            case 1:
-                return 1;
-            case 3:
-                return 3;
-            case 4:
-                return 4;
-            default:
-                return -1;
+    public void updateParentPhone(PhoneBase parentPhone) {
+        if (!(this.mDefaultPhone == null || this.mDefaultPhone.getServiceStateTracker() == null)) {
+            this.mDefaultPhone.getServiceStateTracker().unregisterForDataRegStateOrRatChanged(this);
+        }
+        this.mDefaultPhone = parentPhone;
+        this.mPhoneId = this.mDefaultPhone.getPhoneId();
+        if (this.mDefaultPhone.getServiceStateTracker() != null) {
+            this.mDefaultPhone.getServiceStateTracker().registerForDataRegStateOrRatChanged(this, 46, null);
+        }
+        updateDataServiceState();
+        Rlog.d(LOG_TAG, "updateParentPhone - Notify video capability changed " + this.mIsVideoCapable);
+        notifyForVideoCapabilityChanged(this.mIsVideoCapable);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void dispose() {
+        Rlog.d(LOG_TAG, "dispose");
+        this.mPendingMMIs.clear();
+        this.mCT.dispose();
+        if (this.mDefaultPhone != null && this.mDefaultPhone.getServiceStateTracker() != null) {
+            this.mDefaultPhone.getServiceStateTracker().unregisterForDataRegStateOrRatChanged(this);
         }
     }
 
-    private int getCBTypeFromFacility(String str) {
-        return CommandsInterface.CB_FACILITY_BAOC.equals(str) ? 2 : CommandsInterface.CB_FACILITY_BAOIC.equals(str) ? 3 : CommandsInterface.CB_FACILITY_BAOICxH.equals(str) ? 4 : CommandsInterface.CB_FACILITY_BAIC.equals(str) ? 1 : CommandsInterface.CB_FACILITY_BAICr.equals(str) ? 5 : CommandsInterface.CB_FACILITY_BA_ALL.equals(str) ? 7 : CommandsInterface.CB_FACILITY_BA_MO.equals(str) ? 8 : CommandsInterface.CB_FACILITY_BA_MT.equals(str) ? 9 : 0;
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void removeReferences() {
+        Rlog.d(LOG_TAG, "removeReferences");
+        super.removeReferences();
+        this.mCT = null;
+        this.mSS = null;
     }
 
-    private int getCFReasonFromCondition(int i) {
-        switch (i) {
-            case 0:
-                return 0;
-            case 1:
-                return 1;
-            case 2:
-                return 2;
-            case 4:
-                return 4;
-            case 5:
-                return 5;
-            default:
-                return 3;
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public ServiceState getServiceState() {
+        return this.mSS;
+    }
+
+    public void setServiceState(int state) {
+        this.mSS.setState(state);
+        updateDataServiceState();
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase
+    public CallTracker getCallTracker() {
+        return this.mCT;
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean getCallForwardingIndicator() {
+        IccRecords r = getIccRecords();
+        if (r == null || !r.isCallForwardStatusStored()) {
+            return getCallForwardingPreference();
         }
+        return r.getVoiceCallForwardingFlag();
     }
 
-    private CallForwardInfo getCallForwardInfo(ImsCallForwardInfo imsCallForwardInfo) {
-        CallForwardInfo callForwardInfo = new CallForwardInfo();
-        callForwardInfo.status = imsCallForwardInfo.mStatus;
-        callForwardInfo.reason = getCFReasonFromCondition(imsCallForwardInfo.mCondition);
-        callForwardInfo.serviceClass = 1;
-        callForwardInfo.toa = imsCallForwardInfo.mToA;
-        callForwardInfo.number = imsCallForwardInfo.mNumber;
-        callForwardInfo.timeSeconds = imsCallForwardInfo.mTimeSeconds;
-        callForwardInfo.startHour = imsCallForwardInfo.mStartHour;
-        callForwardInfo.startMinute = imsCallForwardInfo.mStartMinute;
-        callForwardInfo.endHour = imsCallForwardInfo.mEndHour;
-        callForwardInfo.endMinute = imsCallForwardInfo.mEndMinute;
-        return callForwardInfo;
-    }
-
-    private int getConditionFromCFReason(int i) {
-        switch (i) {
-            case 0:
-                return 0;
-            case 1:
-                return 1;
-            case 2:
-                return 2;
-            case 3:
-                return 3;
-            case 4:
-                return 4;
-            case 5:
-                return 5;
-            default:
-                return -1;
+    public void updateCallForwardStatus() {
+        Rlog.d(LOG_TAG, "updateCallForwardStatus");
+        IccRecords r = getIccRecords();
+        if (r == null || !r.isCallForwardStatusStored()) {
+            sendMessage(obtainMessage(39));
+            return;
         }
+        Rlog.d(LOG_TAG, "Callforwarding info is present on sim");
+        notifyCallForwardingIndicator();
     }
 
-    private ArrayList<String> getDialNumberInfo(String str, int i) {
-        ArrayList<String> arrayList = new ArrayList();
-        Context context = getContext();
-        boolean z = context != null ? context.getSharedPreferences("network_service_settings_private", 0).getBoolean("sub_address_setting", true) : false;
-        Rlog.d(LOG_TAG, "dialString is " + str + " isSubAddress is " + z + " prefix is " + i);
-        arrayList.add(str);
-        arrayList.add(null);
-        if (z) {
-            String substring = str.substring(i);
-            int length = substring.length();
-            if (length != 0) {
-                int i2 = 0;
-                while (i2 < length && substring.charAt(i2) == '*') {
-                    i2++;
-                }
-                if (substring.substring(i2).length() != 0) {
-                    int indexOf = substring.substring(i2).indexOf(42);
-                    if (indexOf > 0) {
-                        indexOf += i2 + i;
-                        Object substring2 = str.substring(0, indexOf);
-                        substring = str.substring(indexOf + 1);
-                        if (!substring.equals("")) {
-                            substring2 = substring2 + "&" + substring;
-                        }
-                        arrayList.set(0, substring2);
-                    }
-                    Rlog.d(LOG_TAG, "dialInfoList.get(0) is " + ((String) arrayList.get(0)) + ")");
-                    return arrayList;
-                }
-            }
-        }
-        return arrayList;
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public List<? extends ImsPhoneMmiCode> getPendingMmiCodes() {
+        return this.mPendingMMIs;
     }
 
-    private boolean handleCallDeflectionIncallSupplementaryService(String str) {
-        if (str.length() > 1) {
+    @Override // com.android.internal.telephony.Phone
+    public void acceptCall(int videoState) throws CallStateException {
+        this.mCT.acceptCall(videoState);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void deflectCall(String number) throws CallStateException {
+        this.mCT.deflectCall(number);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void rejectCall() throws CallStateException {
+        this.mCT.rejectCall();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void switchHoldingAndActive() throws CallStateException {
+        this.mCT.switchWaitingOrHoldingAndActive();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean canConference() {
+        return this.mCT.canConference();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public boolean canDial() {
+        return this.mCT.canDial();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void conference() {
+        this.mCT.conference();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void clearDisconnected() {
+        this.mCT.clearDisconnected();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean canTransfer() {
+        return this.mCT.canTransfer();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void explicitCallTransfer() {
+        this.mCT.explicitCallTransfer();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public ImsPhoneCall getForegroundCall() {
+        return this.mCT.mForegroundCall;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public ImsPhoneCall getBackgroundCall() {
+        return this.mCT.mBackgroundCall;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public ImsPhoneCall getRingingCall() {
+        return this.mCT.mRingingCall;
+    }
+
+    private boolean handleCallDeflectionIncallSupplementaryService(String dialString) {
+        if (dialString.length() > 1) {
             return false;
         }
-        if (getRingingCall().getState() != State.IDLE) {
+        if (getRingingCall().getState() != Call.State.IDLE) {
             Rlog.d(LOG_TAG, "MmiCode 0: rejectCall");
             try {
                 this.mCT.rejectCall();
                 return true;
             } catch (CallStateException e) {
                 Rlog.d(LOG_TAG, "reject failed", e);
-                notifySuppServiceFailed(SuppService.REJECT);
+                notifySuppServiceFailed(Phone.SuppService.REJECT);
                 return true;
             }
-        } else if (getBackgroundCall().getState() == State.IDLE) {
+        } else if (getBackgroundCall().getState() == Call.State.IDLE) {
             return true;
         } else {
             Rlog.d(LOG_TAG, "MmiCode 0: hangupWaitingOrBackground");
@@ -274,140 +603,60 @@ public class ImsPhone extends ImsPhoneBase {
         }
     }
 
-    private boolean handleCallHoldIncallSupplementaryService(String str) {
-        int length = str.length();
-        if (length > 2) {
+    private boolean handleCallWaitingIncallSupplementaryService(String dialString) {
+        int len = dialString.length();
+        if (len > 2) {
+            return false;
+        }
+        ImsPhoneCall call = getForegroundCall();
+        try {
+            if (len > 1) {
+                Rlog.d(LOG_TAG, "not support 1X SEND");
+                notifySuppServiceFailed(Phone.SuppService.HANGUP);
+            } else if (call.getState() != Call.State.IDLE) {
+                Rlog.d(LOG_TAG, "MmiCode 1: hangup foreground");
+                this.mCT.hangup(call);
+            } else {
+                Rlog.d(LOG_TAG, "MmiCode 1: switchWaitingOrHoldingAndActive");
+                this.mCT.switchWaitingOrHoldingAndActive();
+            }
+            return true;
+        } catch (CallStateException e) {
+            Rlog.d(LOG_TAG, "hangup failed", e);
+            notifySuppServiceFailed(Phone.SuppService.HANGUP);
+            return true;
+        }
+    }
+
+    private boolean handleCallHoldIncallSupplementaryService(String dialString) {
+        int len = dialString.length();
+        if (len > 2) {
             return false;
         }
         getForegroundCall();
-        if (length > 1) {
+        if (len > 1) {
             Rlog.d(LOG_TAG, "separate not supported");
-            notifySuppServiceFailed(SuppService.SEPARATE);
+            notifySuppServiceFailed(Phone.SuppService.SEPARATE);
             return true;
         }
         try {
-            if (getRingingCall().getState() != State.IDLE) {
+            if (getRingingCall().getState() != Call.State.IDLE) {
                 Rlog.d(LOG_TAG, "MmiCode 2: accept ringing call");
                 this.mCT.acceptCall(2);
-                return true;
+            } else {
+                Rlog.d(LOG_TAG, "MmiCode 2: switchWaitingOrHoldingAndActive");
+                this.mCT.switchWaitingOrHoldingAndActive();
             }
-            Rlog.d(LOG_TAG, "MmiCode 2: switchWaitingOrHoldingAndActive");
-            this.mCT.switchWaitingOrHoldingAndActive();
             return true;
         } catch (CallStateException e) {
             Rlog.d(LOG_TAG, "switch failed", e);
-            notifySuppServiceFailed(SuppService.SWITCH);
+            notifySuppServiceFailed(Phone.SuppService.SWITCH);
             return true;
         }
     }
 
-    private boolean handleCallWaitingIncallSupplementaryService(String str) {
-        int length = str.length();
-        if (length > 2) {
-            return false;
-        }
-        ImsPhoneCall foregroundCall = getForegroundCall();
-        if (length > 1) {
-            try {
-                Rlog.d(LOG_TAG, "not support 1X SEND");
-                notifySuppServiceFailed(SuppService.HANGUP);
-                return true;
-            } catch (CallStateException e) {
-                Rlog.d(LOG_TAG, "hangup failed", e);
-                notifySuppServiceFailed(SuppService.HANGUP);
-                return true;
-            }
-        } else if (foregroundCall.getState() != State.IDLE) {
-            Rlog.d(LOG_TAG, "MmiCode 1: hangup foreground");
-            this.mCT.hangup(foregroundCall);
-            return true;
-        } else {
-            Rlog.d(LOG_TAG, "MmiCode 1: switchWaitingOrHoldingAndActive");
-            this.mCT.switchWaitingOrHoldingAndActive();
-            return true;
-        }
-    }
-
-    private int[] handleCbQueryResult(ImsSsInfo[] imsSsInfoArr) {
-        int[] iArr = new int[]{0};
-        if (imsSsInfoArr[0].mStatus == 1) {
-            iArr[0] = 1;
-        }
-        return iArr;
-    }
-
-    private boolean handleCcbsIncallSupplementaryService(String str) {
-        if (str.length() > 1) {
-            return false;
-        }
-        Rlog.i(LOG_TAG, "MmiCode 5: CCBS not supported!");
-        notifySuppServiceFailed(SuppService.UNKNOWN);
-        return true;
-    }
-
-    private CallForwardInfo[] handleCfQueryResult(ImsCallForwardInfo[] imsCallForwardInfoArr) {
-        CallForwardInfo[] callForwardInfoArr = (imsCallForwardInfoArr == null || imsCallForwardInfoArr.length == 0) ? null : new CallForwardInfo[imsCallForwardInfoArr.length];
-        IccRecords iccRecords = getIccRecords();
-        if (imsCallForwardInfoArr != null && imsCallForwardInfoArr.length != 0) {
-            int length = imsCallForwardInfoArr.length;
-            for (int i = 0; i < length; i++) {
-                if (imsCallForwardInfoArr[i].mCondition == 0 && iccRecords != null) {
-                    setCallForwardingPreference(imsCallForwardInfoArr[i].mStatus == 1);
-                    iccRecords.setVoiceCallForwardingFlag(1, imsCallForwardInfoArr[i].mStatus == 1, imsCallForwardInfoArr[i].mNumber);
-                }
-                callForwardInfoArr[i] = getCallForwardInfo(imsCallForwardInfoArr[i]);
-            }
-        } else if (iccRecords != null) {
-            iccRecords.setVoiceCallForwardingFlag(1, false, null);
-        }
-        return callForwardInfoArr;
-    }
-
-    private int[] handleCwQueryResult(ImsSsInfo[] imsSsInfoArr) {
-        int[] iArr = new int[2];
-        iArr[0] = 0;
-        if (imsSsInfoArr[0].mStatus == 1) {
-            iArr[0] = 1;
-            iArr[1] = 1;
-        }
-        return iArr;
-    }
-
-    private boolean handleEctIncallSupplementaryService(String str) {
-        if (str.length() != 1) {
-            return false;
-        }
-        Rlog.d(LOG_TAG, "MmiCode 4: not support explicit call transfer");
-        notifySuppServiceFailed(SuppService.TRANSFER);
-        return true;
-    }
-
-    private void handleEnterEmergencyCallbackMode() {
-        Rlog.d(LOG_TAG, "handleEnterEmergencyCallbackMode,mIsPhoneInEcmState= " + this.mIsPhoneInEcmState);
-        if (!this.mIsPhoneInEcmState) {
-            this.mIsPhoneInEcmState = true;
-            sendEmergencyCallbackModeChange();
-            setSystemProperty("ril.cdma.inecmmode", "true");
-            postDelayed(this.mExitEcmRunnable, SystemProperties.getLong("ro.cdma.ecmexittimer", 300000));
-            this.mWakeLock.acquire();
-        }
-    }
-
-    private void handleExitEmergencyCallbackMode() {
-        Rlog.d(LOG_TAG, "handleExitEmergencyCallbackMode: mIsPhoneInEcmState = " + this.mIsPhoneInEcmState);
-        removeCallbacks(this.mExitEcmRunnable);
-        if (this.mEcmExitRespRegistrant != null) {
-            this.mEcmExitRespRegistrant.notifyResult(Boolean.TRUE);
-        }
-        if (this.mIsPhoneInEcmState) {
-            this.mIsPhoneInEcmState = false;
-            setSystemProperty("ril.cdma.inecmmode", "false");
-        }
-        sendEmergencyCallbackModeChange();
-    }
-
-    private boolean handleMultipartyIncallSupplementaryService(String str) {
-        if (str.length() > 1) {
+    private boolean handleMultipartyIncallSupplementaryService(String dialString) {
+        if (dialString.length() > 1) {
             return false;
         }
         Rlog.d(LOG_TAG, "MmiCode 3: merge calls");
@@ -415,24 +664,263 @@ public class ImsPhone extends ImsPhoneBase {
         return true;
     }
 
-    private boolean isCfEnable(int i) {
-        return i == 1 || i == 3;
+    private boolean handleEctIncallSupplementaryService(String dialString) {
+        if (dialString.length() != 1) {
+            return false;
+        }
+        Rlog.d(LOG_TAG, "MmiCode 4: not support explicit call transfer");
+        notifySuppServiceFailed(Phone.SuppService.TRANSFER);
+        return true;
     }
 
-    private boolean isValidCommandInterfaceCFAction(int i) {
-        switch (i) {
-            case 0:
-            case 1:
-            case 3:
-            case 4:
-                return true;
-            default:
-                return false;
+    private boolean handleCcbsIncallSupplementaryService(String dialString) {
+        if (dialString.length() > 1) {
+            return false;
+        }
+        Rlog.i(LOG_TAG, "MmiCode 5: CCBS not supported!");
+        notifySuppServiceFailed(Phone.SuppService.UNKNOWN);
+        return true;
+    }
+
+    public void notifySuppSvcNotification(SuppServiceNotification suppSvc) {
+        Rlog.d(LOG_TAG, "notifySuppSvcNotification: suppSvc = " + suppSvc);
+        this.mSsnRegistrants.notifyRegistrants(new AsyncResult((Object) null, suppSvc, (Throwable) null));
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public boolean handleInCallMmiCommands(String dialString) {
+        if (isInCall() && !TextUtils.isEmpty(dialString)) {
+            switch (dialString.charAt(0)) {
+                case '0':
+                    return handleCallDeflectionIncallSupplementaryService(dialString);
+                case '1':
+                    return handleCallWaitingIncallSupplementaryService(dialString);
+                case OemCdmaTelephonyManager.OEM_RIL_RDE_Data.RDE_NV_MOB_TERM_HOME_I /* 50 */:
+                    return handleCallHoldIncallSupplementaryService(dialString);
+                case '3':
+                    return handleMultipartyIncallSupplementaryService(dialString);
+                case '4':
+                    return handleEctIncallSupplementaryService(dialString);
+                case '5':
+                    return handleCcbsIncallSupplementaryService(dialString);
+                default:
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase
+    public boolean isInCall() {
+        return getForegroundCall().getState().isAlive() || getBackgroundCall().getState().isAlive() || getRingingCall().getState().isAlive();
+    }
+
+    public void notifyNewRingingConnection(Connection c) {
+        this.mDefaultPhone.notifyNewRingingConnectionP(c);
+    }
+
+    public void notifyUnknownConnection(Connection c) {
+        this.mDefaultPhone.notifyUnknownConnectionP(c);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase
+    public void notifyForVideoCapabilityChanged(boolean isVideoCapable) {
+        this.mIsVideoCapable = isVideoCapable;
+        this.mDefaultPhone.notifyForVideoCapabilityChanged(isVideoCapable);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public Connection dial(String dialString, int videoState, Bundle extras) throws CallStateException {
+        return dialInternal(dialString, videoState, extras);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public Connection dial(String dialString, int videoState) throws CallStateException {
+        return dialInternal(dialString, videoState, (Bundle) null);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public Connection dial(String dialString, int videoState, Bundle extras, int prefix) throws CallStateException {
+        return dialInternal(dialString, videoState, extras, prefix);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public Connection dial(String dialString, int videoState, int prefix) throws CallStateException {
+        return dial(dialString, videoState, (Bundle) null, prefix);
+    }
+
+    protected Connection dialInternal(String dialString, int videoState, Bundle extras) throws CallStateException {
+        if (TelBrand.IS_DCM) {
+            return dialInternal(dialString, videoState, extras, 0);
+        }
+        boolean isConferenceUri = false;
+        boolean isSkipSchemaParsing = false;
+        if (extras != null) {
+            isConferenceUri = extras.getBoolean("org.codeaurora.extra.DIAL_CONFERENCE_URI", false);
+            isSkipSchemaParsing = extras.getBoolean("org.codeaurora.extra.SKIP_SCHEMA_PARSING", false);
+        }
+        String newDialString = dialString;
+        if (!isConferenceUri && !isSkipSchemaParsing) {
+            newDialString = PhoneNumberUtils.stripSeparators(dialString);
+        }
+        if (handleInCallMmiCommands(newDialString)) {
+            return null;
+        }
+        String networkPortion = newDialString;
+        if (!ImsPhoneMmiCode.isScMatchesSuppServType(newDialString)) {
+            networkPortion = PhoneNumberUtils.extractNetworkPortionAlt(newDialString);
+        }
+        ImsPhoneMmiCode mmi = ImsPhoneMmiCode.newFromDialString(networkPortion, this);
+        Rlog.d(LOG_TAG, "dialing w/ mmi '" + mmi + "'...");
+        if (mmi == null) {
+            return this.mCT.dial(dialString, videoState, extras);
+        }
+        if (mmi.isTemporaryModeCLIR()) {
+            return this.mCT.dial(mmi.getDialingNumber(), mmi.getCLIRMode(), videoState, extras);
+        }
+        if (!mmi.isSupportedOverImsPhone()) {
+            throw new CallStateException(CS_FALLBACK);
+        }
+        this.mPendingMMIs.add(mmi);
+        this.mMmiRegistrants.notifyRegistrants(new AsyncResult((Object) null, mmi, (Throwable) null));
+        mmi.processCode();
+        return null;
+    }
+
+    protected Connection dialInternal(String dialString, int videoState, Bundle extras, int prefix) throws CallStateException {
+        boolean isConferenceUri = false;
+        boolean isSkipSchemaParsing = false;
+        if (extras != null) {
+            isConferenceUri = extras.getBoolean("org.codeaurora.extra.DIAL_CONFERENCE_URI", false);
+            isSkipSchemaParsing = extras.getBoolean("org.codeaurora.extra.SKIP_SCHEMA_PARSING", false);
+        }
+        String newDialString = dialString;
+        if (!isConferenceUri && !isSkipSchemaParsing) {
+            newDialString = PhoneNumberUtils.stripSeparators(dialString);
+        }
+        if (handleInCallMmiCommands(newDialString)) {
+            return null;
+        }
+        String networkPortion = newDialString;
+        if (!ImsPhoneMmiCode.isScMatchesSuppServType(newDialString)) {
+            networkPortion = PhoneNumberUtils.extractNetworkPortionAlt(newDialString);
+        }
+        ImsPhoneMmiCode mmi = ImsPhoneMmiCode.newFromDialString(networkPortion, this);
+        Rlog.d(LOG_TAG, "dialing w/ mmi '" + mmi + "'...");
+        if (mmi == null) {
+            return this.mCT.dial(getDialNumberInfo(dialString, prefix).get(0), videoState, extras);
+        } else if (mmi.isTemporaryModeCLIR()) {
+            if (prefix >= 4) {
+                prefix -= 4;
+            }
+            return this.mCT.dial(getDialNumberInfo(mmi.getDialingNumber(), prefix).get(0), mmi.getCLIRMode(), videoState, extras);
+        } else if (!mmi.isSupportedOverImsPhone()) {
+            throw new CallStateException(CS_FALLBACK);
+        } else {
+            this.mPendingMMIs.add(mmi);
+            this.mMmiRegistrants.notifyRegistrants(new AsyncResult((Object) null, mmi, (Throwable) null));
+            mmi.processCode();
+            return null;
         }
     }
 
-    private boolean isValidCommandInterfaceCFReason(int i) {
-        switch (i) {
+    private ArrayList<String> getDialNumberInfo(String dialString, int prefix) {
+        String subDialString;
+        int subDialStringLen;
+        String dialAddress;
+        ArrayList<String> dialInfoList = new ArrayList<>();
+        boolean isSubAddress = false;
+        Context context = getContext();
+        if (context != null) {
+            isSubAddress = context.getSharedPreferences("network_service_settings_private", 0).getBoolean("sub_address_setting", true);
+        }
+        Rlog.d(LOG_TAG, "dialString is " + dialString + " isSubAddress is " + isSubAddress + " prefix is " + prefix);
+        dialInfoList.add(dialString);
+        dialInfoList.add(null);
+        if (isSubAddress && (subDialStringLen = (subDialString = dialString.substring(prefix)).length()) != 0) {
+            int i = 0;
+            while (i < subDialStringLen && subDialString.charAt(i) == '*') {
+                i++;
+            }
+            if (subDialString.substring(i).length() != 0) {
+                int startPos = subDialString.substring(i).indexOf(42);
+                if (startPos > 0) {
+                    int startIndexOfDialString = prefix + i + startPos;
+                    String subDialString2 = dialString.substring(0, startIndexOfDialString);
+                    String subAddress = dialString.substring(startIndexOfDialString + 1);
+                    if (!subAddress.equals("")) {
+                        dialAddress = subDialString2 + "&" + subAddress;
+                    } else {
+                        dialAddress = subDialString2;
+                    }
+                    dialInfoList.set(0, dialAddress);
+                }
+                Rlog.d(LOG_TAG, "dialInfoList.get(0) is " + dialInfoList.get(0) + ")");
+            }
+        }
+        return dialInfoList;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void addParticipant(String dialString) throws CallStateException {
+        this.mCT.addParticipant(dialString);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void sendDtmf(char c) {
+        if (!PhoneNumberUtils.is12Key(c)) {
+            Rlog.e(LOG_TAG, "sendDtmf called with invalid character '" + c + "'");
+        } else if (this.mCT.mState == PhoneConstants.State.OFFHOOK) {
+            this.mCT.sendDtmf(c, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void startDtmf(char c) {
+        if (PhoneNumberUtils.is12Key(c) || (c >= 'A' && c <= 'D')) {
+            this.mCT.startDtmf(c);
+        } else {
+            Rlog.e(LOG_TAG, "startDtmf called with invalid character '" + c + "'");
+        }
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void stopDtmf() {
+        this.mCT.stopDtmf();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setOnPostDialCharacter(Handler h, int what, Object obj) {
+        this.mPostDialHandler = new Registrant(h, what, obj);
+    }
+
+    public void notifyIncomingRing() {
+        Rlog.d(LOG_TAG, "notifyIncomingRing");
+        sendMessage(obtainMessage(14, new AsyncResult((Object) null, (Object) null, (Throwable) null)));
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setMute(boolean muted) {
+        this.mCT.setMute(muted);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setUiTTYMode(int uiTtyMode, Message onComplete) {
+        this.mCT.setUiTTYMode(uiTtyMode, onComplete);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean getMute() {
+        return this.mCT.getMute();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public PhoneConstants.State getState() {
+        return this.mCT.mState;
+    }
+
+    private boolean isValidCommandInterfaceCFReason(int commandInterfaceCFReason) {
+        switch (commandInterfaceCFReason) {
             case 0:
             case 1:
             case 2:
@@ -445,200 +933,595 @@ public class ImsPhone extends ImsPhoneBase {
         }
     }
 
-    private boolean isValidFacilityString(String str) {
-        if (str.equals(CommandsInterface.CB_FACILITY_BAOC) || str.equals(CommandsInterface.CB_FACILITY_BAOIC) || str.equals(CommandsInterface.CB_FACILITY_BAOICxH) || str.equals(CommandsInterface.CB_FACILITY_BAIC) || str.equals(CommandsInterface.CB_FACILITY_BAICr) || str.equals(CommandsInterface.CB_FACILITY_BA_ALL) || str.equals(CommandsInterface.CB_FACILITY_BA_MO) || str.equals(CommandsInterface.CB_FACILITY_BA_MT)) {
+    private boolean isValidCommandInterfaceCFAction(int commandInterfaceCFAction) {
+        switch (commandInterfaceCFAction) {
+            case 0:
+            case 1:
+            case 3:
+            case 4:
+                return true;
+            case 2:
+            default:
+                return false;
+        }
+    }
+
+    private boolean isCfEnable(int action) {
+        return action == 1 || action == 3;
+    }
+
+    private int getConditionFromCFReason(int reason) {
+        switch (reason) {
+            case 0:
+                return 0;
+            case 1:
+                return 1;
+            case 2:
+                return 2;
+            case 3:
+                return 3;
+            case 4:
+                return 4;
+            case 5:
+                return 5;
+            default:
+                return -1;
+        }
+    }
+
+    private int getCFReasonFromCondition(int condition) {
+        switch (condition) {
+            case 0:
+                return 0;
+            case 1:
+                return 1;
+            case 2:
+                return 2;
+            case 3:
+            default:
+                return 3;
+            case 4:
+                return 4;
+            case 5:
+                return 5;
+        }
+    }
+
+    private int getActionFromCFAction(int action) {
+        switch (action) {
+            case 0:
+                return 0;
+            case 1:
+                return 1;
+            case 2:
+            default:
+                return -1;
+            case 3:
+                return 3;
+            case 4:
+                return 4;
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public void getOutgoingCallerIdDisplay(Message onComplete) {
+        Rlog.d(LOG_TAG, "getCLIR");
+        try {
+            this.mCT.getUtInterface().queryCLIR(obtainMessage(45, onComplete));
+        } catch (ImsException e) {
+            sendErrorResponse(onComplete, (Throwable) e);
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public void setOutgoingCallerIdDisplay(int clirMode, Message onComplete) {
+        Rlog.d(LOG_TAG, "setCLIR action= " + clirMode);
+        try {
+            this.mCT.getUtInterface().updateCLIR(clirMode, obtainMessage(44, onComplete));
+        } catch (ImsException e) {
+            sendErrorResponse(onComplete, (Throwable) e);
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public void getCallForwardingOption(int commandInterfaceCFReason, Message onComplete) {
+        Rlog.d(LOG_TAG, "getCallForwardingOption reason=" + commandInterfaceCFReason);
+        if (isValidCommandInterfaceCFReason(commandInterfaceCFReason)) {
+            Rlog.d(LOG_TAG, "requesting call forwarding query.");
+            try {
+                this.mCT.getUtInterface().queryCallForward(getConditionFromCFReason(commandInterfaceCFReason), (String) null, obtainMessage(13, onComplete));
+            } catch (ImsException e) {
+                sendErrorResponse(onComplete, (Throwable) e);
+            }
+        } else if (onComplete != null) {
+            sendErrorResponse(onComplete);
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallForwardingOption(int commandInterfaceCFAction, int commandInterfaceCFReason, String dialingNumber, int timerSeconds, Message onComplete) {
+        setCallForwardingOption(commandInterfaceCFAction, commandInterfaceCFReason, dialingNumber, 1, timerSeconds, onComplete);
+    }
+
+    public void setCallForwardingOption(int commandInterfaceCFAction, int commandInterfaceCFReason, String dialingNumber, int serviceClass, int timerSeconds, Message onComplete) {
+        Rlog.d(LOG_TAG, "setCallForwardingOption action=" + commandInterfaceCFAction + ", reason=" + commandInterfaceCFReason + " serviceClass=" + serviceClass);
+        if (isValidCommandInterfaceCFAction(commandInterfaceCFAction) && isValidCommandInterfaceCFReason(commandInterfaceCFReason)) {
+            obtainMessage(12, isCfEnable(commandInterfaceCFAction) ? 1 : 0, 0, new Cf(dialingNumber, commandInterfaceCFReason == 0, onComplete));
+            try {
+                this.mCT.getUtInterface().updateCallForward(getActionFromCFAction(commandInterfaceCFAction), getConditionFromCFReason(commandInterfaceCFReason), dialingNumber, serviceClass, timerSeconds, onComplete);
+            } catch (ImsException e) {
+                sendErrorResponse(onComplete, (Throwable) e);
+            }
+        } else if (onComplete != null) {
+            sendErrorResponse(onComplete);
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallForwardingUncondTimerOption(int startHour, int startMinute, int endHour, int endMinute, int commandInterfaceCFAction, int commandInterfaceCFReason, String dialingNumber, Message onComplete) {
+        Rlog.d(LOG_TAG, "setCallForwardingUncondTimerOption action=" + commandInterfaceCFAction + ", reason=" + commandInterfaceCFReason + ", startHour=" + startHour + ", startMinute=" + startMinute + ", endHour=" + endHour + ", endMinute=" + endMinute);
+        if (isValidCommandInterfaceCFAction(commandInterfaceCFAction) && isValidCommandInterfaceCFReason(commandInterfaceCFReason)) {
+            try {
+                this.mCT.getUtInterface().updateCallForwardUncondTimer(startHour, startMinute, endHour, endMinute, getActionFromCFAction(commandInterfaceCFAction), getConditionFromCFReason(commandInterfaceCFReason), dialingNumber, obtainMessage(37, isCfEnable(commandInterfaceCFAction) ? 1 : 0, 0, new Cf(dialingNumber, commandInterfaceCFReason == 0, onComplete)));
+            } catch (ImsException e) {
+                sendErrorResponse(onComplete, (Throwable) e);
+            }
+        } else if (onComplete != null) {
+            sendErrorResponse(onComplete);
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void getCallWaiting(Message onComplete) {
+        Rlog.d(LOG_TAG, "getCallWaiting");
+        try {
+            this.mCT.getUtInterface().queryCallWaiting(obtainMessage(43, onComplete));
+        } catch (ImsException e) {
+            sendErrorResponse(onComplete, (Throwable) e);
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallWaiting(boolean enable, Message onComplete) {
+        setCallWaiting(enable, 1, onComplete);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallWaiting(boolean enable, int serviceClass, Message onComplete) {
+        Rlog.d(LOG_TAG, "setCallWaiting enable=" + enable);
+        try {
+            this.mCT.getUtInterface().updateCallWaiting(enable, serviceClass, obtainMessage(42, onComplete));
+        } catch (ImsException e) {
+            sendErrorResponse(onComplete, (Throwable) e);
+        }
+    }
+
+    private int getCBTypeFromFacility(String facility) {
+        if (CommandsInterface.CB_FACILITY_BAOC.equals(facility)) {
+            return 2;
+        }
+        if (CommandsInterface.CB_FACILITY_BAOIC.equals(facility)) {
+            return 3;
+        }
+        if (CommandsInterface.CB_FACILITY_BAOICxH.equals(facility)) {
+            return 4;
+        }
+        if (CommandsInterface.CB_FACILITY_BAIC.equals(facility)) {
+            return 1;
+        }
+        if (CommandsInterface.CB_FACILITY_BAICr.equals(facility)) {
+            return 5;
+        }
+        if (CommandsInterface.CB_FACILITY_BA_ALL.equals(facility)) {
+            return 7;
+        }
+        if (CommandsInterface.CB_FACILITY_BA_MO.equals(facility)) {
+            return 8;
+        }
+        if (CommandsInterface.CB_FACILITY_BA_MT.equals(facility)) {
+            return 9;
+        }
+        return 0;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void getCallBarring(String facility, Message onComplete) {
+        Rlog.d(LOG_TAG, "getCallBarring facility=" + facility);
+        try {
+            this.mCT.getUtInterface().queryCallBarring(getCBTypeFromFacility(facility), obtainMessage(41, onComplete));
+        } catch (ImsException e) {
+            sendErrorResponse(onComplete, (Throwable) e);
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallBarring(String facility, boolean lockState, String password, Message onComplete) {
+        int action;
+        Rlog.d(LOG_TAG, "setCallBarring facility=" + facility + ", lockState=" + lockState);
+        Message resp = obtainMessage(40, onComplete);
+        if (lockState) {
+            action = 1;
+        } else {
+            action = 0;
+        }
+        try {
+            this.mCT.getUtInterface().updateCallBarring(getCBTypeFromFacility(facility), action, resp, (String[]) null);
+        } catch (ImsException e) {
+            sendErrorResponse(onComplete, (Throwable) e);
+        }
+    }
+
+    private boolean isValidFacilityString(String facility) {
+        if (facility.equals(CommandsInterface.CB_FACILITY_BAOC) || facility.equals(CommandsInterface.CB_FACILITY_BAOIC) || facility.equals(CommandsInterface.CB_FACILITY_BAOICxH) || facility.equals(CommandsInterface.CB_FACILITY_BAIC) || facility.equals(CommandsInterface.CB_FACILITY_BAICr) || facility.equals(CommandsInterface.CB_FACILITY_BA_ALL) || facility.equals(CommandsInterface.CB_FACILITY_BA_MO) || facility.equals(CommandsInterface.CB_FACILITY_BA_MT)) {
             return true;
         }
-        Rlog.e(LOG_TAG, "isValidFacilityString: invalid facilityString:" + str);
+        Rlog.e(LOG_TAG, "isValidFacilityString: invalid facilityString:" + facility);
         return false;
     }
 
-    private void onNetworkInitiatedUssd(ImsPhoneMmiCode imsPhoneMmiCode) {
-        Rlog.d(LOG_TAG, "onNetworkInitiatedUssd");
-        this.mMmiCompleteRegistrants.notifyRegistrants(new AsyncResult(null, imsPhoneMmiCode, null));
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void getCallBarring(String facility, String password, Message onComplete) {
+        if (isValidFacilityString(facility)) {
+            Rlog.d(LOG_TAG, "getCallBarring: facility=" + facility);
+            try {
+                if (this.mImsConfig != null) {
+                    this.mImsConfig.queryFacilityLockSH(facility, password, 0, onComplete);
+                } else {
+                    Rlog.e(LOG_TAG, "queryFacilityLockSH failed. mImsConfig is null");
+                }
+            } catch (ImsException e) {
+                Rlog.e(LOG_TAG, "queryFacilityLockSH failed. Exception = " + e);
+            }
+        }
     }
 
-    private void sendResponse(Message message, Object obj, Throwable th) {
-        if (message != null) {
-            if (th != null) {
-                AsyncResult.forMessage(message, obj, getCommandException(th));
-            } else {
-                AsyncResult.forMessage(message, obj, null);
+    public void setCallBarringNew(String facility, boolean lockState, String password, Message onComplete) {
+        if (isValidFacilityString(facility)) {
+            Rlog.d(LOG_TAG, "setCallBarring: facility=" + facility + " lockState=" + lockState);
+            try {
+                if (this.mImsConfig != null) {
+                    this.mImsConfig.setFacilityLockSH(facility, lockState, password, 1, onComplete);
+                } else {
+                    Rlog.e(LOG_TAG, "setFacilityLockSH failed. mImsConfig is null");
+                }
+            } catch (ImsException e) {
+                Rlog.e(LOG_TAG, "setFacilityLockSH failed. Exception = " + e);
             }
-            message.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public void sendUssdResponse(String ussdMessge) {
+        Rlog.d(LOG_TAG, "sendUssdResponse");
+        ImsPhoneMmiCode mmi = ImsPhoneMmiCode.newFromUssdUserInput(ussdMessge, this);
+        this.mPendingMMIs.add(mmi);
+        this.mMmiRegistrants.notifyRegistrants(new AsyncResult((Object) null, mmi, (Throwable) null));
+        mmi.sendUssd(ussdMessge);
+    }
+
+    public void sendUSSD(String ussdString, Message response) {
+        this.mCT.sendUSSD(ussdString, response);
+    }
+
+    public void cancelUSSD() {
+        this.mCT.cancelUSSD();
+    }
+
+    void sendErrorResponse(Message onComplete) {
+        Rlog.d(LOG_TAG, "sendErrorResponse");
+        if (onComplete != null) {
+            AsyncResult.forMessage(onComplete, (Object) null, new CommandException(CommandException.Error.GENERIC_FAILURE));
+            onComplete.sendToTarget();
+        }
+    }
+
+    public void sendErrorResponse(Message onComplete, Throwable e) {
+        Rlog.d(LOG_TAG, "sendErrorResponse");
+        if (onComplete != null) {
+            AsyncResult.forMessage(onComplete, (Object) null, getCommandException(e));
+            onComplete.sendToTarget();
+        }
+    }
+
+    void sendErrorResponse(Message onComplete, ImsReasonInfo reasonInfo) {
+        Rlog.d(LOG_TAG, "sendErrorResponse reasonCode=" + reasonInfo.getCode());
+        if (onComplete != null) {
+            AsyncResult.forMessage(onComplete, (Object) null, getCommandException(reasonInfo.getCode()));
+            onComplete.sendToTarget();
+        }
+    }
+
+    CommandException getCommandException(int code) {
+        return getCommandException(code, null);
+    }
+
+    CommandException getCommandException(int code, String errorString) {
+        Rlog.d(LOG_TAG, "getCommandException code= " + code + ", errorString= " + errorString);
+        CommandException.Error error = CommandException.Error.GENERIC_FAILURE;
+        switch (code) {
+            case 801:
+                error = CommandException.Error.REQUEST_NOT_SUPPORTED;
+                break;
+            case 821:
+                error = CommandException.Error.PASSWORD_INCORRECT;
+                break;
+        }
+        return new CommandException(error, errorString);
+    }
+
+    CommandException getCommandException(Throwable e) {
+        if (e instanceof ImsException) {
+            return getCommandException(((ImsException) e).getCode(), e.getMessage());
+        }
+        Rlog.d(LOG_TAG, "getCommandException generic failure");
+        return new CommandException(CommandException.Error.GENERIC_FAILURE);
+    }
+
+    private void onNetworkInitiatedUssd(ImsPhoneMmiCode mmi) {
+        Rlog.d(LOG_TAG, "onNetworkInitiatedUssd");
+        this.mMmiCompleteRegistrants.notifyRegistrants(new AsyncResult((Object) null, mmi, (Throwable) null));
+    }
+
+    public void onIncomingUSSD(int ussdMode, String ussdMessage) {
+        boolean isUssdError = true;
+        Rlog.d(LOG_TAG, "onIncomingUSSD ussdMode=" + ussdMode);
+        boolean isUssdRequest = ussdMode == 1;
+        if (ussdMode == 0 || ussdMode == 1) {
+            isUssdError = false;
+        }
+        ImsPhoneMmiCode found = null;
+        int i = 0;
+        int s = this.mPendingMMIs.size();
+        while (true) {
+            if (i >= s) {
+                break;
+            } else if (this.mPendingMMIs.get(i).isPendingUSSD()) {
+                found = this.mPendingMMIs.get(i);
+                break;
+            } else {
+                i++;
+            }
+        }
+        if (found != null) {
+            if (isUssdError) {
+                found.onUssdFinishedError();
+            } else {
+                found.onUssdFinished(ussdMessage, isUssdRequest);
+            }
+        } else if (!isUssdError && ussdMessage != null) {
+            onNetworkInitiatedUssd(ImsPhoneMmiCode.newNetworkInitiatedUssd(ussdMessage, isUssdRequest, this));
+        }
+    }
+
+    public void onMMIDone(ImsPhoneMmiCode mmi) {
+        if (this.mPendingMMIs.remove(mmi) || mmi.isUssdRequest()) {
+            this.mMmiCompleteRegistrants.notifyRegistrants(new AsyncResult((Object) null, mmi, (Throwable) null));
+        }
+    }
+
+    public ArrayList<Connection> getHandoverConnection() {
+        ArrayList<Connection> connList = new ArrayList<>();
+        connList.addAll(getForegroundCall().mConnections);
+        connList.addAll(getBackgroundCall().mConnections);
+        connList.addAll(getRingingCall().mConnections);
+        if (connList.size() > 0) {
+            return connList;
+        }
+        return null;
+    }
+
+    public void notifySrvccState(Call.SrvccState state) {
+        this.mCT.notifySrvccState(state);
+    }
+
+    public void initiateSilentRedial() {
+        AsyncResult ar = new AsyncResult((Object) null, this.mLastDialString, (Throwable) null);
+        if (ar != null) {
+            this.mSilentRedialRegistrants.notifyRegistrants(ar);
+        }
+    }
+
+    public void registerForSilentRedial(Handler h, int what, Object obj) {
+        this.mSilentRedialRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForSilentRedial(Handler h) {
+        this.mSilentRedialRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public void registerForSuppServiceNotification(Handler h, int what, Object obj) {
+        this.mSsnRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public void unregisterForSuppServiceNotification(Handler h) {
+        this.mSsnRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public int getSubId() {
+        return this.mDefaultPhone.getSubId();
+    }
+
+    @Override // com.android.internal.telephony.imsphone.ImsPhoneBase, com.android.internal.telephony.Phone
+    public String getSubscriberId() {
+        IccRecords r = getIccRecords();
+        if (r != null) {
+            return r.getIMSI();
+        }
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public int getPhoneId() {
+        return this.mDefaultPhone.getPhoneId();
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase
+    public IccRecords getIccRecords() {
+        return this.mDefaultPhone.mIccRecords.get();
+    }
+
+    private CallForwardInfo getCallForwardInfo(ImsCallForwardInfo info) {
+        CallForwardInfo cfInfo = new CallForwardInfo();
+        cfInfo.status = info.mStatus;
+        cfInfo.reason = getCFReasonFromCondition(info.mCondition);
+        cfInfo.serviceClass = 1;
+        cfInfo.toa = info.mToA;
+        cfInfo.number = info.mNumber;
+        cfInfo.timeSeconds = info.mTimeSeconds;
+        cfInfo.startHour = info.mStartHour;
+        cfInfo.startMinute = info.mStartMinute;
+        cfInfo.endHour = info.mEndHour;
+        cfInfo.endMinute = info.mEndMinute;
+        return cfInfo;
+    }
+
+    private CallForwardInfo[] handleCfQueryResult(ImsCallForwardInfo[] infos) {
+        CallForwardInfo[] cfInfos = null;
+        if (!(infos == null || infos.length == 0)) {
+            cfInfos = new CallForwardInfo[infos.length];
+        }
+        IccRecords r = getIccRecords();
+        if (infos != null && infos.length != 0) {
+            int s = infos.length;
+            for (int i = 0; i < s; i++) {
+                if (infos[i].mCondition == 0 && r != null) {
+                    setCallForwardingPreference(infos[i].mStatus == 1);
+                    r.setVoiceCallForwardingFlag(1, infos[i].mStatus == 1, infos[i].mNumber);
+                }
+                cfInfos[i] = getCallForwardInfo(infos[i]);
+            }
+        } else if (r != null) {
+            r.setVoiceCallForwardingFlag(1, false, null);
+        }
+        return cfInfos;
+    }
+
+    private int[] handleCbQueryResult(ImsSsInfo[] infos) {
+        int[] cbInfos = new int[1];
+        cbInfos[0] = 0;
+        if (infos[0].mStatus == 1) {
+            cbInfos[0] = 1;
+        }
+        return cbInfos;
+    }
+
+    private int[] handleCwQueryResult(ImsSsInfo[] infos) {
+        int[] cwInfos = new int[2];
+        cwInfos[0] = 0;
+        if (infos[0].mStatus == 1) {
+            cwInfos[0] = 1;
+            cwInfos[1] = 1;
+        }
+        return cwInfos;
+    }
+
+    private void sendResponse(Message onComplete, Object result, Throwable e) {
+        if (onComplete != null) {
+            if (e != null) {
+                AsyncResult.forMessage(onComplete, result, getCommandException(e));
+            } else {
+                AsyncResult.forMessage(onComplete, result, (Throwable) null);
+            }
+            onComplete.sendToTarget();
         }
     }
 
     private void updateDataServiceState() {
         if (this.mSS != null && this.mDefaultPhone.getServiceStateTracker() != null && this.mDefaultPhone.getServiceStateTracker().mSS != null) {
-            ServiceState serviceState = this.mDefaultPhone.getServiceStateTracker().mSS;
-            this.mSS.setDataRegState(serviceState.getDataRegState());
-            this.mSS.setRilDataRadioTechnology(serviceState.getRilDataRadioTechnology());
-            Rlog.d(LOG_TAG, "updateDataServiceState: defSs = " + serviceState + " imsSs = " + this.mSS);
+            ServiceState ss = this.mDefaultPhone.getServiceStateTracker().mSS;
+            this.mSS.setDataRegState(ss.getDataRegState());
+            this.mSS.setRilDataRadioTechnology(ss.getRilDataRadioTechnology());
+            Rlog.d(LOG_TAG, "updateDataServiceState: defSs = " + ss + " imsSs = " + this.mSS);
         }
     }
 
-    public void acceptCall(int i) throws CallStateException {
-        this.mCT.acceptCall(i);
-    }
-
-    public /* bridge */ /* synthetic */ void activateCellBroadcastSms(int i, Message message) {
-        super.activateCellBroadcastSms(i, message);
-    }
-
-    public void addParticipant(String str) throws CallStateException {
-        this.mCT.addParticipant(str);
-    }
-
-    public boolean canConference() {
-        return this.mCT.canConference();
-    }
-
-    public boolean canDial() {
-        return this.mCT.canDial();
-    }
-
-    public boolean canTransfer() {
-        return this.mCT.canTransfer();
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void cancelUSSD() {
-        this.mCT.cancelUSSD();
-    }
-
-    public void clearDisconnected() {
-        this.mCT.clearDisconnected();
-    }
-
-    public void conference() {
-        this.mCT.conference();
-    }
-
-    public void declineCall() throws CallStateException {
-        this.mCT.declineCall();
-    }
-
-    public void deflectCall(String str) throws CallStateException {
-        this.mCT.deflectCall(str);
-    }
-
-    public Connection dial(String str, int i) throws CallStateException {
-        return dialInternal(str, i, null);
-    }
-
-    public Connection dial(String str, int i, int i2) throws CallStateException {
-        return dial(str, i, null, i2);
-    }
-
-    public Connection dial(String str, int i, Bundle bundle) throws CallStateException {
-        return dialInternal(str, i, bundle);
-    }
-
-    public Connection dial(String str, int i, Bundle bundle, int i2) throws CallStateException {
-        return dialInternal(str, i, bundle, i2);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public Connection dialInternal(String str, int i, Bundle bundle) throws CallStateException {
-        if (TelBrand.IS_DCM) {
-            return dialInternal(str, i, bundle, 0);
-        }
-        boolean z;
-        boolean z2;
-        if (bundle != null) {
-            z = bundle.getBoolean("org.codeaurora.extra.DIAL_CONFERENCE_URI", false);
-            z2 = bundle.getBoolean("org.codeaurora.extra.SKIP_SCHEMA_PARSING", false);
-        } else {
-            z2 = false;
-            z = false;
-        }
-        String stripSeparators = (z || z2) ? str : PhoneNumberUtils.stripSeparators(str);
-        if (handleInCallMmiCommands(stripSeparators)) {
-            return null;
-        }
-        if (!ImsPhoneMmiCode.isScMatchesSuppServType(stripSeparators)) {
-            stripSeparators = PhoneNumberUtils.extractNetworkPortionAlt(stripSeparators);
-        }
-        ImsPhoneMmiCode newFromDialString = ImsPhoneMmiCode.newFromDialString(stripSeparators, this);
-        Rlog.d(LOG_TAG, "dialing w/ mmi '" + newFromDialString + "'...");
-        if (newFromDialString == null) {
-            return this.mCT.dial(str, i, bundle);
-        }
-        if (newFromDialString.isTemporaryModeCLIR()) {
-            return this.mCT.dial(newFromDialString.getDialingNumber(), newFromDialString.getCLIRMode(), i, bundle);
-        }
-        if (newFromDialString.isSupportedOverImsPhone()) {
-            this.mPendingMMIs.add(newFromDialString);
-            this.mMmiRegistrants.notifyRegistrants(new AsyncResult(null, newFromDialString, null));
-            newFromDialString.processCode();
-            return null;
-        }
-        throw new CallStateException(CS_FALLBACK);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public Connection dialInternal(String str, int i, Bundle bundle, int i2) throws CallStateException {
-        boolean z;
-        boolean z2;
-        if (bundle != null) {
-            z = bundle.getBoolean("org.codeaurora.extra.DIAL_CONFERENCE_URI", false);
-            z2 = bundle.getBoolean("org.codeaurora.extra.SKIP_SCHEMA_PARSING", false);
-        } else {
-            z2 = false;
-            z = false;
-        }
-        String stripSeparators = (z || z2) ? str : PhoneNumberUtils.stripSeparators(str);
-        if (handleInCallMmiCommands(stripSeparators)) {
-            return null;
-        }
-        if (!ImsPhoneMmiCode.isScMatchesSuppServType(stripSeparators)) {
-            stripSeparators = PhoneNumberUtils.extractNetworkPortionAlt(stripSeparators);
-        }
-        ImsPhoneMmiCode newFromDialString = ImsPhoneMmiCode.newFromDialString(stripSeparators, this);
-        Rlog.d(LOG_TAG, "dialing w/ mmi '" + newFromDialString + "'...");
-        if (newFromDialString == null) {
-            return this.mCT.dial((String) getDialNumberInfo(str, i2).get(0), i, bundle);
-        } else if (newFromDialString.isTemporaryModeCLIR()) {
-            if (i2 >= 4) {
-                i2 -= 4;
-            }
-            return this.mCT.dial((String) getDialNumberInfo(newFromDialString.getDialingNumber(), i2).get(0), newFromDialString.getCLIRMode(), i, bundle);
-        } else if (newFromDialString.isSupportedOverImsPhone()) {
-            this.mPendingMMIs.add(newFromDialString);
-            this.mMmiRegistrants.notifyRegistrants(new AsyncResult(null, newFromDialString, null));
-            newFromDialString.processCode();
-            return null;
-        } else {
-            throw new CallStateException(CS_FALLBACK);
+    @Override // com.android.internal.telephony.PhoneBase, android.os.Handler
+    public void handleMessage(Message msg) {
+        AsyncResult ar = (AsyncResult) msg.obj;
+        Rlog.d(LOG_TAG, "handleMessage what=" + msg.what);
+        switch (msg.what) {
+            case 12:
+                IccRecords r = getIccRecords();
+                Cf cf = (Cf) ar.userObj;
+                if (cf.mIsCfu && ar.exception == null && r != null) {
+                    setCallForwardingPreference(msg.arg1 == 1);
+                    r.setVoiceCallForwardingFlag(1, msg.arg1 == 1, cf.mSetCfNumber);
+                }
+                sendResponse(cf.mOnComplete, null, ar.exception);
+                updateCallForwardStatus();
+                return;
+            case 13:
+                CallForwardInfo[] cfInfos = null;
+                if (ar.exception == null) {
+                    cfInfos = handleCfQueryResult((ImsCallForwardInfo[]) ar.result);
+                }
+                sendResponse((Message) ar.userObj, cfInfos, ar.exception);
+                updateCallForwardStatus();
+                return;
+            case 37:
+                sendResponse(((Cf) ar.userObj).mOnComplete, null, ar.exception);
+                return;
+            case 39:
+                Rlog.d(LOG_TAG, "Callforwarding is " + getCallForwardingPreference());
+                notifyCallForwardingIndicator();
+                return;
+            case 40:
+            case 42:
+            case 44:
+                sendResponse((Message) ar.userObj, null, ar.exception);
+                return;
+            case 41:
+            case 43:
+                int[] ssInfos = null;
+                if (ar.exception == null) {
+                    if (msg.what == 41) {
+                        ssInfos = handleCbQueryResult((ImsSsInfo[]) ar.result);
+                    } else if (msg.what == 43) {
+                        ssInfos = handleCwQueryResult((ImsSsInfo[]) ar.result);
+                    }
+                }
+                sendResponse((Message) ar.userObj, ssInfos, ar.exception);
+                return;
+            case 45:
+                Bundle ssInfo = (Bundle) ar.result;
+                int[] clirInfo = null;
+                if (ssInfo != null) {
+                    clirInfo = ssInfo.getIntArray(ImsPhoneMmiCode.UT_BUNDLE_KEY_CLIR);
+                }
+                sendResponse((Message) ar.userObj, clirInfo, ar.exception);
+                return;
+            case OemCdmaTelephonyManager.OEM_RIL_RDE_Data.RDE_NV_DS_MIP_SS_USER_PROF_I /* 46 */:
+                Rlog.d(LOG_TAG, "EVENT_DEFAULT_PHONE_DATA_STATE_CHANGED");
+                updateDataServiceState();
+                return;
+            default:
+                super.handleMessage(msg);
+                return;
         }
     }
 
-    public /* bridge */ /* synthetic */ boolean disableDataConnectivity() {
-        return super.disableDataConnectivity();
+    @Override // com.android.internal.telephony.PhoneBase
+    public boolean isInEmergencyCall() {
+        return this.mCT.isInEmergencyCall();
     }
 
-    public /* bridge */ /* synthetic */ void disableLocationUpdates() {
-        super.disableLocationUpdates();
+    @Override // com.android.internal.telephony.PhoneBase
+    public boolean isInEcm() {
+        return this.mIsPhoneInEcmState;
     }
 
-    public void dispose() {
-        Rlog.d(LOG_TAG, "dispose");
-        this.mPendingMMIs.clear();
-        this.mCT.dispose();
-        if (this.mDefaultPhone != null && this.mDefaultPhone.getServiceStateTracker() != null) {
-            this.mDefaultPhone.getServiceStateTracker().unregisterForDataRegStateOrRatChanged(this);
-        }
+    void sendEmergencyCallbackModeChange() {
+        Intent intent = new Intent("android.intent.action.EMERGENCY_CALLBACK_MODE_CHANGED");
+        intent.putExtra("phoneinECMState", this.mIsPhoneInEcmState);
+        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, getPhoneId());
+        ActivityManagerNative.broadcastStickyIntent(intent, (String) null, -1);
+        Rlog.d(LOG_TAG, "sendEmergencyCallbackModeChange");
     }
 
-    public /* bridge */ /* synthetic */ boolean enableDataConnectivity() {
-        return super.enableDataConnectivity();
-    }
-
-    public /* bridge */ /* synthetic */ void enableLocationUpdates() {
-        super.enableLocationUpdates();
-    }
-
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
     public void exitEmergencyCallbackMode() {
         if (this.mWakeLock.isHeld()) {
             this.mWakeLock.release();
@@ -651,399 +1534,34 @@ public class ImsPhone extends ImsPhoneBase {
         }
     }
 
-    public void explicitCallTransfer() {
-        this.mCT.explicitCallTransfer();
-    }
-
-    public /* bridge */ /* synthetic */ List getAllCellInfo() {
-        return super.getAllCellInfo();
-    }
-
-    public /* bridge */ /* synthetic */ void getAvailableNetworks(Message message) {
-        super.getAvailableNetworks(message);
-    }
-
-    public ImsPhoneCall getBackgroundCall() {
-        return this.mCT.mBackgroundCall;
-    }
-
-    public void getCallBarring(String str, Message message) {
-        Rlog.d(LOG_TAG, "getCallBarring facility=" + str);
-        try {
-            this.mCT.getUtInterface().queryCallBarring(getCBTypeFromFacility(str), obtainMessage(41, message));
-        } catch (ImsException e) {
-            sendErrorResponse(message, e);
+    public void handleEnterEmergencyCallbackMode() {
+        Rlog.d(LOG_TAG, "handleEnterEmergencyCallbackMode,mIsPhoneInEcmState= " + this.mIsPhoneInEcmState);
+        if (!this.mIsPhoneInEcmState) {
+            this.mIsPhoneInEcmState = true;
+            sendEmergencyCallbackModeChange();
+            setSystemProperty("ril.cdma.inecmmode", "true");
+            postDelayed(this.mExitEcmRunnable, SystemProperties.getLong("ro.cdma.ecmexittimer", 300000L));
+            this.mWakeLock.acquire();
         }
     }
 
-    public void getCallBarring(String str, String str2, Message message) {
-        if (isValidFacilityString(str)) {
-            Rlog.d(LOG_TAG, "getCallBarring: facility=" + str);
-            try {
-                if (this.mImsConfig != null) {
-                    this.mImsConfig.queryFacilityLockSH(str, str2, 0, message);
-                } else {
-                    Rlog.e(LOG_TAG, "queryFacilityLockSH failed. mImsConfig is null");
-                }
-            } catch (ImsException e) {
-                Rlog.e(LOG_TAG, "queryFacilityLockSH failed. Exception = " + e);
-            }
+    public void handleExitEmergencyCallbackMode() {
+        Rlog.d(LOG_TAG, "handleExitEmergencyCallbackMode: mIsPhoneInEcmState = " + this.mIsPhoneInEcmState);
+        removeCallbacks(this.mExitEcmRunnable);
+        if (this.mEcmExitRespRegistrant != null) {
+            this.mEcmExitRespRegistrant.notifyResult(Boolean.TRUE);
         }
-    }
-
-    public boolean getCallForwardingIndicator() {
-        IccRecords iccRecords = getIccRecords();
-        return (iccRecords == null || !iccRecords.isCallForwardStatusStored()) ? getCallForwardingPreference() : iccRecords.getVoiceCallForwardingFlag();
-    }
-
-    public void getCallForwardingOption(int i, Message message) {
-        Rlog.d(LOG_TAG, "getCallForwardingOption reason=" + i);
-        if (isValidCommandInterfaceCFReason(i)) {
-            Rlog.d(LOG_TAG, "requesting call forwarding query.");
-            try {
-                this.mCT.getUtInterface().queryCallForward(getConditionFromCFReason(i), null, obtainMessage(13, message));
-            } catch (ImsException e) {
-                sendErrorResponse(message, e);
-            }
-        } else if (message != null) {
-            sendErrorResponse(message);
+        if (this.mIsPhoneInEcmState) {
+            this.mIsPhoneInEcmState = false;
+            setSystemProperty("ril.cdma.inecmmode", "false");
         }
+        sendEmergencyCallbackModeChange();
     }
 
-    public CallTracker getCallTracker() {
-        return this.mCT;
-    }
-
-    public void getCallWaiting(Message message) {
-        Rlog.d(LOG_TAG, "getCallWaiting");
-        try {
-            this.mCT.getUtInterface().queryCallWaiting(obtainMessage(43, message));
-        } catch (ImsException e) {
-            sendErrorResponse(message, e);
-        }
-    }
-
-    public /* bridge */ /* synthetic */ void getCellBroadcastSmsConfig(Message message) {
-        super.getCellBroadcastSmsConfig(message);
-    }
-
-    public /* bridge */ /* synthetic */ CellLocation getCellLocation() {
-        return super.getCellLocation();
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public CommandException getCommandException(int i) {
-        return getCommandException(i, null);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public CommandException getCommandException(int i, String str) {
-        Rlog.d(LOG_TAG, "getCommandException code= " + i + ", errorString= " + str);
-        Error error = Error.GENERIC_FAILURE;
-        switch (i) {
-            case 801:
-                error = Error.REQUEST_NOT_SUPPORTED;
-                break;
-            case 821:
-                error = Error.PASSWORD_INCORRECT;
-                break;
-        }
-        return new CommandException(error, str);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public CommandException getCommandException(Throwable th) {
-        if (th instanceof ImsException) {
-            return getCommandException(((ImsException) th).getCode(), th.getMessage());
-        }
-        Rlog.d(LOG_TAG, "getCommandException generic failure");
-        return new CommandException(Error.GENERIC_FAILURE);
-    }
-
-    public /* bridge */ /* synthetic */ List getCurrentDataConnectionList() {
-        return super.getCurrentDataConnectionList();
-    }
-
-    public /* bridge */ /* synthetic */ DataActivityState getDataActivityState() {
-        return super.getDataActivityState();
-    }
-
-    public /* bridge */ /* synthetic */ void getDataCallList(Message message) {
-        super.getDataCallList(message);
-    }
-
-    public /* bridge */ /* synthetic */ DataState getDataConnectionState() {
-        return super.getDataConnectionState();
-    }
-
-    public /* bridge */ /* synthetic */ DataState getDataConnectionState(String str) {
-        return super.getDataConnectionState(str);
-    }
-
-    public /* bridge */ /* synthetic */ boolean getDataEnabled() {
-        return super.getDataEnabled();
-    }
-
-    public /* bridge */ /* synthetic */ boolean getDataRoamingEnabled() {
-        return super.getDataRoamingEnabled();
-    }
-
-    public /* bridge */ /* synthetic */ String getDeviceId() {
-        return super.getDeviceId();
-    }
-
-    public /* bridge */ /* synthetic */ String getDeviceSvn() {
-        return super.getDeviceSvn();
-    }
-
-    public /* bridge */ /* synthetic */ String getEsn() {
-        return super.getEsn();
-    }
-
-    public ImsPhoneCall getForegroundCall() {
-        return this.mCT.mForegroundCall;
-    }
-
-    public /* bridge */ /* synthetic */ String getGroupIdLevel1() {
-        return super.getGroupIdLevel1();
-    }
-
-    public ArrayList<Connection> getHandoverConnection() {
-        ArrayList arrayList = new ArrayList();
-        arrayList.addAll(getForegroundCall().mConnections);
-        arrayList.addAll(getBackgroundCall().mConnections);
-        arrayList.addAll(getRingingCall().mConnections);
-        return arrayList.size() > 0 ? arrayList : null;
-    }
-
-    public /* bridge */ /* synthetic */ IccCard getIccCard() {
-        return super.getIccCard();
-    }
-
-    public /* bridge */ /* synthetic */ IccFileHandler getIccFileHandler() {
-        return super.getIccFileHandler();
-    }
-
-    public /* bridge */ /* synthetic */ IccPhoneBookInterfaceManager getIccPhoneBookInterfaceManager() {
-        return super.getIccPhoneBookInterfaceManager();
-    }
-
-    public IccRecords getIccRecords() {
-        return (IccRecords) this.mDefaultPhone.mIccRecords.get();
-    }
-
-    public /* bridge */ /* synthetic */ boolean getIccRecordsLoaded() {
-        return super.getIccRecordsLoaded();
-    }
-
-    public /* bridge */ /* synthetic */ String getIccSerialNumber() {
-        return super.getIccSerialNumber();
-    }
-
-    public /* bridge */ /* synthetic */ String getImei() {
-        return super.getImei();
-    }
-
-    public void getIncomingAnonymousCallBarring(Message message) {
-        Rlog.d(LOG_TAG, "getIncomingAnonymousCallBarring: facility=157");
-        obtainMessage(46, message);
-        try {
-            this.mCT.getUtInterface().queryFacilityLockBAICa(ImsPhoneMmiCode.SC_BAICa, null, 0, message);
-        } catch (ImsException e) {
-            sendErrorResponse(message, e);
-        }
-    }
-
-    public void getIncomingSpecificDnCallBarring(Message message) {
-        Rlog.d(LOG_TAG, "getIncomingSpecificDnCallBarring: facility=156");
-        obtainMessage(48, message);
-        try {
-            this.mCT.getUtInterface().queryIncomingCallBarringSDn(ImsPhoneMmiCode.SC_BS_MT, 1, message);
-        } catch (ImsException e) {
-            sendErrorResponse(message, e);
-        }
-    }
-
-    public /* bridge */ /* synthetic */ String getLine1AlphaTag() {
-        return super.getLine1AlphaTag();
-    }
-
-    public /* bridge */ /* synthetic */ String getLine1Number() {
-        return super.getLine1Number();
-    }
-
-    public /* bridge */ /* synthetic */ LinkProperties getLinkProperties(String str) {
-        return super.getLinkProperties(str);
-    }
-
-    public /* bridge */ /* synthetic */ String getMeid() {
-        return super.getMeid();
-    }
-
-    public /* bridge */ /* synthetic */ boolean getMessageWaitingIndicator() {
-        return super.getMessageWaitingIndicator();
-    }
-
-    public boolean getMute() {
-        return this.mCT.getMute();
-    }
-
-    public /* bridge */ /* synthetic */ void getNeighboringCids(Message message) {
-        super.getNeighboringCids(message);
-    }
-
-    public void getOutgoingCallerIdDisplay(Message message) {
-        Rlog.d(LOG_TAG, "getCLIR");
-        try {
-            this.mCT.getUtInterface().queryCLIR(obtainMessage(45, message));
-        } catch (ImsException e) {
-            sendErrorResponse(message, e);
-        }
-    }
-
-    public List<? extends ImsPhoneMmiCode> getPendingMmiCodes() {
-        return this.mPendingMMIs;
-    }
-
-    public int getPhoneId() {
-        return this.mDefaultPhone.getPhoneId();
-    }
-
-    public /* bridge */ /* synthetic */ PhoneSubInfo getPhoneSubInfo() {
-        return super.getPhoneSubInfo();
-    }
-
-    public /* bridge */ /* synthetic */ int getPhoneType() {
-        return super.getPhoneType();
-    }
-
-    public ImsPhoneCall getRingingCall() {
-        return this.mCT.mRingingCall;
-    }
-
-    public ServiceState getServiceState() {
-        return this.mSS;
-    }
-
-    public /* bridge */ /* synthetic */ SignalStrength getSignalStrength() {
-        return super.getSignalStrength();
-    }
-
-    public PhoneConstants.State getState() {
-        return this.mCT.mState;
-    }
-
-    public int getSubId() {
-        return this.mDefaultPhone.getSubId();
-    }
-
-    public String getSubscriberId() {
-        IccRecords iccRecords = getIccRecords();
-        return iccRecords != null ? iccRecords.getIMSI() : null;
-    }
-
-    public /* bridge */ /* synthetic */ String getVoiceMailAlphaTag() {
-        return super.getVoiceMailAlphaTag();
-    }
-
-    public /* bridge */ /* synthetic */ String getVoiceMailNumber() {
-        return super.getVoiceMailNumber();
-    }
-
-    public boolean handleInCallMmiCommands(String str) {
-        if (!isInCall() || TextUtils.isEmpty(str)) {
-            return false;
-        }
-        switch (str.charAt(0)) {
-            case '0':
-                return handleCallDeflectionIncallSupplementaryService(str);
-            case '1':
-                return handleCallWaitingIncallSupplementaryService(str);
-            case OEM_RIL_RDE_Data.RDE_NV_MOB_TERM_HOME_I /*50*/:
-                return handleCallHoldIncallSupplementaryService(str);
-            case '3':
-                return handleMultipartyIncallSupplementaryService(str);
-            case '4':
-                return handleEctIncallSupplementaryService(str);
-            case '5':
-                return handleCcbsIncallSupplementaryService(str);
-            default:
-                return false;
-        }
-    }
-
-    public void handleMessage(Message message) {
-        boolean z = false;
-        Object obj = null;
-        AsyncResult asyncResult = (AsyncResult) message.obj;
-        Rlog.d(LOG_TAG, "handleMessage what=" + message.what);
-        switch (message.what) {
-            case 12:
-                IccRecords iccRecords = getIccRecords();
-                Cf cf = (Cf) asyncResult.userObj;
-                if (cf.mIsCfu && asyncResult.exception == null && iccRecords != null) {
-                    setCallForwardingPreference(message.arg1 == 1);
-                    if (message.arg1 == 1) {
-                        z = true;
-                    }
-                    iccRecords.setVoiceCallForwardingFlag(1, z, cf.mSetCfNumber);
-                }
-                sendResponse(cf.mOnComplete, null, asyncResult.exception);
-                updateCallForwardStatus();
-                return;
-            case 13:
-                sendResponse((Message) asyncResult.userObj, asyncResult.exception == null ? handleCfQueryResult((ImsCallForwardInfo[]) asyncResult.result) : null, asyncResult.exception);
-                updateCallForwardStatus();
-                return;
-            case 37:
-                sendResponse(((Cf) asyncResult.userObj).mOnComplete, null, asyncResult.exception);
-                return;
-            case 39:
-                Rlog.d(LOG_TAG, "Callforwarding is " + getCallForwardingPreference());
-                notifyCallForwardingIndicator();
-                return;
-            case 40:
-            case 42:
-            case 44:
-                sendResponse((Message) asyncResult.userObj, null, asyncResult.exception);
-                return;
-            case 41:
-            case 43:
-                if (asyncResult.exception == null) {
-                    if (message.what == 41) {
-                        obj = handleCbQueryResult((ImsSsInfo[]) asyncResult.result);
-                    } else if (message.what == 43) {
-                        obj = handleCwQueryResult((ImsSsInfo[]) asyncResult.result);
-                    }
-                }
-                sendResponse((Message) asyncResult.userObj, obj, asyncResult.exception);
-                return;
-            case 45:
-                Bundle bundle = (Bundle) asyncResult.result;
-                if (bundle != null) {
-                    obj = bundle.getIntArray(ImsPhoneMmiCode.UT_BUNDLE_KEY_CLIR);
-                }
-                sendResponse((Message) asyncResult.userObj, obj, asyncResult.exception);
-                return;
-            case OEM_RIL_RDE_Data.RDE_NV_DS_MIP_SS_USER_PROF_I /*46*/:
-                Rlog.d(LOG_TAG, "EVENT_DEFAULT_PHONE_DATA_STATE_CHANGED");
-                updateDataServiceState();
-                return;
-            default:
-                super.handleMessage(message);
-                return;
-        }
-    }
-
-    public /* bridge */ /* synthetic */ boolean handlePinMmi(String str) {
-        return super.handlePinMmi(str);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void handleTimerInEmergencyCallbackMode(int i) {
-        switch (i) {
+    public void handleTimerInEmergencyCallbackMode(int action) {
+        switch (action) {
             case 0:
-                postDelayed(this.mExitEcmRunnable, SystemProperties.getLong("ro.cdma.ecmexittimer", 300000));
+                postDelayed(this.mExitEcmRunnable, SystemProperties.getLong("ro.cdma.ecmexittimer", 300000L));
                 if (this.mDefaultPhone.getPhoneType() == 1) {
                     ((GSMPhone) this.mDefaultPhone).notifyEcbmTimerReset(Boolean.FALSE);
                     return;
@@ -1061,42 +1579,19 @@ public class ImsPhone extends ImsPhoneBase {
                     return;
                 }
             default:
-                Rlog.e(LOG_TAG, "handleTimerInEmergencyCallbackMode, unsupported action " + i);
+                Rlog.e(LOG_TAG, "handleTimerInEmergencyCallbackMode, unsupported action " + action);
                 return;
         }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void initiateSilentRedial() {
-        AsyncResult asyncResult = new AsyncResult(null, this.mLastDialString, null);
-        if (asyncResult != null) {
-            this.mSilentRedialRegistrants.notifyRegistrants(asyncResult);
-        }
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setOnEcbModeExitResponse(Handler h, int what, Object obj) {
+        this.mEcmExitRespRegistrant = new Registrant(h, what, obj);
     }
 
-    public /* bridge */ /* synthetic */ boolean isDataConnectivityPossible() {
-        return super.isDataConnectivityPossible();
-    }
-
-    public boolean isImsRegistered() {
-        return this.mImsRegistered;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isInCall() {
-        return getForegroundCall().getState().isAlive() || getBackgroundCall().getState().isAlive() || getRingingCall().getState().isAlive();
-    }
-
-    public boolean isInEcm() {
-        return this.mIsPhoneInEcmState;
-    }
-
-    public boolean isInEmergencyCall() {
-        return this.mCT.isInEmergencyCall();
-    }
-
-    public boolean isUtEnabled() {
-        return this.mCT.isUtEnabled();
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void unsetOnEcbModeExitResponse(Handler h) {
+        this.mEcmExitRespRegistrant.clear();
     }
 
     public boolean isVolteEnabled() {
@@ -1107,404 +1602,66 @@ public class ImsPhone extends ImsPhoneBase {
         return this.mCT.isVtEnabled();
     }
 
-    public /* bridge */ /* synthetic */ void migrateFrom(PhoneBase phoneBase) {
-        super.migrateFrom(phoneBase);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean isUtEnabled() {
+        return this.mCT.isUtEnabled();
     }
 
-    public /* bridge */ /* synthetic */ boolean needsOtaServiceProvisioning() {
-        return super.needsOtaServiceProvisioning();
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean isImsRegistered() {
+        return this.mImsRegistered;
     }
 
-    public /* bridge */ /* synthetic */ void notifyCallForwardingIndicator() {
-        super.notifyCallForwardingIndicator();
+    public void setImsRegistered(boolean value) {
+        this.mImsRegistered = value;
     }
 
-    public void notifyForVideoCapabilityChanged(boolean z) {
-        this.mIsVideoCapable = z;
-        this.mDefaultPhone.notifyForVideoCapabilityChanged(z);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void declineCall() throws CallStateException {
+        this.mCT.declineCall();
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void notifyIncomingRing() {
-        Rlog.d(LOG_TAG, "notifyIncomingRing");
-        sendMessage(obtainMessage(14, new AsyncResult(null, null, null)));
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifyNewRingingConnection(Connection connection) {
-        this.mDefaultPhone.notifyNewRingingConnectionP(connection);
-    }
-
-    public void notifySrvccState(SrvccState srvccState) {
-        this.mCT.notifySrvccState(srvccState);
-    }
-
-    public void notifySuppSvcNotification(SuppServiceNotification suppServiceNotification) {
-        Rlog.d(LOG_TAG, "notifySuppSvcNotification: suppSvc = " + suppServiceNotification);
-        this.mSsnRegistrants.notifyRegistrants(new AsyncResult(null, suppServiceNotification, null));
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifyUnknownConnection(Connection connection) {
-        this.mDefaultPhone.notifyUnknownConnectionP(connection);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void onIncomingUSSD(int i, String str) {
-        ImsPhoneMmiCode imsPhoneMmiCode;
-        int i2 = 0;
-        Rlog.d(LOG_TAG, "onIncomingUSSD ussdMode=" + i);
-        boolean z = i == 1;
-        int i3 = (i == 0 || i == 1) ? 0 : 1;
-        int size = this.mPendingMMIs.size();
-        while (i2 < size) {
-            if (((ImsPhoneMmiCode) this.mPendingMMIs.get(i2)).isPendingUSSD()) {
-                imsPhoneMmiCode = (ImsPhoneMmiCode) this.mPendingMMIs.get(i2);
-                break;
-            }
-            i2++;
-        }
-        imsPhoneMmiCode = null;
-        if (imsPhoneMmiCode != null) {
-            if (i3 != 0) {
-                imsPhoneMmiCode.onUssdFinishedError();
-            } else {
-                imsPhoneMmiCode.onUssdFinished(str, z);
-            }
-        } else if (i3 == 0 && str != null) {
-            onNetworkInitiatedUssd(ImsPhoneMmiCode.newNetworkInitiatedUssd(str, z, this));
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void onMMIDone(ImsPhoneMmiCode imsPhoneMmiCode) {
-        if (this.mPendingMMIs.remove(imsPhoneMmiCode) || imsPhoneMmiCode.isUssdRequest()) {
-            this.mMmiCompleteRegistrants.notifyRegistrants(new AsyncResult(null, imsPhoneMmiCode, null));
-        }
-    }
-
-    public /* bridge */ /* synthetic */ void onTtyModeReceived(int i) {
-        super.onTtyModeReceived(i);
-    }
-
-    public /* bridge */ /* synthetic */ void registerForOnHoldTone(Handler handler, int i, Object obj) {
-        super.registerForOnHoldTone(handler, i, obj);
-    }
-
-    public /* bridge */ /* synthetic */ void registerForRingbackTone(Handler handler, int i, Object obj) {
-        super.registerForRingbackTone(handler, i, obj);
-    }
-
-    public void registerForSilentRedial(Handler handler, int i, Object obj) {
-        this.mSilentRedialRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSuppServiceNotification(Handler handler, int i, Object obj) {
-        this.mSsnRegistrants.addUnique(handler, i, obj);
-    }
-
-    public /* bridge */ /* synthetic */ void registerForTtyModeReceived(Handler handler, int i, Object obj) {
-        super.registerForTtyModeReceived(handler, i, obj);
-    }
-
-    public void rejectCall() throws CallStateException {
-        this.mCT.rejectCall();
-    }
-
-    public void removeReferences() {
-        Rlog.d(LOG_TAG, "removeReferences");
-        super.removeReferences();
-        this.mCT = null;
-        this.mSS = null;
-    }
-
-    public /* bridge */ /* synthetic */ void saveClirSetting(int i) {
-        super.saveClirSetting(i);
-    }
-
-    public /* bridge */ /* synthetic */ void selectNetworkManually(OperatorInfo operatorInfo, Message message) {
-        super.selectNetworkManually(operatorInfo, message);
-    }
-
-    public void sendDtmf(char c) {
-        if (!PhoneNumberUtils.is12Key(c)) {
-            Rlog.e(LOG_TAG, "sendDtmf called with invalid character '" + c + "'");
-        } else if (this.mCT.mState == PhoneConstants.State.OFFHOOK) {
-            this.mCT.sendDtmf(c, null);
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendEmergencyCallbackModeChange() {
-        Intent intent = new Intent("android.intent.action.EMERGENCY_CALLBACK_MODE_CHANGED");
-        intent.putExtra("phoneinECMState", this.mIsPhoneInEcmState);
-        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, getPhoneId());
-        ActivityManagerNative.broadcastStickyIntent(intent, null, -1);
-        Rlog.d(LOG_TAG, "sendEmergencyCallbackModeChange");
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendErrorResponse(Message message) {
-        Rlog.d(LOG_TAG, "sendErrorResponse");
-        if (message != null) {
-            AsyncResult.forMessage(message, null, new CommandException(Error.GENERIC_FAILURE));
-            message.sendToTarget();
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendErrorResponse(Message message, ImsReasonInfo imsReasonInfo) {
-        Rlog.d(LOG_TAG, "sendErrorResponse reasonCode=" + imsReasonInfo.getCode());
-        if (message != null) {
-            AsyncResult.forMessage(message, null, getCommandException(imsReasonInfo.getCode()));
-            message.sendToTarget();
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendErrorResponse(Message message, Throwable th) {
-        Rlog.d(LOG_TAG, "sendErrorResponse");
-        if (message != null) {
-            AsyncResult.forMessage(message, null, getCommandException(th));
-            message.sendToTarget();
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendUSSD(String str, Message message) {
-        this.mCT.sendUSSD(str, message);
-    }
-
-    public void sendUssdResponse(String str) {
-        Rlog.d(LOG_TAG, "sendUssdResponse");
-        ImsPhoneMmiCode newFromUssdUserInput = ImsPhoneMmiCode.newFromUssdUserInput(str, this);
-        this.mPendingMMIs.add(newFromUssdUserInput);
-        this.mMmiRegistrants.notifyRegistrants(new AsyncResult(null, newFromUssdUserInput, null));
-        newFromUssdUserInput.sendUssd(str);
-    }
-
-    public void setCallBarring(String str, boolean z, String str2, Message message) {
-        Rlog.d(LOG_TAG, "setCallBarring facility=" + str + ", lockState=" + z);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void getIncomingAnonymousCallBarring(Message onComplete) {
+        Rlog.d(LOG_TAG, "getIncomingAnonymousCallBarring: facility=157");
+        obtainMessage(46, onComplete);
         try {
-            this.mCT.getUtInterface().updateCallBarring(getCBTypeFromFacility(str), z ? 1 : 0, obtainMessage(40, message), null);
+            this.mCT.getUtInterface().queryFacilityLockBAICa(ImsPhoneMmiCode.SC_BAICa, (String) null, 0, onComplete);
         } catch (ImsException e) {
-            sendErrorResponse(message, e);
+            sendErrorResponse(onComplete, (Throwable) e);
         }
     }
 
-    public void setCallBarringNew(String str, boolean z, String str2, Message message) {
-        if (isValidFacilityString(str)) {
-            Rlog.d(LOG_TAG, "setCallBarring: facility=" + str + " lockState=" + z);
-            try {
-                if (this.mImsConfig != null) {
-                    this.mImsConfig.setFacilityLockSH(str, z, str2, 1, message);
-                } else {
-                    Rlog.e(LOG_TAG, "setFacilityLockSH failed. mImsConfig is null");
-                }
-            } catch (ImsException e) {
-                Rlog.e(LOG_TAG, "setFacilityLockSH failed. Exception = " + e);
-            }
-        }
-    }
-
-    public void setCallForwardingOption(int i, int i2, String str, int i3, int i4, Message message) {
-        int i5 = 1;
-        Rlog.d(LOG_TAG, "setCallForwardingOption action=" + i + ", reason=" + i2 + " serviceClass=" + i3);
-        if (isValidCommandInterfaceCFAction(i) && isValidCommandInterfaceCFReason(i2)) {
-            Cf cf = new Cf(str, i2 == 0, message);
-            if (!isCfEnable(i)) {
-                i5 = 0;
-            }
-            obtainMessage(12, i5, 0, cf);
-            try {
-                this.mCT.getUtInterface().updateCallForward(getActionFromCFAction(i), getConditionFromCFReason(i2), str, i3, i4, message);
-            } catch (ImsException e) {
-                sendErrorResponse(message, e);
-            }
-        } else if (message != null) {
-            sendErrorResponse(message);
-        }
-    }
-
-    public void setCallForwardingOption(int i, int i2, String str, int i3, Message message) {
-        setCallForwardingOption(i, i2, str, 1, i3, message);
-    }
-
-    public void setCallForwardingUncondTimerOption(int i, int i2, int i3, int i4, int i5, int i6, String str, Message message) {
-        Rlog.d(LOG_TAG, "setCallForwardingUncondTimerOption action=" + i5 + ", reason=" + i6 + ", startHour=" + i + ", startMinute=" + i2 + ", endHour=" + i3 + ", endMinute=" + i4);
-        if (isValidCommandInterfaceCFAction(i5) && isValidCommandInterfaceCFReason(i6)) {
-            try {
-                this.mCT.getUtInterface().updateCallForwardUncondTimer(i, i2, i3, i4, getActionFromCFAction(i5), getConditionFromCFReason(i6), str, obtainMessage(37, isCfEnable(i5) ? 1 : 0, 0, new Cf(str, i6 == 0, message)));
-            } catch (ImsException e) {
-                sendErrorResponse(message, e);
-            }
-        } else if (message != null) {
-            sendErrorResponse(message);
-        }
-    }
-
-    public void setCallWaiting(boolean z, int i, Message message) {
-        Rlog.d(LOG_TAG, "setCallWaiting enable=" + z);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setIncomingAnonymousCallBarring(boolean lockState, Message onComplete) {
+        Rlog.d(LOG_TAG, "setIncomingAnonymousCallBarring: facility=157 lockState=" + lockState);
+        obtainMessage(47, onComplete);
         try {
-            this.mCT.getUtInterface().updateCallWaiting(z, i, obtainMessage(42, message));
+            this.mCT.getUtInterface().setFacilityLock(ImsPhoneMmiCode.SC_BAICa, lockState, (String) null, 1, onComplete);
         } catch (ImsException e) {
-            sendErrorResponse(message, e);
+            sendErrorResponse(onComplete, (Throwable) e);
         }
     }
 
-    public void setCallWaiting(boolean z, Message message) {
-        setCallWaiting(z, 1, message);
-    }
-
-    public /* bridge */ /* synthetic */ void setCellBroadcastSmsConfig(int[] iArr, Message message) {
-        super.setCellBroadcastSmsConfig(iArr, message);
-    }
-
-    public /* bridge */ /* synthetic */ void setDataEnabled(boolean z) {
-        super.setDataEnabled(z);
-    }
-
-    public /* bridge */ /* synthetic */ void setDataRoamingEnabled(boolean z) {
-        super.setDataRoamingEnabled(z);
-    }
-
-    public void setImsRegistered(boolean z) {
-        this.mImsRegistered = z;
-    }
-
-    public void setIncomingAnonymousCallBarring(boolean z, Message message) {
-        Rlog.d(LOG_TAG, "setIncomingAnonymousCallBarring: facility=157 lockState=" + z);
-        obtainMessage(47, message);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void getIncomingSpecificDnCallBarring(Message onComplete) {
+        Rlog.d(LOG_TAG, "getIncomingSpecificDnCallBarring: facility=156");
+        obtainMessage(48, onComplete);
         try {
-            this.mCT.getUtInterface().setFacilityLock(ImsPhoneMmiCode.SC_BAICa, z, null, 1, message);
+            this.mCT.getUtInterface().queryIncomingCallBarringSDn(ImsPhoneMmiCode.SC_BS_MT, 1, onComplete);
         } catch (ImsException e) {
-            sendErrorResponse(message, e);
+            sendErrorResponse(onComplete, (Throwable) e);
         }
     }
 
-    public void setIncomingSpecificDnCallBarring(int i, String[] strArr, Message message) {
-        Rlog.d(LOG_TAG, "setIncomingSpecificDnCallBarring: facility=156 operation=" + i);
-        obtainMessage(49, message);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setIncomingSpecificDnCallBarring(int operation, String[] icbNum, Message onComplete) {
+        Rlog.d(LOG_TAG, "setIncomingSpecificDnCallBarring: facility=156 operation=" + operation);
+        obtainMessage(49, onComplete);
         try {
-            this.mCT.getUtInterface().setIncomingCallBarring(i, ImsPhoneMmiCode.SC_BS_MT, strArr, 1, message);
+            this.mCT.getUtInterface().setIncomingCallBarring(operation, ImsPhoneMmiCode.SC_BS_MT, icbNum, 1, onComplete);
         } catch (ImsException e) {
-            sendErrorResponse(message, e);
+            sendErrorResponse(onComplete, (Throwable) e);
         }
-    }
-
-    public /* bridge */ /* synthetic */ void setLine1Number(String str, String str2, Message message) {
-        super.setLine1Number(str, str2, message);
-    }
-
-    public void setMute(boolean z) {
-        this.mCT.setMute(z);
-    }
-
-    public /* bridge */ /* synthetic */ void setNetworkSelectionModeAutomatic(Message message) {
-        super.setNetworkSelectionModeAutomatic(message);
-    }
-
-    public void setOnEcbModeExitResponse(Handler handler, int i, Object obj) {
-        this.mEcmExitRespRegistrant = new Registrant(handler, i, obj);
-    }
-
-    public void setOnPostDialCharacter(Handler handler, int i, Object obj) {
-        this.mPostDialHandler = new Registrant(handler, i, obj);
-    }
-
-    public void setOutgoingCallerIdDisplay(int i, Message message) {
-        Rlog.d(LOG_TAG, "setCLIR action= " + i);
-        try {
-            this.mCT.getUtInterface().updateCLIR(i, obtainMessage(44, message));
-        } catch (ImsException e) {
-            sendErrorResponse(message, e);
-        }
-    }
-
-    public /* bridge */ /* synthetic */ void setRadioPower(boolean z) {
-        super.setRadioPower(z);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void setServiceState(int i) {
-        this.mSS.setState(i);
-        updateDataServiceState();
-    }
-
-    public void setUiTTYMode(int i, Message message) {
-        this.mCT.setUiTTYMode(i, message);
-    }
-
-    public /* bridge */ /* synthetic */ void setVoiceMailNumber(String str, String str2, Message message) {
-        super.setVoiceMailNumber(str, str2, message);
-    }
-
-    public void startDtmf(char c) {
-        if (PhoneNumberUtils.is12Key(c) || (c >= 'A' && c <= 'D')) {
-            this.mCT.startDtmf(c);
-        } else {
-            Rlog.e(LOG_TAG, "startDtmf called with invalid character '" + c + "'");
-        }
-    }
-
-    public void stopDtmf() {
-        this.mCT.stopDtmf();
-    }
-
-    public void switchHoldingAndActive() throws CallStateException {
-        this.mCT.switchWaitingOrHoldingAndActive();
-    }
-
-    public /* bridge */ /* synthetic */ void unregisterForOnHoldTone(Handler handler) {
-        super.unregisterForOnHoldTone(handler);
-    }
-
-    public /* bridge */ /* synthetic */ void unregisterForRingbackTone(Handler handler) {
-        super.unregisterForRingbackTone(handler);
-    }
-
-    public void unregisterForSilentRedial(Handler handler) {
-        this.mSilentRedialRegistrants.remove(handler);
-    }
-
-    public void unregisterForSuppServiceNotification(Handler handler) {
-        this.mSsnRegistrants.remove(handler);
-    }
-
-    public /* bridge */ /* synthetic */ void unregisterForTtyModeReceived(Handler handler) {
-        super.unregisterForTtyModeReceived(handler);
-    }
-
-    public void unsetOnEcbModeExitResponse(Handler handler) {
-        this.mEcmExitRespRegistrant.clear();
-    }
-
-    public void updateCallForwardStatus() {
-        Rlog.d(LOG_TAG, "updateCallForwardStatus");
-        IccRecords iccRecords = getIccRecords();
-        if (iccRecords == null || !iccRecords.isCallForwardStatusStored()) {
-            sendMessage(obtainMessage(39));
-            return;
-        }
-        Rlog.d(LOG_TAG, "Callforwarding info is present on sim");
-        notifyCallForwardingIndicator();
-    }
-
-    public void updateParentPhone(PhoneBase phoneBase) {
-        if (!(this.mDefaultPhone == null || this.mDefaultPhone.getServiceStateTracker() == null)) {
-            this.mDefaultPhone.getServiceStateTracker().unregisterForDataRegStateOrRatChanged(this);
-        }
-        this.mDefaultPhone = phoneBase;
-        this.mPhoneId = this.mDefaultPhone.getPhoneId();
-        if (this.mDefaultPhone.getServiceStateTracker() != null) {
-            this.mDefaultPhone.getServiceStateTracker().registerForDataRegStateOrRatChanged(this, 46, null);
-        }
-        updateDataServiceState();
-        Rlog.d(LOG_TAG, "updateParentPhone - Notify video capability changed " + this.mIsVideoCapable);
-        notifyForVideoCapabilityChanged(this.mIsVideoCapable);
-    }
-
-    public /* bridge */ /* synthetic */ void updateServiceLocation() {
-        super.updateServiceLocation();
     }
 }

@@ -6,6 +6,7 @@ import com.android.internal.telephony.cdma.CdmaSmsBroadcastConfigInfo;
 import com.android.internal.telephony.dataconnection.DataProfile;
 import com.android.internal.telephony.gsm.SmsBroadcastConfigInfo;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface CommandsInterface {
     public static final String CB_FACILITY_BAIC = "AI";
     public static final String CB_FACILITY_BAICr = "IR";
@@ -54,20 +55,6 @@ public interface CommandsInterface {
     public static final int USSD_MODE_NW_RELEASE = 2;
     public static final int USSD_MODE_NW_TIMEOUT = 5;
     public static final int USSD_MODE_REQUEST = 1;
-
-    public enum RadioState {
-        RADIO_OFF,
-        RADIO_UNAVAILABLE,
-        RADIO_ON;
-
-        public boolean isAvailable() {
-            return this != RADIO_UNAVAILABLE;
-        }
-
-        public boolean isOn() {
-            return this == RADIO_ON;
-        }
-    }
 
     void acceptCall(Message message);
 
@@ -628,4 +615,19 @@ public interface CommandsInterface {
     void writeSmsToRuim(int i, String str, Message message);
 
     void writeSmsToSim(int i, String str, String str2, Message message);
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public enum RadioState {
+        RADIO_OFF,
+        RADIO_UNAVAILABLE,
+        RADIO_ON;
+
+        public boolean isOn() {
+            return this == RADIO_ON;
+        }
+
+        public boolean isAvailable() {
+            return this != RADIO_UNAVAILABLE;
+        }
+    }
 }

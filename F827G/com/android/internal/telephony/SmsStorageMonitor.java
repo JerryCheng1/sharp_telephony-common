@@ -8,11 +8,11 @@ import android.os.AsyncResult;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
-import android.provider.Telephony.Sms.Intents;
+import android.provider.Telephony;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class SmsStorageMonitor extends Handler {
     private static final int EVENT_ICC_FULL = 1;
     private static final int EVENT_RADIO_ON = 3;
@@ -23,7 +23,10 @@ public final class SmsStorageMonitor extends Handler {
     private final Context mContext;
     PhoneBase mPhone;
     private boolean mReportMemoryStatusPending;
-    private final BroadcastReceiver mResultReceiver = new BroadcastReceiver() {
+    private PowerManager.WakeLock mWakeLock;
+    boolean mStorageAvailable = true;
+    private final BroadcastReceiver mResultReceiver = new BroadcastReceiver() { // from class: com.android.internal.telephony.SmsStorageMonitor.1
+        @Override // android.content.BroadcastReceiver
         public void onReceive(Context context, Intent intent) {
             if (intent.getAction().equals("android.intent.action.DEVICE_STORAGE_FULL")) {
                 SmsStorageMonitor.this.mStorageAvailable = false;
@@ -34,32 +37,18 @@ public final class SmsStorageMonitor extends Handler {
             }
         }
     };
-    boolean mStorageAvailable = true;
-    private WakeLock mWakeLock;
 
-    public SmsStorageMonitor(PhoneBase phoneBase) {
-        this.mPhone = phoneBase;
-        this.mContext = phoneBase.getContext();
-        this.mCi = phoneBase.mCi;
+    public SmsStorageMonitor(PhoneBase phone) {
+        this.mPhone = phone;
+        this.mContext = phone.getContext();
+        this.mCi = phone.mCi;
         createWakelock();
         this.mCi.setOnIccSmsFull(this, 1, null);
         this.mCi.registerForOn(this, 3, null);
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction("android.intent.action.DEVICE_STORAGE_FULL");
-        intentFilter.addAction("android.intent.action.DEVICE_STORAGE_NOT_FULL");
-        this.mContext.registerReceiver(this.mResultReceiver, intentFilter);
-    }
-
-    private void createWakelock() {
-        this.mWakeLock = ((PowerManager) this.mContext.getSystemService("power")).newWakeLock(1, TAG);
-        this.mWakeLock.setReferenceCounted(true);
-    }
-
-    private void handleIccFull() {
-        Intent intent = new Intent(Intents.SIM_FULL_ACTION);
-        this.mWakeLock.acquire(5000);
-        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhone.getPhoneId());
-        this.mContext.sendBroadcast(intent, "android.permission.RECEIVE_SMS");
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("android.intent.action.DEVICE_STORAGE_FULL");
+        filter.addAction("android.intent.action.DEVICE_STORAGE_NOT_FULL");
+        this.mContext.registerReceiver(this.mResultReceiver, filter);
     }
 
     public void dispose() {
@@ -68,13 +57,14 @@ public final class SmsStorageMonitor extends Handler {
         this.mContext.unregisterReceiver(this.mResultReceiver);
     }
 
-    public void handleMessage(Message message) {
-        switch (message.what) {
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
             case 1:
                 handleIccFull();
                 return;
             case 2:
-                if (((AsyncResult) message.obj).exception != null) {
+                if (((AsyncResult) msg.obj).exception != null) {
                     this.mReportMemoryStatusPending = true;
                     Rlog.v(TAG, "Memory status report to modem pending : mStorageAvailable = " + this.mStorageAvailable);
                     return;
@@ -91,6 +81,18 @@ public final class SmsStorageMonitor extends Handler {
             default:
                 return;
         }
+    }
+
+    private void createWakelock() {
+        this.mWakeLock = ((PowerManager) this.mContext.getSystemService("power")).newWakeLock(1, TAG);
+        this.mWakeLock.setReferenceCounted(true);
+    }
+
+    private void handleIccFull() {
+        Intent intent = new Intent(Telephony.Sms.Intents.SIM_FULL_ACTION);
+        this.mWakeLock.acquire(5000L);
+        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhone.getPhoneId());
+        this.mContext.sendBroadcast(intent, "android.permission.RECEIVE_SMS");
     }
 
     public boolean isStorageAvailable() {

@@ -1,5 +1,6 @@
 package com.android.internal.telephony;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class RestrictedState {
     private boolean mCsEmergencyRestricted;
     private boolean mCsNormalRestricted;
@@ -11,52 +12,52 @@ public class RestrictedState {
         setCsEmergencyRestricted(false);
     }
 
-    public boolean equals(Object obj) {
-        try {
-            RestrictedState restrictedState = (RestrictedState) obj;
-            return obj != null && this.mPsRestricted == restrictedState.mPsRestricted && this.mCsNormalRestricted == restrictedState.mCsNormalRestricted && this.mCsEmergencyRestricted == restrictedState.mCsEmergencyRestricted;
-        } catch (ClassCastException e) {
-            return false;
-        }
+    public void setCsEmergencyRestricted(boolean csEmergencyRestricted) {
+        this.mCsEmergencyRestricted = csEmergencyRestricted;
     }
 
     public boolean isCsEmergencyRestricted() {
         return this.mCsEmergencyRestricted;
     }
 
+    public void setCsNormalRestricted(boolean csNormalRestricted) {
+        this.mCsNormalRestricted = csNormalRestricted;
+    }
+
     public boolean isCsNormalRestricted() {
         return this.mCsNormalRestricted;
     }
 
-    public boolean isCsRestricted() {
-        return this.mCsNormalRestricted && this.mCsEmergencyRestricted;
+    public void setPsRestricted(boolean psRestricted) {
+        this.mPsRestricted = psRestricted;
     }
 
     public boolean isPsRestricted() {
         return this.mPsRestricted;
     }
 
-    public void setCsEmergencyRestricted(boolean z) {
-        this.mCsEmergencyRestricted = z;
+    public boolean isCsRestricted() {
+        return this.mCsNormalRestricted && this.mCsEmergencyRestricted;
     }
 
-    public void setCsNormalRestricted(boolean z) {
-        this.mCsNormalRestricted = z;
-    }
-
-    public void setPsRestricted(boolean z) {
-        this.mPsRestricted = z;
+    public boolean equals(Object o) {
+        try {
+            RestrictedState s = (RestrictedState) o;
+            return o != null && this.mPsRestricted == s.mPsRestricted && this.mCsNormalRestricted == s.mCsNormalRestricted && this.mCsEmergencyRestricted == s.mCsEmergencyRestricted;
+        } catch (ClassCastException e) {
+            return false;
+        }
     }
 
     public String toString() {
-        String str = "none";
+        String csString = "none";
         if (this.mCsEmergencyRestricted && this.mCsNormalRestricted) {
-            str = "all";
+            csString = "all";
         } else if (this.mCsEmergencyRestricted && !this.mCsNormalRestricted) {
-            str = "emergency";
+            csString = "emergency";
         } else if (!this.mCsEmergencyRestricted && this.mCsNormalRestricted) {
-            str = "normal call";
+            csString = "normal call";
         }
-        return "Restricted State CS: " + str + " PS:" + this.mPsRestricted;
+        return "Restricted State CS: " + csString + " PS:" + this.mPsRestricted;
     }
 }

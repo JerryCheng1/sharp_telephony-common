@@ -10,8 +10,7 @@ import android.telephony.CellInfo;
 import android.telephony.CellLocation;
 import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
-import com.android.internal.telephony.PhoneConstants.DataState;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.imsphone.ImsPhone;
 import com.android.internal.telephony.test.SimulatedRadioControl;
 import com.android.internal.telephony.uicc.IsimRecords;
@@ -19,6 +18,7 @@ import com.android.internal.telephony.uicc.UiccCard;
 import com.android.internal.telephony.uicc.UsimServiceTable;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface Phone {
     public static final int BM_AUS2_BAND = 5;
     public static final int BM_AUS_BAND = 4;
@@ -125,6 +125,7 @@ public interface Phone {
     public static final int WCDMA_BAND_4 = 8;
     public static final int WCDMA_BAND_8 = 128;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum DataActivityState {
         NONE,
         DATAIN,
@@ -133,6 +134,7 @@ public interface Phone {
         DORMANT
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum SuppService {
         UNKNOWN,
         SWITCH,
@@ -251,9 +253,9 @@ public interface Phone {
 
     void getDataCallList(Message message);
 
-    DataState getDataConnectionState();
+    PhoneConstants.DataState getDataConnectionState();
 
-    DataState getDataConnectionState(String str);
+    PhoneConstants.DataState getDataConnectionState(String str);
 
     boolean getDataEnabled();
 
@@ -345,7 +347,7 @@ public interface Phone {
 
     void getSmscAddress(Message message);
 
-    State getState();
+    PhoneConstants.State getState();
 
     int getSubId();
 

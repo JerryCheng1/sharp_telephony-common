@@ -6,50 +6,52 @@ import com.android.internal.telephony.IccPhoneBookInterfaceManager;
 import com.android.internal.telephony.uicc.IccFileHandler;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class RuimPhoneBookInterfaceManager extends IccPhoneBookInterfaceManager {
     static final String LOG_TAG = "RuimPhoneBookIM";
 
-    public RuimPhoneBookInterfaceManager(CDMAPhone cDMAPhone) {
-        super(cDMAPhone);
+    public RuimPhoneBookInterfaceManager(CDMAPhone phone) {
+        super(phone);
     }
 
+    @Override // com.android.internal.telephony.IccPhoneBookInterfaceManager
     public void dispose() {
         super.dispose();
     }
 
-    /* Access modifiers changed, original: protected */
-    public void finalize() {
+    protected void finalize() {
         try {
             super.finalize();
-        } catch (Throwable th) {
-            Rlog.e(LOG_TAG, "Error while finalizing:", th);
+        } catch (Throwable throwable) {
+            Rlog.e(LOG_TAG, "Error while finalizing:", throwable);
         }
         Rlog.d(LOG_TAG, "RuimPhoneBookInterfaceManager finalized");
     }
 
-    public int[] getAdnRecordsSize(int i) {
-        logd("getAdnRecordsSize: efid=" + i);
+    @Override // com.android.internal.telephony.IccPhoneBookInterfaceManager
+    public int[] getAdnRecordsSize(int efid) {
+        logd("getAdnRecordsSize: efid=" + efid);
         synchronized (this.mLock) {
             checkThread();
             this.mRecordSize = new int[3];
-            AtomicBoolean atomicBoolean = new AtomicBoolean(false);
-            Message obtainMessage = this.mBaseHandler.obtainMessage(1, atomicBoolean);
-            IccFileHandler iccFileHandler = this.mPhone.getIccFileHandler();
-            if (iccFileHandler != null) {
-                iccFileHandler.getEFLinearRecordSize(i, obtainMessage);
-                waitForResult(atomicBoolean);
+            AtomicBoolean status = new AtomicBoolean(false);
+            Message response = this.mBaseHandler.obtainMessage(1, status);
+            IccFileHandler fh = this.mPhone.getIccFileHandler();
+            if (fh != null) {
+                fh.getEFLinearRecordSize(efid, response);
+                waitForResult(status);
             }
         }
         return this.mRecordSize;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void logd(String str) {
-        Rlog.d(LOG_TAG, "[RuimPbInterfaceManager] " + str);
+    @Override // com.android.internal.telephony.IccPhoneBookInterfaceManager
+    protected void logd(String msg) {
+        Rlog.d(LOG_TAG, "[RuimPbInterfaceManager] " + msg);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void loge(String str) {
-        Rlog.e(LOG_TAG, "[RuimPbInterfaceManager] " + str);
+    @Override // com.android.internal.telephony.IccPhoneBookInterfaceManager
+    protected void loge(String msg) {
+        Rlog.e(LOG_TAG, "[RuimPbInterfaceManager] " + msg);
     }
 }

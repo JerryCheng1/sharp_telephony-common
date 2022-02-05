@@ -3,78 +3,72 @@ package com.android.internal.telephony;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
-import android.net.Uri;
 import android.util.Log;
-import com.android.internal.telephony.HbpcdLookup.ArbitraryMccSidMatch;
-import com.android.internal.telephony.HbpcdLookup.MccIdd;
-import com.android.internal.telephony.HbpcdLookup.MccLookup;
-import com.android.internal.telephony.HbpcdLookup.MccSidConflicts;
-import com.android.internal.telephony.HbpcdLookup.MccSidRange;
+import com.android.internal.telephony.HbpcdLookup;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class HbpcdUtils {
     private static final boolean DBG = false;
     private static final String LOG_TAG = "HbpcdUtils";
-    private ContentResolver resolver = null;
+    private ContentResolver resolver;
 
     public HbpcdUtils(Context context) {
+        this.resolver = null;
         this.resolver = context.getContentResolver();
     }
 
-    public String getIddByMcc(int i) {
-        String str = "";
-        ContentResolver contentResolver = this.resolver;
-        Uri uri = MccIdd.CONTENT_URI;
-        String str2 = "MCC=" + i;
-        Cursor query = contentResolver.query(uri, new String[]{MccIdd.IDD}, str2, null, null);
-        if (query == null) {
-            return str;
-        }
-        String string;
-        if (query.getCount() > 0) {
-            query.moveToFirst();
-            string = query.getString(0);
-        } else {
-            string = str;
-        }
-        query.close();
-        return string;
-    }
-
-    public int getMcc(int i, int i2, int i3, boolean z) {
-        int i4;
-        Cursor query = this.resolver.query(ArbitraryMccSidMatch.CONTENT_URI, new String[]{"MCC"}, "SID=" + i, null, null);
-        if (query != null) {
-            if (query.getCount() == 1) {
-                query.moveToFirst();
-                i4 = query.getInt(0);
-                query.close();
-                return i4;
+    public int getMcc(int sid, int tz, int DSTflag, boolean isNitzTimeZone) {
+        int c3Counter;
+        Cursor c2 = this.resolver.query(HbpcdLookup.ArbitraryMccSidMatch.CONTENT_URI, new String[]{"MCC"}, "SID=" + sid, null, null);
+        if (c2 != null) {
+            if (c2.getCount() == 1) {
+                c2.moveToFirst();
+                int tmpMcc = c2.getInt(0);
+                c2.close();
+                return tmpMcc;
             }
-            query.close();
+            c2.close();
         }
-        query = this.resolver.query(MccSidConflicts.CONTENT_URI, new String[]{"MCC"}, "SID_Conflict=" + i + " and (((" + MccLookup.GMT_OFFSET_LOW + "<=" + i2 + ") and (" + i2 + "<=" + MccLookup.GMT_OFFSET_HIGH + ") and (" + "0=" + i3 + ")) or ((" + MccLookup.GMT_DST_LOW + "<=" + i2 + ") and (" + i2 + "<=" + MccLookup.GMT_DST_HIGH + ") and (" + "1=" + i3 + ")))", null, null);
-        if (query != null) {
-            i4 = query.getCount();
-            if (i4 > 0) {
-                if (i4 > 1) {
-                    Log.w(LOG_TAG, "something wrong, get more results for 1 conflict SID: " + query);
+        Cursor c3 = this.resolver.query(HbpcdLookup.MccSidConflicts.CONTENT_URI, new String[]{"MCC"}, "SID_Conflict=" + sid + " and (((" + HbpcdLookup.MccLookup.GMT_OFFSET_LOW + "<=" + tz + ") and (" + tz + "<=" + HbpcdLookup.MccLookup.GMT_OFFSET_HIGH + ") and (0=" + DSTflag + ")) or ((" + HbpcdLookup.MccLookup.GMT_DST_LOW + "<=" + tz + ") and (" + tz + "<=" + HbpcdLookup.MccLookup.GMT_DST_HIGH + ") and (1=" + DSTflag + ")))", null, null);
+        if (c3 == null || (c3Counter = c3.getCount()) <= 0) {
+            Cursor c5 = this.resolver.query(HbpcdLookup.MccSidRange.CONTENT_URI, new String[]{"MCC"}, "SID_Range_Low<=" + sid + " and " + HbpcdLookup.MccSidRange.RANGE_HIGH + ">=" + sid, null, null);
+            if (c5 != null) {
+                if (c5.getCount() > 0) {
+                    c5.moveToFirst();
+                    int tmpMcc2 = c5.getInt(0);
+                    c5.close();
+                    return tmpMcc2;
                 }
-                query.moveToFirst();
-                i4 = query.getInt(0);
-                query.close();
-                return !z ? 0 : i4;
+                c5.close();
             }
+            return 0;
         }
-        query = this.resolver.query(MccSidRange.CONTENT_URI, new String[]{"MCC"}, "SID_Range_Low<=" + i + " and " + MccSidRange.RANGE_HIGH + ">=" + i, null, null);
-        if (query != null) {
-            if (query.getCount() > 0) {
-                query.moveToFirst();
-                i4 = query.getInt(0);
-                query.close();
-                return i4;
-            }
-            query.close();
+        if (c3Counter > 1) {
+            Log.w(LOG_TAG, "something wrong, get more results for 1 conflict SID: " + c3);
+        }
+        c3.moveToFirst();
+        int tmpMcc3 = c3.getInt(0);
+        c3.close();
+        if (isNitzTimeZone) {
+            return tmpMcc3;
         }
         return 0;
+    }
+
+    public String getIddByMcc(int mcc) {
+        String idd = "";
+        Cursor c = null;
+        Cursor cur = this.resolver.query(HbpcdLookup.MccIdd.CONTENT_URI, new String[]{HbpcdLookup.MccIdd.IDD}, "MCC=" + mcc, null, null);
+        if (cur != null) {
+            if (cur.getCount() > 0) {
+                cur.moveToFirst();
+                idd = cur.getString(0);
+            }
+            cur.close();
+        }
+        if (0 != 0) {
+            c.close();
+        }
+        return idd;
     }
 }

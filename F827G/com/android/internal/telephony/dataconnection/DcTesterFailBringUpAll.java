@@ -9,12 +9,14 @@ import android.os.Handler;
 import android.telephony.Rlog;
 import com.android.internal.telephony.PhoneBase;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DcTesterFailBringUpAll {
     private static final boolean DBG = true;
     private static final String LOG_TAG = "DcTesterFailBrinupAll";
-    private String mActionFailBringUp = (DcFailBringUp.INTENT_BASE + "." + "action_fail_bringup");
+    private String mActionFailBringUp = DcFailBringUp.INTENT_BASE + ".action_fail_bringup";
     private DcFailBringUp mFailBringUp = new DcFailBringUp();
-    private BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
+    private BroadcastReceiver mIntentReceiver = new BroadcastReceiver() { // from class: com.android.internal.telephony.dataconnection.DcTesterFailBringUpAll.1
+        @Override // android.content.BroadcastReceiver
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             DcTesterFailBringUpAll.this.log("sIntentReceiver.onReceive: action=" + action);
@@ -33,33 +35,35 @@ public class DcTesterFailBringUpAll {
     };
     private PhoneBase mPhone;
 
-    DcTesterFailBringUpAll(PhoneBase phoneBase, Handler handler) {
-        this.mPhone = phoneBase;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public DcTesterFailBringUpAll(PhoneBase phone, Handler handler) {
+        this.mPhone = phone;
         if (Build.IS_DEBUGGABLE) {
-            IntentFilter intentFilter = new IntentFilter();
-            intentFilter.addAction(this.mActionFailBringUp);
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(this.mActionFailBringUp);
             log("register for intent action=" + this.mActionFailBringUp);
-            intentFilter.addAction(this.mPhone.getActionDetached());
+            filter.addAction(this.mPhone.getActionDetached());
             log("register for intent action=" + this.mPhone.getActionDetached());
-            intentFilter.addAction(this.mPhone.getActionAttached());
+            filter.addAction(this.mPhone.getActionAttached());
             log("register for intent action=" + this.mPhone.getActionAttached());
-            phoneBase.getContext().registerReceiver(this.mIntentReceiver, intentFilter, null, handler);
+            phone.getContext().registerReceiver(this.mIntentReceiver, filter, null, handler);
         }
     }
 
-    private void log(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public void dispose() {
         if (Build.IS_DEBUGGABLE) {
             this.mPhone.getContext().unregisterReceiver(this.mIntentReceiver);
         }
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public DcFailBringUp getDcFailBringUp() {
         return this.mFailBringUp;
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public void log(String s) {
+        Rlog.d(LOG_TAG, s);
     }
 }

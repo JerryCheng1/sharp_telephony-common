@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cat;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface AppInterface {
     public static final String ALPHA_STRING = "alpha_string";
     public static final String CARD_STATUS = "card_status";
@@ -14,6 +15,9 @@ public interface AppInterface {
     public static final String REFRESH_RESULT = "refresh_result";
     public static final String STK_PERMISSION = "android.permission.RECEIVE_STK_COMMANDS";
 
+    void onCmdResponse(CatResponseMessage catResponseMessage);
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum CommandType {
         DISPLAY_TEXT(33),
         GET_INKEY(34),
@@ -40,23 +44,22 @@ public interface AppInterface {
         
         private int mValue;
 
-        private CommandType(int i) {
-            this.mValue = i;
-        }
-
-        public static CommandType fromInt(int i) {
-            for (CommandType commandType : values()) {
-                if (commandType.mValue == i) {
-                    return commandType;
-                }
-            }
-            return null;
+        CommandType(int value) {
+            this.mValue = value;
         }
 
         public int value() {
             return this.mValue;
         }
-    }
 
-    void onCmdResponse(CatResponseMessage catResponseMessage);
+        public static CommandType fromInt(int value) {
+            CommandType[] arr$ = values();
+            for (CommandType e : arr$) {
+                if (e.mValue == value) {
+                    return e;
+                }
+            }
+            return null;
+        }
+    }
 }

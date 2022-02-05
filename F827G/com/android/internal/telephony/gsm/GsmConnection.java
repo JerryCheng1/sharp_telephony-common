@@ -6,22 +6,21 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
 import android.os.Registrant;
 import android.os.SystemClock;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.Rlog;
 import android.text.TextUtils;
-import com.android.internal.telephony.Call.State;
+import com.android.internal.telephony.Call;
 import com.android.internal.telephony.CallStateException;
 import com.android.internal.telephony.Connection;
-import com.android.internal.telephony.Connection.PostDialState;
 import com.android.internal.telephony.DriverCall;
 import com.android.internal.telephony.TelBrand;
 import com.android.internal.telephony.UUSInfo;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppState;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.UiccCardApplication;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class GsmConnection extends Connection {
     private static final boolean DBG = true;
     static final int EVENT_DTMF_DONE = 1;
@@ -33,36 +32,51 @@ public class GsmConnection extends Connection {
     static final int PAUSE_DELAY_MILLIS = 3000;
     static final int PAUSE_DELAY_POST_MILLIS = 70;
     static final int WAKE_LOCK_TIMEOUT_MILLIS = 60000;
-    boolean mAcceptCallPending = false;
-    int mCause = 0;
+    boolean mAcceptCallPending;
+    int mCause;
     long mDisconnectTime;
     boolean mDisconnected;
     Handler mHandler;
-    boolean mHangupCallPending = false;
+    boolean mHangupCallPending;
     int mIndex;
     int mNextPostDialChar;
     Connection mOrigConnection;
     GsmCallTracker mOwner;
     GsmCall mParent;
-    private WakeLock mPartialWakeLock;
-    PostDialState mPostDialState = PostDialState.NOT_STARTED;
+    private PowerManager.WakeLock mPartialWakeLock;
+    Connection.PostDialState mPostDialState;
     String mPostDialString;
-    int mPreciseCause = 0;
+    int mPreciseCause;
     private String[] mSpeechCodeState;
     UUSInfo mUusInfo;
     String redirectingNum;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     class MyHandler extends Handler {
-        MyHandler(Looper looper) {
-            super(looper);
+        MyHandler(Looper l) {
+            super(l);
         }
 
-        public void handleMessage(Message message) {
-            if (TelBrand.IS_SBM) {
-                GsmConnection.logd("GsmConnection() handleMessage is (%d)", Integer.valueOf(message.what));
-                switch (message.what) {
+        @Override // android.os.Handler
+        public void handleMessage(Message msg) {
+            if (!TelBrand.IS_SBM) {
+                switch (msg.what) {
                     case 1:
-                        GsmConnection.this.mHandler.sendMessageDelayed(GsmConnection.this.mHandler.obtainMessage(5), 70);
+                    case 2:
+                    case 3:
+                        GsmConnection.this.processNextPostDialChar();
+                        return;
+                    case 4:
+                        GsmConnection.this.releaseWakeLock();
+                        return;
+                    default:
+                        return;
+                }
+            } else {
+                GsmConnection.logd("GsmConnection() handleMessage is (%d)", Integer.valueOf(msg.what));
+                switch (msg.what) {
+                    case 1:
+                        GsmConnection.this.mHandler.sendMessageDelayed(GsmConnection.this.mHandler.obtainMessage(5), 70L);
                         return;
                     case 2:
                     case 3:
@@ -76,47 +90,41 @@ public class GsmConnection extends Connection {
                         return;
                 }
             }
-            switch (message.what) {
-                case 1:
-                case 2:
-                case 3:
-                    GsmConnection.this.processNextPostDialChar();
-                    return;
-                case 4:
-                    GsmConnection.this.releaseWakeLock();
-                    return;
-                default:
-                    return;
-            }
         }
     }
 
-    GsmConnection(Context context, DriverCall driverCall, GsmCallTracker gsmCallTracker, int i) {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public GsmConnection(Context context, DriverCall dc, GsmCallTracker ct, int index) {
+        this.mCause = 0;
+        this.mPostDialState = Connection.PostDialState.NOT_STARTED;
+        this.mPreciseCause = 0;
+        this.mHangupCallPending = false;
+        this.mAcceptCallPending = false;
         createWakeLock(context);
         acquireWakeLock();
-        this.mOwner = gsmCallTracker;
+        this.mOwner = ct;
         this.mHandler = new MyHandler(this.mOwner.getLooper());
         if (!TelBrand.IS_DCM) {
-            this.mAddress = driverCall.number;
-        } else if (TextUtils.isEmpty(driverCall.number)) {
-            this.mAddress = driverCall.number;
+            this.mAddress = dc.number;
+        } else if (TextUtils.isEmpty(dc.number)) {
+            this.mAddress = dc.number;
             this.redirectingNum = null;
-        } else if (driverCall.number.indexOf(38) == -1) {
-            this.mAddress = driverCall.number;
+        } else if (dc.number.indexOf(38) == -1) {
+            this.mAddress = dc.number;
             this.redirectingNum = null;
         } else {
-            String[] split = driverCall.number.split("&");
-            this.mAddress = split[0];
-            this.redirectingNum = split[1];
+            String[] a = dc.number.split("&");
+            this.mAddress = a[0];
+            this.redirectingNum = a[1];
             log("GsmConnection: address is " + this.mAddress);
             log("GsmConnection: redirectingNum is " + this.redirectingNum);
         }
-        this.mIsIncoming = driverCall.isMT;
+        this.mIsIncoming = dc.isMT;
         this.mCreateTime = System.currentTimeMillis();
-        this.mCnapName = driverCall.name;
-        this.mCnapNamePresentation = driverCall.namePresentation;
-        this.mNumberPresentation = driverCall.numberPresentation;
-        this.mUusInfo = driverCall.uusInfo;
+        this.mCnapName = dc.name;
+        this.mCnapNamePresentation = dc.namePresentation;
+        this.mNumberPresentation = dc.numberPresentation;
+        this.mUusInfo = dc.uusInfo;
         logd("GsmConnection() mIsIncoming is %s", Boolean.valueOf(this.mIsIncoming));
         logd("GsmConnection() mNumberPresentation is %d", Integer.valueOf(this.mNumberPresentation));
         logd("GsmConnection() mAddress is %s", this.mAddress);
@@ -124,310 +132,164 @@ public class GsmConnection extends Connection {
             logd("GsmConnection() sets PRESENTATION_UNKNOWN to mNumberPresentation");
             this.mNumberPresentation = 3;
         }
-        this.mIndex = i;
-        this.mParent = parentFromDCState(driverCall.state);
-        this.mParent.attach(this, driverCall);
+        this.mIndex = index;
+        this.mParent = parentFromDCState(dc.state);
+        this.mParent.attach(this, dc);
         if (TelBrand.IS_SBM) {
-            logd("[SEQ]GsmConnection.GsmConnection(" + driverCall.number + ") IDLE->" + getState());
+            logd("[SEQ]GsmConnection.GsmConnection(" + dc.number + ") IDLE->" + getState());
         }
     }
 
-    GsmConnection(Context context, String str, GsmCallTracker gsmCallTracker, GsmCall gsmCall) {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public GsmConnection(Context context, String dialString, GsmCallTracker ct, GsmCall parent) {
+        this.mCause = 0;
+        this.mPostDialState = Connection.PostDialState.NOT_STARTED;
+        this.mPreciseCause = 0;
+        this.mHangupCallPending = false;
+        this.mAcceptCallPending = false;
         createWakeLock(context);
         acquireWakeLock();
-        this.mOwner = gsmCallTracker;
+        this.mOwner = ct;
         this.mHandler = new MyHandler(this.mOwner.getLooper());
-        this.mDialString = str;
-        logd("GsmConnection() dialString = (%s)", str);
-        String formatDialString = formatDialString(str);
-        logd("GsmConnection() formated dialString = (%s)", formatDialString);
-        this.mAddress = PhoneNumberUtils.extractNetworkPortionAlt(formatDialString);
-        this.mPostDialString = PhoneNumberUtils.extractPostDialPortion(formatDialString);
+        this.mDialString = dialString;
+        logd("GsmConnection() dialString = (%s)", dialString);
+        String dialString2 = formatDialString(dialString);
+        logd("GsmConnection() formated dialString = (%s)", dialString2);
+        this.mAddress = PhoneNumberUtils.extractNetworkPortionAlt(dialString2);
+        this.mPostDialString = PhoneNumberUtils.extractPostDialPortion(dialString2);
         this.mIndex = -1;
         this.mIsIncoming = false;
         this.mCnapName = null;
         this.mCnapNamePresentation = 1;
         this.mNumberPresentation = 1;
         this.mCreateTime = System.currentTimeMillis();
-        this.mParent = gsmCall;
-        gsmCall.attachFake(this, State.DIALING);
+        this.mParent = parent;
+        parent.attachFake(this, Call.State.DIALING);
         if (TelBrand.IS_SBM) {
-            logd("[SEQ]GsmConnection.GsmConnection(" + formatDialString + ") IDLE->DIALING");
+            logd("[SEQ]GsmConnection.GsmConnection(" + dialString2 + ") IDLE->DIALING");
         }
     }
 
-    private void acquireWakeLock() {
-        log("acquireWakeLock");
-        this.mPartialWakeLock.acquire();
+    public void dispose() {
     }
 
-    private void createWakeLock(Context context) {
-        this.mPartialWakeLock = ((PowerManager) context.getSystemService("power")).newWakeLock(1, LOG_TAG);
+    static boolean equalsHandlesNulls(Object a, Object b) {
+        return a == null ? b == null : a.equals(b);
     }
 
-    static boolean equalsHandlesNulls(Object obj, Object obj2) {
-        return obj == null ? obj2 == null : obj.equals(obj2);
-    }
-
-    private static int findNextPCharOrNonPOrNonWCharIndex(String str, int i) {
-        logv("findNextPCharOrNonPOrNonWCharIndex( Strint(%s), int(%d) ) start", str, Integer.valueOf(i));
-        int i2 = i + 1;
-        int length = str.length();
-        boolean z = false;
-        while (i2 < length) {
-            char charAt = str.charAt(i2);
-            if (isWait(charAt)) {
-                z = true;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public boolean compareTo(DriverCall c) {
+        if ((!this.mIsIncoming && !c.isMT) || this.mOrigConnection != null) {
+            return true;
+        }
+        String address_old = null;
+        if (TelBrand.IS_DCM) {
+            address_old = this.mAddress;
+            if (!TextUtils.isEmpty(this.redirectingNum)) {
+                address_old = address_old + "&" + this.redirectingNum;
             }
-            if (!isWait(charAt) && !isPause(charAt)) {
-                break;
-            }
-            i2++;
         }
-        logd("findNextPCharOrNonPOrNonWCharIndex() wMatched(%s), index(%d), length(%d)", Boolean.valueOf(z), Integer.valueOf(i2), Integer.valueOf(length));
-        if (i2 >= length || i2 <= i + 1 || z || !isPause(str.charAt(i))) {
-            logv("findNextPCharOrNonPOrNonWCharIndex() end, return int(%d)", Integer.valueOf(i2));
-            return i2;
-        }
-        logd("findNextPCharOrNonPOrNonWCharIndex() PAUSE character(s) needs to be handled one by one, return int(%d)", Integer.valueOf(i + 1));
-        return i + 1;
+        String cAddress = PhoneNumberUtils.stringFromStringAndTOA(c.number, c.TOA);
+        return TelBrand.IS_DCM ? this.mIsIncoming == c.isMT && equalsHandlesNulls(address_old, cAddress) : this.mIsIncoming == c.isMT && equalsHandlesNulls(this.mAddress, cAddress);
     }
 
-    private static char findPOrWCharToAppend(String str, int i, int i2) {
-        logv("findPOrWCharToAppend( String(%s), int(%d), int(%d) ) start", str, Integer.valueOf(i), Integer.valueOf(i2));
-        char charAt = str.charAt(i);
-        char c = isPause(charAt) ? ',' : ';';
-        if (isPause(charAt) && i2 > i + 1) {
-            logd("findPOrWCharToAppend() returns WAIT character to append, ret(%c)", Character.valueOf(';'));
-            c = ';';
-        }
-        logv("findPOrWCharToAppend() end, return char(%c)", Character.valueOf(c));
-        return c;
+    @Override // com.android.internal.telephony.Connection
+    public GsmCall getCall() {
+        return this.mParent;
     }
 
-    public static String formatDialString(String str) {
-        logv("formatDialString( String(%s) ) start", str);
-        if (str == null) {
-            loge("formatDialString() parameter is invalid, return String(null)");
-            return null;
-        }
-        int length = str.length();
-        StringBuilder stringBuilder = new StringBuilder();
-        int i = 0;
-        while (i < length) {
-            char charAt = str.charAt(i);
-            if (PhoneNumberUtils.isDialable(charAt)) {
-                logd("formatDialString() number(%c) of currIndex can be dial.", Character.valueOf(charAt));
-                stringBuilder.append(charAt);
-            } else if (isPause(charAt) || isWait(charAt)) {
-                logd("formatDialString() number(%c) of currIndex is PAUSE or WAIT or WAIT_EX", Character.valueOf(charAt));
-                if (i < length - 1) {
-                    logd("formatDialString() currIndex(%d) < length - 1(%d)", Integer.valueOf(i), Integer.valueOf(length - 1));
-                    int findNextPCharOrNonPOrNonWCharIndex = findNextPCharOrNonPOrNonWCharIndex(str, i);
-                    if (findNextPCharOrNonPOrNonWCharIndex < length) {
-                        logd("formatDialString() nextIndex(%d) < length(%d)", Integer.valueOf(findNextPCharOrNonPOrNonWCharIndex), Integer.valueOf(length));
-                        stringBuilder.append(findPOrWCharToAppend(str, i, findNextPCharOrNonPOrNonWCharIndex));
-                        if (findNextPCharOrNonPOrNonWCharIndex > i + 1) {
-                            logd("formatDialString() nextIndex(%d) > ( currIndex + 1 )(%d)", Integer.valueOf(findNextPCharOrNonPOrNonWCharIndex), Integer.valueOf(i + 1));
-                            i = findNextPCharOrNonPOrNonWCharIndex - 1;
-                        }
-                    } else if (findNextPCharOrNonPOrNonWCharIndex == length) {
-                        logd("formatDialString() nextIndex(%d) == length(%d)", Integer.valueOf(findNextPCharOrNonPOrNonWCharIndex), Integer.valueOf(length));
-                        i = length - 1;
-                    }
-                }
-            } else {
-                logd("formatDialString() number of currIndex is (%c)", Character.valueOf(charAt));
-                stringBuilder.append(charAt);
-            }
-            i++;
-        }
-        logv("formatDialString() end, return String(%s)", stringBuilder.toString());
-        return stringBuilder.toString();
+    @Override // com.android.internal.telephony.Connection
+    public long getDisconnectTime() {
+        return this.mDisconnectTime;
     }
 
-    private boolean isConnectingInOrOut() {
-        return this.mParent == null || this.mParent == this.mOwner.mRingingCall || this.mParent.mState == State.DIALING || this.mParent.mState == State.ALERTING;
+    @Override // com.android.internal.telephony.Connection
+    public long getHoldDurationMillis() {
+        if (getState() != Call.State.HOLDING) {
+            return 0L;
+        }
+        return SystemClock.elapsedRealtime() - this.mHoldingStartTime;
     }
 
-    private static boolean isPause(char c) {
-        boolean z;
+    @Override // com.android.internal.telephony.Connection
+    public int getDisconnectCause() {
+        return this.mCause;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public Call.State getState() {
+        return this.mDisconnected ? Call.State.DISCONNECTED : super.getState();
+    }
+
+    public String[] getSpeechCodeState() {
+        log("getSpeechCodeState() start");
+        return this.mSpeechCodeState;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void hangup() throws CallStateException {
+        if (!this.mDisconnected) {
+            this.mOwner.hangup(this);
+            return;
+        }
+        throw new CallStateException("disconnected");
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void separate() throws CallStateException {
+        if (!this.mDisconnected) {
+            this.mOwner.separate(this);
+            return;
+        }
+        throw new CallStateException("disconnected");
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public Connection.PostDialState getPostDialState() {
+        return this.mPostDialState;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void proceedAfterWaitChar() {
         if (TelBrand.IS_SBM) {
-            z = c == ',' || c == 'P';
-            logv("isPause( char(%c) ) return boolean(%s) ", Character.valueOf(c), Boolean.valueOf(z));
-            return c == ',' || c == 'P';
-        } else {
-            z = c == ',';
-            logv("isPause( char(%c) ) return boolean(%s) ", Character.valueOf(c), Boolean.valueOf(z));
-            return c == ',';
-        }
-    }
-
-    private static boolean isWait(char c) {
-        boolean z = true;
-        boolean z2;
-        if (TelBrand.IS_SBM) {
-            z2 = c == ';';
-            logv("isWait( char(%c) ) return boolean(%s) ", Character.valueOf(c), Boolean.valueOf(z2));
-            if (c != ';') {
-                z = false;
+            if (this.mPostDialState != Connection.PostDialState.WAIT) {
+                Rlog.w(LOG_TAG, "GsmConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WAIT but was " + this.mPostDialState);
+                return;
             }
-            return z;
+        } else if (!(this.mPostDialState == Connection.PostDialState.WAIT || this.mPostDialState == Connection.PostDialState.WAIT_EX)) {
+            Rlog.w(LOG_TAG, "GsmConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WAIT but was " + this.mPostDialState);
+            return;
         }
-        z2 = c == ';' || c == 'P';
-        logv("isWait( char(%c) ) return boolean(%s) ", Character.valueOf(c), Boolean.valueOf(z2));
-        return c == ';' || c == 'P';
+        setPostDialState(Connection.PostDialState.STARTED);
+        processNextPostDialChar();
     }
 
-    private void log(String str) {
-        Rlog.d(LOG_TAG, "[GSMConn] " + str);
-    }
-
-    private static void logd(String str) {
-        Rlog.d(LOG_TAG, "[GSMConn] " + str);
-    }
-
-    private static void logd(String str, Object... objArr) {
-        Rlog.d(LOG_TAG, "[GSMConn] " + String.format(str, objArr));
-    }
-
-    private static void loge(String str) {
-        Rlog.e(LOG_TAG, "[GSMConn] " + str);
-    }
-
-    private static void logv(String str) {
-        Rlog.v(LOG_TAG, "[GSMConn] " + str);
-    }
-
-    private static void logv(String str, Object... objArr) {
-        Rlog.v(LOG_TAG, "[GSMConn] " + String.format(str, objArr));
-    }
-
-    private GsmCall parentFromDCState(DriverCall.State state) {
-        switch (state) {
-            case ACTIVE:
-            case DIALING:
-            case ALERTING:
-                return this.mOwner.mForegroundCall;
-            case HOLDING:
-                return this.mOwner.mBackgroundCall;
-            case INCOMING:
-            case WAITING:
-                return this.mOwner.mRingingCall;
-            default:
-                throw new RuntimeException("illegal call state: " + state);
+    @Override // com.android.internal.telephony.Connection
+    public void proceedAfterWildChar(String str) {
+        if (this.mPostDialState != Connection.PostDialState.WILD) {
+            Rlog.w(LOG_TAG, "GsmConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WILD but was " + this.mPostDialState);
+            return;
         }
+        setPostDialState(Connection.PostDialState.STARTED);
+        this.mPostDialString = str + this.mPostDialString.substring(this.mNextPostDialChar);
+        this.mNextPostDialChar = 0;
+        log(new StringBuilder().append("proceedAfterWildChar: new postDialString is ").append(this.mPostDialString).toString());
+        processNextPostDialChar();
     }
 
-    private void processNextPostDialChar() {
-        if (this.mPostDialState != PostDialState.CANCELLED) {
-            char c;
-            if (this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
-                setPostDialState(PostDialState.COMPLETE);
-                c = 0;
-            } else {
-                setPostDialState(PostDialState.STARTED);
-                String str = this.mPostDialString;
-                int i = this.mNextPostDialChar;
-                this.mNextPostDialChar = i + 1;
-                c = str.charAt(i);
-                if (!processPostDialChar(c)) {
-                    this.mHandler.obtainMessage(3).sendToTarget();
-                    Rlog.e("GSM", "processNextPostDialChar: c=" + c + " isn't valid!");
-                    return;
-                }
-            }
-            notifyPostDialListenersNextChar(c);
-            Registrant registrant = this.mOwner.mPhone.mPostDialHandler;
-            if (registrant != null) {
-                Message messageForRegistrant = registrant.messageForRegistrant();
-                if (messageForRegistrant != null) {
-                    PostDialState postDialState = this.mPostDialState;
-                    AsyncResult forMessage = AsyncResult.forMessage(messageForRegistrant);
-                    forMessage.result = this;
-                    forMessage.userObj = postDialState;
-                    messageForRegistrant.arg1 = c;
-                    messageForRegistrant.sendToTarget();
-                }
-            }
-        }
-    }
-
-    private boolean processPostDialChar(char c) {
-        if (PhoneNumberUtils.is12Key(c)) {
-            this.mOwner.mCi.sendDtmf(c, this.mHandler.obtainMessage(1));
-            return true;
-        } else if (c == ',') {
-            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(2), 3000);
-            if (!TelBrand.IS_SBM) {
-                return true;
-            }
-            setPostDialState(PostDialState.PAUSE);
-            return true;
-        } else if (c == ';') {
-            setPostDialState(PostDialState.WAIT);
-            return true;
-        } else if (c == 'P') {
-            setPostDialState(PostDialState.WAIT_EX);
-            return true;
-        } else if (c != 'N') {
-            return false;
-        } else {
-            setPostDialState(PostDialState.WILD);
-            return true;
-        }
-    }
-
-    private void releaseWakeLock() {
-        synchronized (this.mPartialWakeLock) {
-            if (this.mPartialWakeLock.isHeld()) {
-                log("releaseWakeLock");
-                this.mPartialWakeLock.release();
-            }
-        }
-    }
-
-    private void setPostDialState(PostDialState postDialState) {
-        if (this.mPostDialState != PostDialState.STARTED && postDialState == PostDialState.STARTED) {
-            acquireWakeLock();
-            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(4), 60000);
-        } else if (this.mPostDialState == PostDialState.STARTED && postDialState != PostDialState.STARTED) {
-            this.mHandler.removeMessages(4);
-            releaseWakeLock();
-        }
-        this.mPostDialState = postDialState;
-        notifyPostDialListeners();
-    }
-
+    @Override // com.android.internal.telephony.Connection
     public void cancelPostDial() {
-        setPostDialState(PostDialState.CANCELLED);
+        setPostDialState(Connection.PostDialState.CANCELLED);
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean compareTo(DriverCall driverCall) {
-        if ((this.mIsIncoming || driverCall.isMT) && this.mOrigConnection == null) {
-            Object obj = null;
-            if (TelBrand.IS_DCM) {
-                obj = this.mAddress;
-                if (!TextUtils.isEmpty(this.redirectingNum)) {
-                    obj = obj + "&" + this.redirectingNum;
-                }
-            }
-            String stringFromStringAndTOA = PhoneNumberUtils.stringFromStringAndTOA(driverCall.number, driverCall.TOA);
-            if (TelBrand.IS_DCM) {
-                if (!(this.mIsIncoming == driverCall.isMT && equalsHandlesNulls(obj, stringFromStringAndTOA))) {
-                    return false;
-                }
-            } else if (!(this.mIsIncoming == driverCall.isMT && equalsHandlesNulls(this.mAddress, stringFromStringAndTOA))) {
-                return false;
-            }
-        }
-        return true;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public void onHangupLocal() {
+        this.mCause = 3;
+        this.mPreciseCause = 0;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public int disconnectCauseFromCode(int i) {
-        switch (i) {
+    int disconnectCauseFromCode(int causeCode) {
+        switch (causeCode) {
             case 1:
                 return 25;
             case 17:
@@ -435,7 +297,7 @@ public class GsmConnection extends Connection {
             case 34:
             case 41:
             case 42:
-            case CallFailCause.CHANNEL_NOT_AVAIL /*44*/:
+            case CallFailCause.CHANNEL_NOT_AVAIL /* 44 */:
             case 49:
             case 58:
                 return 5;
@@ -456,160 +318,45 @@ public class GsmConnection extends Connection {
             case 326:
                 return 93;
             default:
-                GSMPhone gSMPhone = this.mOwner.mPhone;
-                int state = gSMPhone.getServiceState().getState();
-                UiccCardApplication uiccCardApplication = gSMPhone.getUiccCardApplication();
-                return state == 3 ? 17 : (state == 1 || state == 2) ? 18 : (uiccCardApplication != null ? uiccCardApplication.getState() : AppState.APPSTATE_UNKNOWN) != AppState.APPSTATE_READY ? 19 : i == 65535 ? gSMPhone.mSST.mRestrictedState.isCsRestricted() ? 22 : gSMPhone.mSST.mRestrictedState.isCsEmergencyRestricted() ? 24 : gSMPhone.mSST.mRestrictedState.isCsNormalRestricted() ? 23 : 36 : i == 16 ? 2 : 36;
+                GSMPhone phone = this.mOwner.mPhone;
+                int serviceState = phone.getServiceState().getState();
+                UiccCardApplication cardApp = phone.getUiccCardApplication();
+                IccCardApplicationStatus.AppState uiccAppState = cardApp != null ? cardApp.getState() : IccCardApplicationStatus.AppState.APPSTATE_UNKNOWN;
+                if (serviceState == 3) {
+                    return 17;
+                }
+                if (serviceState == 1 || serviceState == 2) {
+                    return 18;
+                }
+                if (uiccAppState != IccCardApplicationStatus.AppState.APPSTATE_READY) {
+                    return 19;
+                }
+                if (causeCode != 65535) {
+                    return causeCode == 16 ? 2 : 36;
+                }
+                if (phone.mSST.mRestrictedState.isCsRestricted()) {
+                    return 22;
+                }
+                if (phone.mSST.mRestrictedState.isCsEmergencyRestricted()) {
+                    return 24;
+                }
+                if (phone.mSST.mRestrictedState.isCsNormalRestricted()) {
+                    return 23;
+                }
+                return 36;
         }
     }
 
-    public void dispose() {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public void onRemoteDisconnect(int causeCode) {
+        this.mPreciseCause = causeCode;
+        onDisconnect(disconnectCauseFromCode(causeCode));
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void fakeHoldBeforeDial() {
-        if (TelBrand.IS_SBM) {
-            logd("[SEQ]GsmConnection.fakeHoldBeforeDial(" + this.mAddress + ") " + getState() + "->HOLDING");
-        }
-        if (this.mParent != null) {
-            this.mParent.detach(this);
-        }
-        this.mParent = this.mOwner.mBackgroundCall;
-        this.mParent.attachFake(this, State.HOLDING);
-        onStartedHolding();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void finalize() {
-        if (this.mPartialWakeLock.isHeld()) {
-            Rlog.e(LOG_TAG, "[GSMConn] UNEXPECTED; mPartialWakeLock is held when finalizing.");
-        }
-        clearPostDialListeners();
-        releaseWakeLock();
-    }
-
-    public boolean getAcceptCallPending() {
-        return TelBrand.IS_DCM ? this.mAcceptCallPending : false;
-    }
-
-    public String getBeforeFowardingNumber() {
-        return TelBrand.IS_DCM ? this.redirectingNum : null;
-    }
-
-    public GsmCall getCall() {
-        return this.mParent;
-    }
-
-    public int getDisconnectCause() {
-        return this.mCause;
-    }
-
-    public long getDisconnectTime() {
-        return this.mDisconnectTime;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getGSMIndex() throws CallStateException {
-        if (this.mIndex >= 0) {
-            return this.mIndex + 1;
-        }
-        throw new CallStateException("GSM index not yet assigned");
-    }
-
-    public boolean getHangUpCallPending() {
-        return TelBrand.IS_DCM ? this.mHangupCallPending : false;
-    }
-
-    public long getHoldDurationMillis() {
-        return getState() != State.HOLDING ? 0 : SystemClock.elapsedRealtime() - this.mHoldingStartTime;
-    }
-
-    public int getNumberPresentation() {
-        return this.mNumberPresentation;
-    }
-
-    public Connection getOrigConnection() {
-        return this.mOrigConnection;
-    }
-
-    public PostDialState getPostDialState() {
-        return this.mPostDialState;
-    }
-
-    public int getPreciseDisconnectCause() {
-        return this.mPreciseCause;
-    }
-
-    public String getRemainingPostDialString() {
-        if (this.mPostDialState == PostDialState.CANCELLED || this.mPostDialState == PostDialState.COMPLETE || this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
-            return "";
-        }
-        String substring = this.mPostDialString.substring(this.mNextPostDialChar);
-        if (substring != null) {
-            int indexOf = substring.indexOf(59);
-            int indexOf2 = substring.indexOf(44);
-            int indexOf3 = substring.indexOf(80);
-            if (indexOf > 0 && ((indexOf < indexOf2 || indexOf2 <= 0) && (indexOf < indexOf3 || indexOf3 <= 0))) {
-                substring = substring.substring(0, indexOf);
-            } else if (indexOf3 > 0 && ((indexOf3 < indexOf2 || indexOf2 <= 0) && (indexOf3 < indexOf || indexOf <= 0))) {
-                substring = substring.substring(0, indexOf3);
-            } else if (indexOf2 > 0) {
-                substring = substring.substring(0, indexOf2);
-            }
-            logd("getRemainingPostDialString() wIndex(%d), pIndex(%d), wexIndex(%d)", Integer.valueOf(indexOf), Integer.valueOf(indexOf2), Integer.valueOf(indexOf3));
-        }
-        logv("getRemainingPostDialString() end, return String(%s)", substring);
-        return substring;
-    }
-
-    public String[] getSpeechCodeState() {
-        log("getSpeechCodeState() start");
-        return this.mSpeechCodeState;
-    }
-
-    public State getState() {
-        return this.mDisconnected ? State.DISCONNECTED : super.getState();
-    }
-
-    public UUSInfo getUUSInfo() {
-        return this.mUusInfo;
-    }
-
-    public void hangup() throws CallStateException {
-        if (this.mDisconnected) {
-            throw new CallStateException("disconnected");
-        }
-        this.mOwner.hangup(this);
-    }
-
-    public boolean isMultiparty() {
-        return this.mOrigConnection != null ? this.mOrigConnection.isMultiparty() : false;
-    }
-
-    public void migrateFrom(Connection connection) {
-        if (connection != null) {
-            super.migrateFrom(connection);
-            this.mUusInfo = connection.getUUSInfo();
-            setUserData(connection.getUserData());
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void onConnectedInOrOut() {
-        this.mConnectTime = System.currentTimeMillis();
-        this.mConnectTimeReal = SystemClock.elapsedRealtime();
-        this.mDuration = 0;
-        log("onConnectedInOrOut: connectTime=" + this.mConnectTime);
-        if (!this.mIsIncoming) {
-            processNextPostDialChar();
-        }
-        releaseWakeLock();
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean onDisconnect(int i) {
-        boolean z = false;
-        this.mCause = i;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public boolean onDisconnect(int cause) {
+        boolean changed = false;
+        this.mCause = cause;
         if (TelBrand.IS_DCM) {
             this.mHangupCallPending = false;
             this.mAcceptCallPending = false;
@@ -619,166 +366,488 @@ public class GsmConnection extends Connection {
             this.mDisconnectTime = System.currentTimeMillis();
             this.mDuration = SystemClock.elapsedRealtime() - this.mConnectTimeReal;
             this.mDisconnected = true;
-            Rlog.d(LOG_TAG, "onDisconnect: cause=" + i);
+            Rlog.d(LOG_TAG, "onDisconnect: cause=" + cause);
             this.mOwner.mPhone.notifyDisconnect(this);
             if (this.mParent != null) {
-                z = this.mParent.connectionDisconnected(this);
+                changed = this.mParent.connectionDisconnected(this);
             }
             this.mOrigConnection = null;
         }
         clearPostDialListeners();
         releaseWakeLock();
-        return z;
+        return changed;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void onHangupLocal() {
-        this.mCause = 3;
-        this.mPreciseCause = 0;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public boolean update(DriverCall dc) {
+        boolean changed;
+        boolean z = true;
+        boolean changed2 = false;
+        boolean wasConnectingInOrOut = isConnectingInOrOut();
+        boolean wasHolding = getState() == Call.State.HOLDING;
+        GsmCall newParent = parentFromDCState(dc.state);
+        String address_old = null;
+        if (TelBrand.IS_DCM) {
+            address_old = this.mAddress;
+            if (!TextUtils.isEmpty(this.redirectingNum)) {
+                address_old = this.mAddress + "&" + this.redirectingNum;
+            }
+        }
+        if (this.mOrigConnection != null) {
+            log("update: mOrigConnection is not null");
+        } else {
+            log(" mNumberConverted " + this.mNumberConverted);
+            if (TelBrand.IS_DCM) {
+                if (!equalsHandlesNulls(address_old, dc.number) && (!this.mNumberConverted || !equalsHandlesNulls(this.mConvertedNumber, dc.number))) {
+                    log("update: phone # changed!");
+                    if (TextUtils.isEmpty(dc.number)) {
+                        this.mAddress = dc.number;
+                        this.redirectingNum = null;
+                    } else if (dc.number.indexOf(38) == -1) {
+                        this.mAddress = dc.number;
+                        this.redirectingNum = null;
+                    } else {
+                        String[] a = dc.number.split("&");
+                        this.mAddress = a[0];
+                        this.redirectingNum = a[1];
+                        log("update: address is " + this.mAddress);
+                        log("update: redirectingNum is " + this.redirectingNum);
+                    }
+                    changed2 = true;
+                }
+            } else if (!equalsHandlesNulls(this.mAddress, dc.number) && (!this.mNumberConverted || !equalsHandlesNulls(this.mConvertedNumber, dc.number))) {
+                log("update: phone # changed!");
+                this.mAddress = dc.number;
+                changed2 = true;
+            }
+        }
+        if (TextUtils.isEmpty(dc.name)) {
+            if (!TextUtils.isEmpty(this.mCnapName)) {
+                changed2 = true;
+                this.mCnapName = "";
+            }
+        } else if (!dc.name.equals(this.mCnapName)) {
+            changed2 = true;
+            this.mCnapName = dc.name;
+        }
+        log("--dssds----" + this.mCnapName);
+        this.mCnapNamePresentation = dc.namePresentation;
+        this.mNumberPresentation = dc.numberPresentation;
+        if (newParent != this.mParent) {
+            if (this.mParent != null) {
+                this.mParent.detach(this);
+            }
+            newParent.attach(this, dc);
+            this.mParent = newParent;
+            changed = true;
+        } else {
+            changed = changed2 || this.mParent.update(this, dc);
+        }
+        StringBuilder append = new StringBuilder().append("update: parent=").append(this.mParent).append(", hasNewParent=");
+        if (newParent == this.mParent) {
+            z = false;
+        }
+        log(append.append(z).append(", wasConnectingInOrOut=").append(wasConnectingInOrOut).append(", wasHolding=").append(wasHolding).append(", isConnectingInOrOut=").append(isConnectingInOrOut()).append(", changed=").append(changed).toString());
+        if (wasConnectingInOrOut && !isConnectingInOrOut()) {
+            onConnectedInOrOut();
+        }
+        if (changed && !wasHolding && getState() == Call.State.HOLDING) {
+            onStartedHolding();
+        }
+        return changed;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void onRemoteDisconnect(int i) {
-        this.mPreciseCause = i;
-        onDisconnect(disconnectCauseFromCode(i));
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public void fakeHoldBeforeDial() {
+        if (TelBrand.IS_SBM) {
+            logd("[SEQ]GsmConnection.fakeHoldBeforeDial(" + this.mAddress + ") " + getState() + "->HOLDING");
+        }
+        if (this.mParent != null) {
+            this.mParent.detach(this);
+        }
+        this.mParent = this.mOwner.mBackgroundCall;
+        this.mParent.attachFake(this, Call.State.HOLDING);
+        onStartedHolding();
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getGSMIndex() throws CallStateException {
+        if (this.mIndex >= 0) {
+            return this.mIndex + 1;
+        }
+        throw new CallStateException("GSM index not yet assigned");
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public void onConnectedInOrOut() {
+        this.mConnectTime = System.currentTimeMillis();
+        this.mConnectTimeReal = SystemClock.elapsedRealtime();
+        this.mDuration = 0L;
+        log("onConnectedInOrOut: connectTime=" + this.mConnectTime);
+        if (!this.mIsIncoming) {
+            processNextPostDialChar();
+        }
+        releaseWakeLock();
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
     public void onStartedHolding() {
         this.mHoldingStartTime = SystemClock.elapsedRealtime();
     }
 
-    public void proceedAfterWaitChar() {
-        if (TelBrand.IS_SBM) {
-            if (this.mPostDialState != PostDialState.WAIT) {
-                Rlog.w(LOG_TAG, "GsmConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WAIT but was " + this.mPostDialState);
-                return;
+    private boolean processPostDialChar(char c) {
+        if (PhoneNumberUtils.is12Key(c)) {
+            this.mOwner.mCi.sendDtmf(c, this.mHandler.obtainMessage(1));
+            return true;
+        } else if (c == ',') {
+            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(2), 3000L);
+            if (!TelBrand.IS_SBM) {
+                return true;
             }
-        } else if (!(this.mPostDialState == PostDialState.WAIT || this.mPostDialState == PostDialState.WAIT_EX)) {
-            Rlog.w(LOG_TAG, "GsmConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WAIT but was " + this.mPostDialState);
-            return;
-        }
-        setPostDialState(PostDialState.STARTED);
-        processNextPostDialChar();
-    }
-
-    public void proceedAfterWildChar(String str) {
-        if (this.mPostDialState != PostDialState.WILD) {
-            Rlog.w(LOG_TAG, "GsmConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WILD but was " + this.mPostDialState);
-            return;
-        }
-        setPostDialState(PostDialState.STARTED);
-        StringBuilder stringBuilder = new StringBuilder(str);
-        stringBuilder.append(this.mPostDialString.substring(this.mNextPostDialChar));
-        this.mPostDialString = stringBuilder.toString();
-        this.mNextPostDialChar = 0;
-        log("proceedAfterWildChar: new postDialString is " + this.mPostDialString);
-        processNextPostDialChar();
-    }
-
-    public void separate() throws CallStateException {
-        if (this.mDisconnected) {
-            throw new CallStateException("disconnected");
-        }
-        this.mOwner.separate(this);
-    }
-
-    public void setAcceptCallPending(boolean z) {
-        if (TelBrand.IS_DCM) {
-            this.mAcceptCallPending = z;
+            setPostDialState(Connection.PostDialState.PAUSE);
+            return true;
+        } else if (c == ';') {
+            setPostDialState(Connection.PostDialState.WAIT);
+            return true;
+        } else if (c == 'P') {
+            setPostDialState(Connection.PostDialState.WAIT_EX);
+            return true;
+        } else if (c != 'N') {
+            return false;
+        } else {
+            setPostDialState(Connection.PostDialState.WILD);
+            return true;
         }
     }
 
-    public void setHangUpCallPending(boolean z) {
-        if (TelBrand.IS_DCM) {
-            this.mHangupCallPending = z;
+    @Override // com.android.internal.telephony.Connection
+    public String getRemainingPostDialString() {
+        if (this.mPostDialState == Connection.PostDialState.CANCELLED || this.mPostDialState == Connection.PostDialState.COMPLETE || this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
+            return "";
         }
-    }
-
-    public void setSpeechCodeState(String[] strArr) {
-        log("setSpeechCodeState start");
-        this.mSpeechCodeState = strArr;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean update(DriverCall driverCall) {
-        Object obj;
-        boolean z;
-        boolean z2 = false;
-        boolean isConnectingInOrOut = isConnectingInOrOut();
-        boolean z3 = getState() == State.HOLDING;
-        GsmCall parentFromDCState = parentFromDCState(driverCall.state);
-        if (TelBrand.IS_DCM) {
-            obj = this.mAddress;
-            if (!TextUtils.isEmpty(this.redirectingNum)) {
-                obj = this.mAddress + "&" + this.redirectingNum;
+        String subStr = this.mPostDialString.substring(this.mNextPostDialChar);
+        if (subStr != null) {
+            int wIndex = subStr.indexOf(59);
+            int pIndex = subStr.indexOf(44);
+            int wexIndex = subStr.indexOf(80);
+            if (wIndex > 0 && ((wIndex < pIndex || pIndex <= 0) && (wIndex < wexIndex || wexIndex <= 0))) {
+                subStr = subStr.substring(0, wIndex);
+            } else if (wexIndex > 0 && ((wexIndex < pIndex || pIndex <= 0) && (wexIndex < wIndex || wIndex <= 0))) {
+                subStr = subStr.substring(0, wexIndex);
+            } else if (pIndex > 0) {
+                subStr = subStr.substring(0, pIndex);
             }
-        } else {
-            obj = null;
+            logd("getRemainingPostDialString() wIndex(%d), pIndex(%d), wexIndex(%d)", Integer.valueOf(wIndex), Integer.valueOf(pIndex), Integer.valueOf(wexIndex));
         }
-        if (this.mOrigConnection != null) {
-            log("update: mOrigConnection is not null");
-            z = false;
-        } else {
-            log(" mNumberConverted " + this.mNumberConverted);
-            if (TelBrand.IS_DCM) {
-                if (!(equalsHandlesNulls(obj, driverCall.number) || (this.mNumberConverted && equalsHandlesNulls(this.mConvertedNumber, driverCall.number)))) {
-                    log("update: phone # changed!");
-                    if (TextUtils.isEmpty(driverCall.number)) {
-                        this.mAddress = driverCall.number;
-                        this.redirectingNum = null;
-                    } else if (driverCall.number.indexOf(38) == -1) {
-                        this.mAddress = driverCall.number;
-                        this.redirectingNum = null;
-                    } else {
-                        String[] split = driverCall.number.split("&");
-                        this.mAddress = split[0];
-                        this.redirectingNum = split[1];
-                        log("update: address is " + this.mAddress);
-                        log("update: redirectingNum is " + this.redirectingNum);
-                    }
-                    z = true;
+        logv("getRemainingPostDialString() end, return String(%s)", subStr);
+        return subStr;
+    }
+
+    protected void finalize() {
+        if (this.mPartialWakeLock.isHeld()) {
+            Rlog.e(LOG_TAG, "[GSMConn] UNEXPECTED; mPartialWakeLock is held when finalizing.");
+        }
+        clearPostDialListeners();
+        releaseWakeLock();
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public void processNextPostDialChar() {
+        char c;
+        Message notifyMessage;
+        if (this.mPostDialState != Connection.PostDialState.CANCELLED) {
+            if (this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
+                setPostDialState(Connection.PostDialState.COMPLETE);
+                c = 0;
+            } else {
+                setPostDialState(Connection.PostDialState.STARTED);
+                String str = this.mPostDialString;
+                int i = this.mNextPostDialChar;
+                this.mNextPostDialChar = i + 1;
+                c = str.charAt(i);
+                if (!processPostDialChar(c)) {
+                    this.mHandler.obtainMessage(3).sendToTarget();
+                    Rlog.e("GSM", "processNextPostDialChar: c=" + c + " isn't valid!");
+                    return;
                 }
-            } else if (!(equalsHandlesNulls(this.mAddress, driverCall.number) || (this.mNumberConverted && equalsHandlesNulls(this.mConvertedNumber, driverCall.number)))) {
-                log("update: phone # changed!");
-                this.mAddress = driverCall.number;
-                z = true;
             }
-            z = false;
+            notifyPostDialListenersNextChar(c);
+            Registrant postDialHandler = this.mOwner.mPhone.mPostDialHandler;
+            if (postDialHandler != null && (notifyMessage = postDialHandler.messageForRegistrant()) != null) {
+                Connection.PostDialState state = this.mPostDialState;
+                AsyncResult ar = AsyncResult.forMessage(notifyMessage);
+                ar.result = this;
+                ar.userObj = state;
+                notifyMessage.arg1 = c;
+                notifyMessage.sendToTarget();
+            }
         }
-        if (TextUtils.isEmpty(driverCall.name)) {
-            if (!TextUtils.isEmpty(this.mCnapName)) {
-                this.mCnapName = "";
-                z = true;
+    }
+
+    private boolean isConnectingInOrOut() {
+        return this.mParent == null || this.mParent == this.mOwner.mRingingCall || this.mParent.mState == Call.State.DIALING || this.mParent.mState == Call.State.ALERTING;
+    }
+
+    private GsmCall parentFromDCState(DriverCall.State state) {
+        switch (state) {
+            case ACTIVE:
+            case DIALING:
+            case ALERTING:
+                return this.mOwner.mForegroundCall;
+            case HOLDING:
+                return this.mOwner.mBackgroundCall;
+            case INCOMING:
+            case WAITING:
+                return this.mOwner.mRingingCall;
+            default:
+                throw new RuntimeException("illegal call state: " + state);
+        }
+    }
+
+    private void setPostDialState(Connection.PostDialState s) {
+        if (this.mPostDialState != Connection.PostDialState.STARTED && s == Connection.PostDialState.STARTED) {
+            acquireWakeLock();
+            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(4), 60000L);
+        } else if (this.mPostDialState == Connection.PostDialState.STARTED && s != Connection.PostDialState.STARTED) {
+            this.mHandler.removeMessages(4);
+            releaseWakeLock();
+        }
+        this.mPostDialState = s;
+        notifyPostDialListeners();
+    }
+
+    public void setSpeechCodeState(String[] codec) {
+        log("setSpeechCodeState start");
+        this.mSpeechCodeState = codec;
+    }
+
+    private void createWakeLock(Context context) {
+        this.mPartialWakeLock = ((PowerManager) context.getSystemService("power")).newWakeLock(1, LOG_TAG);
+    }
+
+    private void acquireWakeLock() {
+        log("acquireWakeLock");
+        this.mPartialWakeLock.acquire();
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public void releaseWakeLock() {
+        synchronized (this.mPartialWakeLock) {
+            if (this.mPartialWakeLock.isHeld()) {
+                log("releaseWakeLock");
+                this.mPartialWakeLock.release();
             }
-        } else if (!driverCall.name.equals(this.mCnapName)) {
-            this.mCnapName = driverCall.name;
+        }
+    }
+
+    private static boolean isPause(char c) {
+        boolean z = false;
+        if (!TelBrand.IS_SBM) {
+            Object[] objArr = new Object[2];
+            objArr[0] = Character.valueOf(c);
+            objArr[1] = Boolean.valueOf(c == ',');
+            logv("isPause( char(%c) ) return boolean(%s) ", objArr);
+            return c == ',';
+        }
+        Object[] objArr2 = new Object[2];
+        objArr2[0] = Character.valueOf(c);
+        objArr2[1] = Boolean.valueOf(c == ',' || c == 'P');
+        logv("isPause( char(%c) ) return boolean(%s) ", objArr2);
+        if (c == ',' || c == 'P') {
             z = true;
-        }
-        log("--dssds----" + this.mCnapName);
-        this.mCnapNamePresentation = driverCall.namePresentation;
-        this.mNumberPresentation = driverCall.numberPresentation;
-        if (parentFromDCState != this.mParent) {
-            if (this.mParent != null) {
-                this.mParent.detach(this);
-            }
-            parentFromDCState.attach(this, driverCall);
-            this.mParent = parentFromDCState;
-            z = true;
-        } else {
-            z = z || this.mParent.update(this, driverCall);
-        }
-        StringBuilder append = new StringBuilder().append("update: parent=").append(this.mParent).append(", hasNewParent=");
-        if (parentFromDCState != this.mParent) {
-            z2 = true;
-        }
-        log(append.append(z2).append(", wasConnectingInOrOut=").append(isConnectingInOrOut).append(", wasHolding=").append(z3).append(", isConnectingInOrOut=").append(isConnectingInOrOut()).append(", changed=").append(z).toString());
-        if (isConnectingInOrOut && !isConnectingInOrOut()) {
-            onConnectedInOrOut();
-        }
-        if (z && !z3 && getState() == State.HOLDING) {
-            onStartedHolding();
         }
         return z;
+    }
+
+    private static boolean isWait(char c) {
+        boolean z = true;
+        if (!TelBrand.IS_SBM) {
+            Object[] objArr = new Object[2];
+            objArr[0] = Character.valueOf(c);
+            objArr[1] = Boolean.valueOf(c == ';' || c == 'P');
+            logv("isWait( char(%c) ) return boolean(%s) ", objArr);
+            return c == ';' || c == 'P';
+        }
+        Object[] objArr2 = new Object[2];
+        objArr2[0] = Character.valueOf(c);
+        objArr2[1] = Boolean.valueOf(c == ';');
+        logv("isWait( char(%c) ) return boolean(%s) ", objArr2);
+        if (c != ';') {
+            z = false;
+        }
+        return z;
+    }
+
+    private static int findNextPCharOrNonPOrNonWCharIndex(String phoneNumber, int currIndex) {
+        logv("findNextPCharOrNonPOrNonWCharIndex( Strint(%s), int(%d) ) start", phoneNumber, Integer.valueOf(currIndex));
+        boolean wMatched = false;
+        int index = currIndex + 1;
+        int length = phoneNumber.length();
+        while (index < length) {
+            char cNext = phoneNumber.charAt(index);
+            if (isWait(cNext)) {
+                wMatched = true;
+            }
+            if (!isWait(cNext) && !isPause(cNext)) {
+                break;
+            }
+            index++;
+        }
+        logd("findNextPCharOrNonPOrNonWCharIndex() wMatched(%s), index(%d), length(%d)", Boolean.valueOf(wMatched), Integer.valueOf(index), Integer.valueOf(length));
+        if (index >= length || index <= currIndex + 1 || wMatched || !isPause(phoneNumber.charAt(currIndex))) {
+            logv("findNextPCharOrNonPOrNonWCharIndex() end, return int(%d)", Integer.valueOf(index));
+            return index;
+        }
+        logd("findNextPCharOrNonPOrNonWCharIndex() PAUSE character(s) needs to be handled one by one, return int(%d)", Integer.valueOf(currIndex + 1));
+        return currIndex + 1;
+    }
+
+    private static char findPOrWCharToAppend(String phoneNumber, int currPwIndex, int nextNonPwCharIndex) {
+        logv("findPOrWCharToAppend( String(%s), int(%d), int(%d) ) start", phoneNumber, Integer.valueOf(currPwIndex), Integer.valueOf(nextNonPwCharIndex));
+        char c = phoneNumber.charAt(currPwIndex);
+        char ret = isPause(c) ? ',' : ';';
+        if (isPause(c) && nextNonPwCharIndex > currPwIndex + 1) {
+            ret = ';';
+            logd("findPOrWCharToAppend() returns WAIT character to append, ret(%c)", ';');
+        }
+        logv("findPOrWCharToAppend() end, return char(%c)", Character.valueOf(ret));
+        return ret;
+    }
+
+    public static String formatDialString(String phoneNumber) {
+        logv("formatDialString( String(%s) ) start", phoneNumber);
+        if (phoneNumber == null) {
+            loge("formatDialString() parameter is invalid, return String(null)");
+            return null;
+        }
+        int length = phoneNumber.length();
+        StringBuilder ret = new StringBuilder();
+        int currIndex = 0;
+        while (currIndex < length) {
+            char c = phoneNumber.charAt(currIndex);
+            if (PhoneNumberUtils.isDialable(c)) {
+                logd("formatDialString() number(%c) of currIndex can be dial.", Character.valueOf(c));
+                ret.append(c);
+            } else if (isPause(c) || isWait(c)) {
+                logd("formatDialString() number(%c) of currIndex is PAUSE or WAIT or WAIT_EX", Character.valueOf(c));
+                if (currIndex < length - 1) {
+                    logd("formatDialString() currIndex(%d) < length - 1(%d)", Integer.valueOf(currIndex), Integer.valueOf(length - 1));
+                    int nextIndex = findNextPCharOrNonPOrNonWCharIndex(phoneNumber, currIndex);
+                    if (nextIndex < length) {
+                        logd("formatDialString() nextIndex(%d) < length(%d)", Integer.valueOf(nextIndex), Integer.valueOf(length));
+                        ret.append(findPOrWCharToAppend(phoneNumber, currIndex, nextIndex));
+                        if (nextIndex > currIndex + 1) {
+                            logd("formatDialString() nextIndex(%d) > ( currIndex + 1 )(%d)", Integer.valueOf(nextIndex), Integer.valueOf(currIndex + 1));
+                            currIndex = nextIndex - 1;
+                        }
+                    } else if (nextIndex == length) {
+                        logd("formatDialString() nextIndex(%d) == length(%d)", Integer.valueOf(nextIndex), Integer.valueOf(length));
+                        currIndex = length - 1;
+                    }
+                }
+            } else {
+                logd("formatDialString() number of currIndex is (%c)", Character.valueOf(c));
+                ret.append(c);
+            }
+            currIndex++;
+        }
+        logv("formatDialString() end, return String(%s)", ret.toString());
+        return ret.toString();
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public static void logd(String format, Object... args) {
+        Rlog.d(LOG_TAG, "[GSMConn] " + String.format(format, args));
+    }
+
+    private static void logd(String msg) {
+        Rlog.d(LOG_TAG, "[GSMConn] " + msg);
+    }
+
+    private static void logv(String format, Object... args) {
+        Rlog.v(LOG_TAG, "[GSMConn] " + String.format(format, args));
+    }
+
+    private static void logv(String msg) {
+        Rlog.v(LOG_TAG, "[GSMConn] " + msg);
+    }
+
+    private static void loge(String msg) {
+        Rlog.e(LOG_TAG, "[GSMConn] " + msg);
+    }
+
+    private void log(String msg) {
+        Rlog.d(LOG_TAG, "[GSMConn] " + msg);
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public int getNumberPresentation() {
+        return this.mNumberPresentation;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public UUSInfo getUUSInfo() {
+        return this.mUusInfo;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public int getPreciseDisconnectCause() {
+        return this.mPreciseCause;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void migrateFrom(Connection c) {
+        if (c != null) {
+            super.migrateFrom(c);
+            this.mUusInfo = c.getUUSInfo();
+            setUserData(c.getUserData());
+        }
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public Connection getOrigConnection() {
+        return this.mOrigConnection;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public boolean isMultiparty() {
+        if (this.mOrigConnection != null) {
+            return this.mOrigConnection.isMultiparty();
+        }
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public String getBeforeFowardingNumber() {
+        if (TelBrand.IS_DCM) {
+            return this.redirectingNum;
+        }
+        return null;
+    }
+
+    public boolean getHangUpCallPending() {
+        if (TelBrand.IS_DCM) {
+            return this.mHangupCallPending;
+        }
+        return false;
+    }
+
+    public void setHangUpCallPending(boolean hangupCallPending) {
+        if (TelBrand.IS_DCM) {
+            this.mHangupCallPending = hangupCallPending;
+        }
+    }
+
+    public boolean getAcceptCallPending() {
+        if (TelBrand.IS_DCM) {
+            return this.mAcceptCallPending;
+        }
+        return false;
+    }
+
+    public void setAcceptCallPending(boolean acceptCallPending) {
+        if (TelBrand.IS_DCM) {
+            this.mAcceptCallPending = acceptCallPending;
+        }
     }
 }

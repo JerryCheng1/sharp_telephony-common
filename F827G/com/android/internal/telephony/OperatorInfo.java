@@ -2,17 +2,21 @@ package com.android.internal.telephony;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
-import android.provider.Telephony.Carriers;
+import android.provider.Telephony;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class OperatorInfo implements Parcelable {
-    public static final Creator<OperatorInfo> CREATOR = new Creator<OperatorInfo>() {
-        public OperatorInfo createFromParcel(Parcel parcel) {
-            return new OperatorInfo(parcel.readString(), parcel.readString(), parcel.readString(), (State) parcel.readSerializable());
+    public static final Parcelable.Creator<OperatorInfo> CREATOR = new Parcelable.Creator<OperatorInfo>() { // from class: com.android.internal.telephony.OperatorInfo.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public OperatorInfo createFromParcel(Parcel in) {
+            return new OperatorInfo(in.readString(), in.readString(), in.readString(), (State) in.readSerializable());
         }
 
-        public OperatorInfo[] newArray(int i) {
-            return new OperatorInfo[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public OperatorInfo[] newArray(int size) {
+            return new OperatorInfo[size];
         }
     };
     private String mOperatorAlphaLong;
@@ -21,52 +25,12 @@ public class OperatorInfo implements Parcelable {
     private String mRadioTech;
     private State mState;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum State {
         UNKNOWN,
         AVAILABLE,
         CURRENT,
         FORBIDDEN
-    }
-
-    OperatorInfo(String str, String str2, String str3, State state) {
-        this.mState = State.UNKNOWN;
-        this.mRadioTech = "";
-        this.mOperatorAlphaLong = str;
-        this.mOperatorAlphaShort = str2;
-        this.mOperatorNumeric = str3;
-        this.mRadioTech = "";
-        if (str3 != null) {
-            String[] split = str3.split("\\+");
-            this.mOperatorNumeric = split[0];
-            if (split.length > 1) {
-                this.mRadioTech = split[1];
-            }
-        }
-        this.mState = state;
-    }
-
-    public OperatorInfo(String str, String str2, String str3, String str4) {
-        this(str, str2, str3, rilStateToState(str4));
-    }
-
-    private static State rilStateToState(String str) {
-        if (str.equals("unknown")) {
-            return State.UNKNOWN;
-        }
-        if (str.equals("available")) {
-            return State.AVAILABLE;
-        }
-        if (str.equals(Carriers.CURRENT)) {
-            return State.CURRENT;
-        }
-        if (str.equals("forbidden")) {
-            return State.FORBIDDEN;
-        }
-        throw new RuntimeException("RIL impl error: Invalid network state '" + str + "'");
-    }
-
-    public int describeContents() {
-        return 0;
     }
 
     public String getOperatorAlphaLong() {
@@ -81,22 +45,65 @@ public class OperatorInfo implements Parcelable {
         return this.mOperatorNumeric;
     }
 
+    public State getState() {
+        return this.mState;
+    }
+
     public String getRadioTech() {
         return this.mRadioTech;
     }
 
-    public State getState() {
-        return this.mState;
+    OperatorInfo(String operatorAlphaLong, String operatorAlphaShort, String operatorNumeric, State state) {
+        this.mState = State.UNKNOWN;
+        this.mRadioTech = "";
+        this.mOperatorAlphaLong = operatorAlphaLong;
+        this.mOperatorAlphaShort = operatorAlphaShort;
+        this.mOperatorNumeric = operatorNumeric;
+        this.mRadioTech = "";
+        if (operatorNumeric != null) {
+            String[] values = operatorNumeric.split("\\+");
+            this.mOperatorNumeric = values[0];
+            if (values.length > 1) {
+                this.mRadioTech = values[1];
+            }
+        }
+        this.mState = state;
+    }
+
+    public OperatorInfo(String operatorAlphaLong, String operatorAlphaShort, String operatorNumeric, String stateString) {
+        this(operatorAlphaLong, operatorAlphaShort, operatorNumeric, rilStateToState(stateString));
+    }
+
+    private static State rilStateToState(String s) {
+        if (s.equals("unknown")) {
+            return State.UNKNOWN;
+        }
+        if (s.equals("available")) {
+            return State.AVAILABLE;
+        }
+        if (s.equals(Telephony.Carriers.CURRENT)) {
+            return State.CURRENT;
+        }
+        if (s.equals("forbidden")) {
+            return State.FORBIDDEN;
+        }
+        throw new RuntimeException("RIL impl error: Invalid network state '" + s + "'");
     }
 
     public String toString() {
         return "OperatorInfo " + this.mOperatorAlphaLong + "/" + this.mOperatorAlphaShort + "/" + this.mOperatorNumeric + "/" + this.mState + "/" + this.mRadioTech;
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeString(this.mOperatorAlphaLong);
-        parcel.writeString(this.mOperatorAlphaShort);
-        parcel.writeString(this.mOperatorNumeric + "+" + this.mRadioTech);
-        parcel.writeSerializable(this.mState);
+    @Override // android.os.Parcelable
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(this.mOperatorAlphaLong);
+        dest.writeString(this.mOperatorAlphaShort);
+        dest.writeString(this.mOperatorNumeric + "+" + this.mRadioTech);
+        dest.writeSerializable(this.mState);
     }
 }

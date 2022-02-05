@@ -8,7 +8,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
 import android.os.Registrant;
 import android.os.SystemClock;
 import android.os.SystemProperties;
@@ -20,13 +19,13 @@ import com.android.ims.ImsCall;
 import com.android.ims.ImsCallProfile;
 import com.android.ims.ImsException;
 import com.android.ims.ImsStreamMediaProfile;
-import com.android.internal.telephony.Call.State;
+import com.android.internal.telephony.Call;
 import com.android.internal.telephony.CallStateException;
 import com.android.internal.telephony.Connection;
-import com.android.internal.telephony.Connection.PostDialState;
 import com.android.internal.telephony.TelBrand;
 import com.android.internal.telephony.UUSInfo;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ImsPhoneConnection extends Connection {
     private static final boolean DBG = true;
     private static final int EVENT_DTMF_DONE = 1;
@@ -37,31 +36,36 @@ public class ImsPhoneConnection extends Connection {
     private static final int PAUSE_DELAY_MILLIS = 3000;
     private static final String PROPERTY_ENABLE_RESTRICT_NON_OWNER_MERGE = "persist.radio.restrict_merge";
     private static final int WAKE_LOCK_TIMEOUT_MILLIS = 60000;
-    private Bundle mCallExtras = null;
-    private int mCause = 0;
+    private Bundle mCallExtras;
+    private int mCause;
     private Context mContext;
     private long mDisconnectTime;
     private boolean mDisconnected;
     private Handler mHandler;
     private ImsCall mImsCall;
-    private boolean mIsConferenceUri = false;
-    private boolean mMptyState = false;
+    private boolean mIsConferenceUri;
+    private boolean mMptyState;
     private int mNextPostDialChar;
     private ImsPhoneCallTracker mOwner;
     private ImsPhoneCall mParent;
-    private WakeLock mPartialWakeLock;
-    private PostDialState mPostDialState = PostDialState.NOT_STARTED;
+    private PowerManager.WakeLock mPartialWakeLock;
+    private Connection.PostDialState mPostDialState;
     private String mPostDialString;
     private UUSInfo mUusInfo;
     String redirectingNum;
 
-    class MyHandler extends Handler {
-        MyHandler(Looper looper) {
-            super(looper);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class MyHandler extends Handler {
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+        MyHandler(Looper l) {
+            super(l);
+            ImsPhoneConnection.this = r1;
         }
 
-        public void handleMessage(Message message) {
-            switch (message.what) {
+        @Override // android.os.Handler
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
                 case 1:
                 case 2:
                 case 3:
@@ -76,12 +80,16 @@ public class ImsPhoneConnection extends Connection {
         }
     }
 
-    ImsPhoneConnection(Context context, ImsCall imsCall, ImsPhoneCallTracker imsPhoneCallTracker, ImsPhoneCall imsPhoneCall, boolean z, State state, String str) {
-        boolean z2 = false;
+    public ImsPhoneConnection(Context context, ImsCall imsCall, ImsPhoneCallTracker ct, ImsPhoneCall parent, boolean isUnknown, Call.State state, String address) {
+        this.mCallExtras = null;
+        this.mMptyState = false;
+        this.mIsConferenceUri = false;
+        this.mCause = 0;
+        this.mPostDialState = Connection.PostDialState.NOT_STARTED;
         createWakeLock(context);
         acquireWakeLock();
         this.mContext = context;
-        this.mOwner = imsPhoneCallTracker;
+        this.mOwner = ct;
         this.mHandler = new MyHandler(this.mOwner.getLooper());
         this.mImsCall = imsCall;
         if (imsCall == null || imsCall.getCallProfile() == null) {
@@ -95,9 +103,9 @@ public class ImsPhoneConnection extends Connection {
                 } else if (this.mAddress.indexOf(38) == -1) {
                     this.redirectingNum = null;
                 } else {
-                    String[] split = this.mAddress.split("&");
-                    this.mAddress = split[0];
-                    this.redirectingNum = split[1];
+                    String[] a = this.mAddress.split("&");
+                    this.mAddress = a[0];
+                    this.redirectingNum = a[1];
                     Rlog.d(LOG_TAG, "ImsConnection: address is " + this.mAddress);
                     Rlog.d(LOG_TAG, "ImsConnection: redirectingNum is " + this.redirectingNum);
                 }
@@ -105,9 +113,9 @@ public class ImsPhoneConnection extends Connection {
             this.mCnapName = imsCall.getCallProfile().getCallExtra("cna");
             this.mNumberPresentation = ImsCallProfile.OIRToPresentation(imsCall.getCallProfile().getCallExtraInt("oir"));
             this.mCnapNamePresentation = ImsCallProfile.OIRToPresentation(imsCall.getCallProfile().getCallExtraInt("cnap"));
-            ImsCallProfile callProfile = imsCall.getCallProfile();
-            if (callProfile != null) {
-                setVideoState(ImsCallProfile.getVideoStateFromImsCallProfile(callProfile));
+            ImsCallProfile imsCallProfile = imsCall.getCallProfile();
+            if (imsCallProfile != null) {
+                setVideoState(ImsCallProfile.getVideoStateFromImsCallProfile(imsCallProfile));
             }
             try {
                 ImsCallProfile localCallProfile = imsCall.getLocalCallProfile();
@@ -126,120 +134,211 @@ public class ImsPhoneConnection extends Connection {
         }
         this.mCreateTime = System.currentTimeMillis();
         this.mUusInfo = null;
-        this.mParent = imsPhoneCall;
-        if (!z) {
-            z2 = true;
-        }
-        this.mIsIncoming = z2;
-        if (z) {
+        this.mParent = parent;
+        this.mIsIncoming = !isUnknown;
+        if (isUnknown) {
             this.mParent.attach(this, state);
-            this.mAddress = str;
-            this.mCnapName = str;
+            this.mAddress = address;
+            this.mCnapName = address;
             this.mCnapNamePresentation = 1;
             this.mNumberPresentation = 1;
             return;
         }
-        this.mParent.attach(this, this.mIsIncoming ? State.INCOMING : State.DIALING);
+        this.mParent.attach(this, this.mIsIncoming ? Call.State.INCOMING : Call.State.DIALING);
     }
 
-    ImsPhoneConnection(Context context, String str, ImsPhoneCallTracker imsPhoneCallTracker, ImsPhoneCall imsPhoneCall, Bundle bundle) {
-        boolean z;
+    public ImsPhoneConnection(Context context, String dialString, ImsPhoneCallTracker ct, ImsPhoneCall parent, Bundle extras) {
+        this.mCallExtras = null;
+        this.mMptyState = false;
+        this.mIsConferenceUri = false;
+        this.mCause = 0;
+        this.mPostDialState = Connection.PostDialState.NOT_STARTED;
         createWakeLock(context);
         acquireWakeLock();
-        boolean z2;
-        if (bundle != null) {
-            z = bundle.getBoolean("org.codeaurora.extra.DIAL_CONFERENCE_URI", false);
-            z2 = bundle.getBoolean("org.codeaurora.extra.SKIP_SCHEMA_PARSING", false);
-        } else {
-            z2 = false;
-            z = false;
+        boolean isConferenceUri = false;
+        boolean isSkipSchemaParsing = false;
+        if (extras != null) {
+            isConferenceUri = extras.getBoolean("org.codeaurora.extra.DIAL_CONFERENCE_URI", false);
+            isSkipSchemaParsing = extras.getBoolean("org.codeaurora.extra.SKIP_SCHEMA_PARSING", false);
         }
         this.mContext = context;
-        this.mOwner = imsPhoneCallTracker;
+        this.mOwner = ct;
         this.mHandler = new MyHandler(this.mOwner.getLooper());
-        this.mIsConferenceUri = z;
-        this.mDialString = str;
-        if (z || z2) {
-            this.mAddress = str;
+        this.mIsConferenceUri = isConferenceUri;
+        this.mDialString = dialString;
+        if (isConferenceUri || isSkipSchemaParsing) {
+            this.mAddress = dialString;
             this.mPostDialString = "";
         } else {
-            this.mAddress = PhoneNumberUtils.extractNetworkPortionAlt(str);
-            this.mPostDialString = PhoneNumberUtils.extractPostDialPortion(str);
+            this.mAddress = PhoneNumberUtils.extractNetworkPortionAlt(dialString);
+            this.mPostDialString = PhoneNumberUtils.extractPostDialPortion(dialString);
         }
         this.mIsIncoming = false;
         this.mCnapName = null;
         this.mCnapNamePresentation = 1;
         this.mNumberPresentation = 1;
         this.mCreateTime = System.currentTimeMillis();
-        if (bundle != null) {
-            this.mCallExtras = bundle;
+        if (extras != null) {
+            this.mCallExtras = extras;
         }
-        this.mParent = imsPhoneCall;
-        imsPhoneCall.attachFake(this, State.DIALING);
+        this.mParent = parent;
+        parent.attachFake(this, Call.State.DIALING);
     }
 
-    private void acquireWakeLock() {
-        Rlog.d(LOG_TAG, "acquireWakeLock");
-        this.mPartialWakeLock.acquire();
+    public void dispose() {
     }
 
-    private void createWakeLock(Context context) {
-        this.mPartialWakeLock = ((PowerManager) context.getSystemService("power")).newWakeLock(1, LOG_TAG);
+    static boolean equalsHandlesNulls(Object a, Object b) {
+        return a == null ? b == null : a.equals(b);
     }
 
-    static boolean equalsHandlesNulls(Object obj, Object obj2) {
-        return obj == null ? obj2 == null : obj.equals(obj2);
-    }
-
-    private int getAudioQualityFromCallProfile(ImsCallProfile imsCallProfile, ImsCallProfile imsCallProfile2) {
-        int i = 2;
-        if (imsCallProfile == null || imsCallProfile2 == null || imsCallProfile.mMediaProfile == null) {
-            i = 1;
-        } else {
-            int i2 = ((imsCallProfile.mMediaProfile.mAudioQuality == 2 || imsCallProfile.mMediaProfile.mAudioQuality == 6) && imsCallProfile2.mRestrictCause == 0) ? 1 : 0;
-            if (i2 == 0) {
-                return 1;
-            }
+    private int getAudioQualityFromMediaProfile(ImsStreamMediaProfile mediaProfile) {
+        if (mediaProfile.mAudioQuality == 2) {
+            return 2;
         }
-        return i;
+        return 1;
     }
 
-    private int getAudioQualityFromMediaProfile(ImsStreamMediaProfile imsStreamMediaProfile) {
-        return imsStreamMediaProfile.mAudioQuality == 2 ? 2 : 1;
+    @Override // com.android.internal.telephony.Connection
+    public String getOrigDialString() {
+        return this.mDialString;
     }
 
-    private void processNextPostDialChar() {
-        if (this.mPostDialState != PostDialState.CANCELLED) {
-            char c;
-            if (this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
-                setPostDialState(PostDialState.COMPLETE);
-                c = 0;
+    @Override // com.android.internal.telephony.Connection
+    public ImsPhoneCall getCall() {
+        return this.mParent;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public long getDisconnectTime() {
+        return this.mDisconnectTime;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public long getHoldingStartTime() {
+        return this.mHoldingStartTime;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public long getHoldDurationMillis() {
+        if (getState() != Call.State.HOLDING) {
+            return 0L;
+        }
+        return SystemClock.elapsedRealtime() - this.mHoldingStartTime;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public int getDisconnectCause() {
+        return this.mCause;
+    }
+
+    public void setDisconnectCause(int cause) {
+        this.mCause = cause;
+    }
+
+    public ImsPhoneCallTracker getOwner() {
+        return this.mOwner;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public Call.State getState() {
+        return this.mDisconnected ? Call.State.DISCONNECTED : super.getState();
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void hangup() throws CallStateException {
+        if (!this.mDisconnected) {
+            this.mOwner.hangup(this);
+            return;
+        }
+        throw new CallStateException("disconnected");
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void separate() throws CallStateException {
+        throw new CallStateException("not supported");
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public Connection.PostDialState getPostDialState() {
+        return this.mPostDialState;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void proceedAfterWaitChar() {
+        if (this.mPostDialState == Connection.PostDialState.WAIT || this.mPostDialState == Connection.PostDialState.WAIT_EX) {
+            setPostDialState(Connection.PostDialState.STARTED);
+            processNextPostDialChar();
+            return;
+        }
+        Rlog.w(LOG_TAG, "ImsPhoneConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WAIT but was " + this.mPostDialState);
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void proceedAfterWildChar(String str) {
+        if (this.mPostDialState != Connection.PostDialState.WILD) {
+            Rlog.w(LOG_TAG, "ImsPhoneConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WILD but was " + this.mPostDialState);
+            return;
+        }
+        setPostDialState(Connection.PostDialState.STARTED);
+        this.mPostDialString = str + this.mPostDialString.substring(this.mNextPostDialChar);
+        this.mNextPostDialChar = 0;
+        Rlog.d(LOG_TAG, new StringBuilder().append("proceedAfterWildChar: new postDialString is ").append(this.mPostDialString).toString());
+        processNextPostDialChar();
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void cancelPostDial() {
+        setPostDialState(Connection.PostDialState.CANCELLED);
+    }
+
+    public void onHangupLocal() {
+        this.mCause = 3;
+    }
+
+    public boolean onDisconnect(int cause) {
+        Rlog.d(LOG_TAG, "onDisconnect: cause=" + cause);
+        if (this.mCause != 3) {
+            this.mCause = cause;
+        }
+        return onDisconnect();
+    }
+
+    public boolean onDisconnect() {
+        boolean changed = false;
+        if (!this.mDisconnected) {
+            this.mDisconnectTime = System.currentTimeMillis();
+            this.mDuration = SystemClock.elapsedRealtime() - this.mConnectTimeReal;
+            this.mDisconnected = true;
+            this.mOwner.mPhone.notifyDisconnect(this);
+            if (this.mParent != null) {
+                changed = this.mParent.connectionDisconnected(this);
             } else {
-                setPostDialState(PostDialState.STARTED);
-                String str = this.mPostDialString;
-                int i = this.mNextPostDialChar;
-                this.mNextPostDialChar = i + 1;
-                c = str.charAt(i);
-                if (!processPostDialChar(c)) {
-                    this.mHandler.obtainMessage(3).sendToTarget();
-                    Rlog.e(LOG_TAG, "processNextPostDialChar: c=" + c + " isn't valid!");
-                    return;
-                }
+                Rlog.d(LOG_TAG, "onDisconnect: no parent");
             }
-            notifyPostDialListenersNextChar(c);
-            Registrant registrant = this.mOwner.mPhone.mPostDialHandler;
-            if (registrant != null) {
-                Message messageForRegistrant = registrant.messageForRegistrant();
-                if (messageForRegistrant != null) {
-                    PostDialState postDialState = this.mPostDialState;
-                    AsyncResult forMessage = AsyncResult.forMessage(messageForRegistrant);
-                    forMessage.result = this;
-                    forMessage.userObj = postDialState;
-                    messageForRegistrant.arg1 = c;
-                    messageForRegistrant.sendToTarget();
-                }
+            if (this.mImsCall != null) {
+                this.mImsCall.close();
             }
+            this.mImsCall = null;
         }
+        clearPostDialListeners();
+        releaseWakeLock();
+        return changed;
+    }
+
+    void onConnectedInOrOut() {
+        this.mConnectTime = System.currentTimeMillis();
+        this.mConnectTimeReal = SystemClock.elapsedRealtime();
+        this.mDuration = 0L;
+        Rlog.d(LOG_TAG, "onConnectedInOrOut: connectTime=" + this.mConnectTime);
+        if (!this.mIsIncoming) {
+            processNextPostDialChar();
+        }
+        releaseWakeLock();
+    }
+
+    void onStartedHolding() {
+        this.mHoldingStartTime = SystemClock.elapsedRealtime();
     }
 
     private boolean processPostDialChar(char c) {
@@ -251,274 +350,106 @@ public class ImsPhoneConnection extends Connection {
             return true;
         } else if (c == ',') {
             if (!TelBrand.IS_DCM) {
-                setPostDialState(PostDialState.PAUSE);
+                setPostDialState(Connection.PostDialState.PAUSE);
             }
-            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(2), 3000);
+            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(2), 3000L);
             return true;
         } else if (c == ';') {
-            setPostDialState(PostDialState.WAIT);
+            setPostDialState(Connection.PostDialState.WAIT);
             return true;
         } else if (c == 'P') {
-            setPostDialState(PostDialState.WAIT_EX);
-            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(2), 3000);
+            setPostDialState(Connection.PostDialState.WAIT_EX);
+            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(2), 3000L);
             return true;
         } else if (c != 'N') {
             return false;
         } else {
-            setPostDialState(PostDialState.WILD);
+            setPostDialState(Connection.PostDialState.WILD);
             return true;
         }
     }
 
-    private boolean restrictedMergeFeatureEnabled() {
-        return SystemProperties.get(PROPERTY_ENABLE_RESTRICT_NON_OWNER_MERGE, "false").equals("true") ? true : this.mContext.getResources().getBoolean(17957013);
-    }
-
-    private void setPostDialState(PostDialState postDialState) {
-        if (this.mPostDialState != PostDialState.STARTED && postDialState == PostDialState.STARTED) {
-            acquireWakeLock();
-            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(4), 60000);
-        } else if (this.mPostDialState == PostDialState.STARTED && postDialState != PostDialState.STARTED) {
-            this.mHandler.removeMessages(4);
-            releaseWakeLock();
+    @Override // com.android.internal.telephony.Connection
+    public String getRemainingPostDialString() {
+        if (this.mPostDialState == Connection.PostDialState.CANCELLED || this.mPostDialState == Connection.PostDialState.COMPLETE || this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
+            return "";
         }
-        this.mPostDialState = postDialState;
-        notifyPostDialListeners();
-    }
-
-    private boolean updateMediaCapabilities(ImsCall imsCall) {
-        boolean z = false;
-        if (imsCall != null) {
-            try {
-                ImsCallProfile localCallProfile = imsCall.getLocalCallProfile();
-                ImsCallProfile remoteCallProfile = imsCall.getRemoteCallProfile();
-                if (localCallProfile != null) {
-                    boolean z2 = localCallProfile.mCallType == 4;
-                    if (isLocalVideoCapable() != z2) {
-                        setLocalVideoCapable(z2);
-                        z = true;
-                    }
-                }
-                int audioQualityFromCallProfile = getAudioQualityFromCallProfile(localCallProfile, remoteCallProfile);
-                if (getAudioQuality() != audioQualityFromCallProfile) {
-                    setAudioQuality(audioQualityFromCallProfile);
-                    return true;
-                }
-            } catch (ImsException e) {
-                return false;
+        String subStr = this.mPostDialString.substring(this.mNextPostDialChar);
+        if (subStr != null) {
+            int wIndex = subStr.indexOf(59);
+            int pIndex = subStr.indexOf(44);
+            int wexIndex = subStr.indexOf(80);
+            if (wIndex > 0 && ((wIndex < pIndex || pIndex <= 0) && (wIndex < wexIndex || wexIndex <= 0))) {
+                subStr = subStr.substring(0, wIndex);
+            } else if (wexIndex > 0 && ((wexIndex < pIndex || pIndex <= 0) && (wexIndex < wIndex || wIndex <= 0))) {
+                subStr = subStr.substring(0, wexIndex);
+            } else if (pIndex > 0) {
+                subStr = subStr.substring(0, pIndex);
             }
+            Rlog.w(LOG_TAG, "getRemainingPostDialString() wIndex(" + wIndex + "), pIndex(" + pIndex + "), wexIndex(" + wexIndex + ")");
         }
-        return z;
+        Rlog.w(LOG_TAG, "getRemainingPostDialString() end, return String(" + subStr + ")");
+        return subStr;
     }
 
-    public void cancelPostDial() {
-        setPostDialState(PostDialState.CANCELLED);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void changeParent(ImsPhoneCall imsPhoneCall) {
-        this.mParent = imsPhoneCall;
-    }
-
-    public void dispose() {
-    }
-
-    /* Access modifiers changed, original: protected */
     public void finalize() {
         clearPostDialListeners();
         releaseWakeLock();
     }
 
-    public String getBeforeFowardingNumber() {
-        return this.redirectingNum;
-    }
-
-    public ImsPhoneCall getCall() {
-        return this.mParent;
-    }
-
-    public Bundle getCallExtras() {
-        return this.mCallExtras;
-    }
-
-    public int getDisconnectCause() {
-        return this.mCause;
-    }
-
-    public long getDisconnectTime() {
-        return this.mDisconnectTime;
-    }
-
-    public long getHoldDurationMillis() {
-        return getState() != State.HOLDING ? 0 : SystemClock.elapsedRealtime() - this.mHoldingStartTime;
-    }
-
-    public long getHoldingStartTime() {
-        return this.mHoldingStartTime;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public ImsCall getImsCall() {
-        return this.mImsCall;
-    }
-
-    public int getNumberPresentation() {
-        return this.mNumberPresentation;
-    }
-
-    public Connection getOrigConnection() {
-        return null;
-    }
-
-    public String getOrigDialString() {
-        return this.mDialString;
-    }
-
-    public ImsPhoneCallTracker getOwner() {
-        return this.mOwner;
-    }
-
-    public PostDialState getPostDialState() {
-        return this.mPostDialState;
-    }
-
-    public int getPreciseDisconnectCause() {
-        return 0;
-    }
-
-    public String getRemainingPostDialString() {
-        if (this.mPostDialState == PostDialState.CANCELLED || this.mPostDialState == PostDialState.COMPLETE || this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
-            return "";
-        }
-        String substring = this.mPostDialString.substring(this.mNextPostDialChar);
-        if (substring != null) {
-            int indexOf = substring.indexOf(59);
-            int indexOf2 = substring.indexOf(44);
-            int indexOf3 = substring.indexOf(80);
-            if (indexOf > 0 && ((indexOf < indexOf2 || indexOf2 <= 0) && (indexOf < indexOf3 || indexOf3 <= 0))) {
-                substring = substring.substring(0, indexOf);
-            } else if (indexOf3 > 0 && ((indexOf3 < indexOf2 || indexOf2 <= 0) && (indexOf3 < indexOf || indexOf <= 0))) {
-                substring = substring.substring(0, indexOf3);
-            } else if (indexOf2 > 0) {
-                substring = substring.substring(0, indexOf2);
-            }
-            Rlog.w(LOG_TAG, "getRemainingPostDialString() wIndex(" + indexOf + "), pIndex(" + indexOf2 + "), wexIndex(" + indexOf3 + ")");
-        }
-        Rlog.w(LOG_TAG, "getRemainingPostDialString() end, return String(" + substring + ")");
-        return substring;
-    }
-
-    public State getState() {
-        return this.mDisconnected ? State.DISCONNECTED : super.getState();
-    }
-
-    public UUSInfo getUUSInfo() {
-        return this.mUusInfo;
-    }
-
-    public void hangup() throws CallStateException {
-        if (this.mDisconnected) {
-            throw new CallStateException("disconnected");
-        }
-        this.mOwner.hangup(this);
-    }
-
-    public boolean isMergeAllowed() {
-        return (restrictedMergeFeatureEnabled() && this.mImsCall != null && this.mImsCall.isMultiparty() && this.mImsCall.getCallGroup() == null && !this.mIsConferenceUri) ? false : true;
-    }
-
-    public boolean isMultiparty() {
-        return this.mImsCall != null && this.mImsCall.isMultiparty();
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void onConnectedInOrOut() {
-        this.mConnectTime = System.currentTimeMillis();
-        this.mConnectTimeReal = SystemClock.elapsedRealtime();
-        this.mDuration = 0;
-        Rlog.d(LOG_TAG, "onConnectedInOrOut: connectTime=" + this.mConnectTime);
-        if (!this.mIsIncoming) {
-            processNextPostDialChar();
-        }
-        releaseWakeLock();
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean onDisconnect() {
-        boolean z = false;
-        if (!this.mDisconnected) {
-            this.mDisconnectTime = System.currentTimeMillis();
-            this.mDuration = SystemClock.elapsedRealtime() - this.mConnectTimeReal;
-            this.mDisconnected = true;
-            this.mOwner.mPhone.notifyDisconnect(this);
-            if (this.mParent != null) {
-                z = this.mParent.connectionDisconnected(this);
+    public void processNextPostDialChar() {
+        char c;
+        Message notifyMessage;
+        if (this.mPostDialState != Connection.PostDialState.CANCELLED) {
+            if (this.mPostDialString == null || this.mPostDialString.length() <= this.mNextPostDialChar) {
+                setPostDialState(Connection.PostDialState.COMPLETE);
+                c = 0;
             } else {
-                Rlog.d(LOG_TAG, "onDisconnect: no parent");
+                setPostDialState(Connection.PostDialState.STARTED);
+                String str = this.mPostDialString;
+                int i = this.mNextPostDialChar;
+                this.mNextPostDialChar = i + 1;
+                c = str.charAt(i);
+                if (!processPostDialChar(c)) {
+                    this.mHandler.obtainMessage(3).sendToTarget();
+                    Rlog.e(LOG_TAG, "processNextPostDialChar: c=" + c + " isn't valid!");
+                    return;
+                }
             }
-            if (this.mImsCall != null) {
-                this.mImsCall.close();
-            }
-            this.mImsCall = null;
-        }
-        clearPostDialListeners();
-        releaseWakeLock();
-        return z;
-    }
-
-    public boolean onDisconnect(int i) {
-        Rlog.d(LOG_TAG, "onDisconnect: cause=" + i);
-        if (this.mCause != 3) {
-            this.mCause = i;
-        }
-        return onDisconnect();
-    }
-
-    public void onDisconnectConferenceParticipant(Uri uri) {
-        ImsCall imsCall = getImsCall();
-        if (imsCall != null) {
-            try {
-                imsCall.removeParticipants(new String[]{uri.toString()});
-            } catch (ImsException e) {
-                Rlog.e(LOG_TAG, "onDisconnectConferenceParticipant: no session in place. Failed to disconnect endpoint = " + uri);
+            notifyPostDialListenersNextChar(c);
+            Registrant postDialHandler = this.mOwner.mPhone.mPostDialHandler;
+            if (postDialHandler != null && (notifyMessage = postDialHandler.messageForRegistrant()) != null) {
+                Connection.PostDialState state = this.mPostDialState;
+                AsyncResult ar = AsyncResult.forMessage(notifyMessage);
+                ar.result = this;
+                ar.userObj = state;
+                notifyMessage.arg1 = c;
+                notifyMessage.sendToTarget();
             }
         }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void onHangupLocal() {
-        this.mCause = 3;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void onStartedHolding() {
-        this.mHoldingStartTime = SystemClock.elapsedRealtime();
-    }
-
-    public void proceedAfterWaitChar() {
-        if (this.mPostDialState == PostDialState.WAIT || this.mPostDialState == PostDialState.WAIT_EX) {
-            setPostDialState(PostDialState.STARTED);
-            processNextPostDialChar();
-            return;
+    private void setPostDialState(Connection.PostDialState s) {
+        if (this.mPostDialState != Connection.PostDialState.STARTED && s == Connection.PostDialState.STARTED) {
+            acquireWakeLock();
+            this.mHandler.sendMessageDelayed(this.mHandler.obtainMessage(4), 60000L);
+        } else if (this.mPostDialState == Connection.PostDialState.STARTED && s != Connection.PostDialState.STARTED) {
+            this.mHandler.removeMessages(4);
+            releaseWakeLock();
         }
-        Rlog.w(LOG_TAG, "ImsPhoneConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WAIT but was " + this.mPostDialState);
+        this.mPostDialState = s;
+        notifyPostDialListeners();
     }
 
-    public void proceedAfterWildChar(String str) {
-        if (this.mPostDialState != PostDialState.WILD) {
-            Rlog.w(LOG_TAG, "ImsPhoneConnection.proceedAfterWaitChar(): Expected getPostDialState() to be WILD but was " + this.mPostDialState);
-            return;
-        }
-        setPostDialState(PostDialState.STARTED);
-        StringBuilder stringBuilder = new StringBuilder(str);
-        stringBuilder.append(this.mPostDialString.substring(this.mNextPostDialChar));
-        this.mPostDialString = stringBuilder.toString();
-        this.mNextPostDialChar = 0;
-        Rlog.d(LOG_TAG, "proceedAfterWildChar: new postDialString is " + this.mPostDialString);
-        processNextPostDialChar();
+    private void createWakeLock(Context context) {
+        this.mPartialWakeLock = ((PowerManager) context.getSystemService("power")).newWakeLock(1, LOG_TAG);
     }
 
-    /* Access modifiers changed, original: 0000 */
+    private void acquireWakeLock() {
+        Rlog.d(LOG_TAG, "acquireWakeLock");
+        this.mPartialWakeLock.acquire();
+    }
+
     public void releaseWakeLock() {
         synchronized (this.mPartialWakeLock) {
             if (this.mPartialWakeLock.isHeld()) {
@@ -528,317 +459,254 @@ public class ImsPhoneConnection extends Connection {
         }
     }
 
-    public void separate() throws CallStateException {
-        throw new CallStateException("not supported");
+    @Override // com.android.internal.telephony.Connection
+    public int getNumberPresentation() {
+        return this.mNumberPresentation;
     }
 
-    public void setDisconnectCause(int i) {
-        this.mCause = i;
+    @Override // com.android.internal.telephony.Connection
+    public UUSInfo getUUSInfo() {
+        return this.mUusInfo;
     }
 
-    /* Access modifiers changed, original: 0000 */
+    @Override // com.android.internal.telephony.Connection
+    public Connection getOrigConnection() {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public boolean isMultiparty() {
+        return this.mImsCall != null && this.mImsCall.isMultiparty();
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public boolean isMergeAllowed() {
+        if (restrictedMergeFeatureEnabled() && this.mImsCall != null && this.mImsCall.isMultiparty() && this.mImsCall.getCallGroup() == null && !this.mIsConferenceUri) {
+            return false;
+        }
+        return true;
+    }
+
+    public ImsCall getImsCall() {
+        return this.mImsCall;
+    }
+
     public void setImsCall(ImsCall imsCall) {
         this.mImsCall = imsCall;
     }
 
-    public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("[ImsPhoneConnection objId: ");
-        stringBuilder.append(System.identityHashCode(this));
-        stringBuilder.append(" address:");
-        stringBuilder.append(Log.pii(getAddress()));
-        stringBuilder.append(" ImsCall:");
-        if (this.mImsCall == null) {
-            stringBuilder.append("null");
-        } else {
-            stringBuilder.append(this.mImsCall);
-        }
-        stringBuilder.append("]");
-        return stringBuilder.toString();
+    public void changeParent(ImsPhoneCall parent) {
+        this.mParent = parent;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    /* JADX WARNING: Removed duplicated region for block: B:15:0x006d A:{Catch:{ ImsException -> 0x01cf }} */
-    /* JADX WARNING: Removed duplicated region for block: B:23:0x0086 A:{Catch:{ ImsException -> 0x01cf }} */
-    /* JADX WARNING: Removed duplicated region for block: B:81:0x01db  */
-    /* JADX WARNING: Removed duplicated region for block: B:27:0x0090  */
-    /* JADX WARNING: Removed duplicated region for block: B:62:0x0150  */
-    public boolean update(com.android.ims.ImsCall r13) {
-        /*
-        r12 = this;
-        r11 = 0;
-        r7 = 4;
-        r2 = 0;
-        r1 = 1;
-        if (r13 == 0) goto L_0x01d5;
-    L_0x0006:
-        r0 = r13.getLocalCallProfile();	 Catch:{ ImsException -> 0x01cb }
-        r3 = "ImsPhoneConnection";
-        r4 = new java.lang.StringBuilder;	 Catch:{ ImsException -> 0x01cb }
-        r4.<init>();	 Catch:{ ImsException -> 0x01cb }
-        r5 = " update localCallProfile=";
-        r4 = r4.append(r5);	 Catch:{ ImsException -> 0x01cb }
-        r4 = r4.append(r0);	 Catch:{ ImsException -> 0x01cb }
-        r5 = "isLocalVideoCapable()= ";
-        r4 = r4.append(r5);	 Catch:{ ImsException -> 0x01cb }
-        r5 = r12.isLocalVideoCapable();	 Catch:{ ImsException -> 0x01cb }
-        r4 = r4.append(r5);	 Catch:{ ImsException -> 0x01cb }
-        r4 = r4.toString();	 Catch:{ ImsException -> 0x01cb }
-        android.telephony.Rlog.d(r3, r4);	 Catch:{ ImsException -> 0x01cb }
-        if (r0 == 0) goto L_0x01de;
-    L_0x0032:
-        r0 = r0.mCallType;	 Catch:{ ImsException -> 0x01cb }
-        if (r0 != r7) goto L_0x0153;
-    L_0x0036:
-        r0 = r1;
-    L_0x0037:
-        r3 = r12.isLocalVideoCapable();	 Catch:{ ImsException -> 0x01cb }
-        if (r3 == r0) goto L_0x01de;
-    L_0x003d:
-        r12.setLocalVideoCapable(r0);	 Catch:{ ImsException -> 0x01cb }
-        r0 = r1;
-    L_0x0041:
-        r3 = r13.getRemoteCallProfile();	 Catch:{ ImsException -> 0x01cf }
-        r4 = "ImsPhoneConnection";
-        r5 = new java.lang.StringBuilder;	 Catch:{ ImsException -> 0x01cf }
-        r5.<init>();	 Catch:{ ImsException -> 0x01cf }
-        r6 = " update remoteCallProfile=";
-        r5 = r5.append(r6);	 Catch:{ ImsException -> 0x01cf }
-        r5 = r5.append(r3);	 Catch:{ ImsException -> 0x01cf }
-        r6 = "isRemoteVideoCapable()= ";
-        r5 = r5.append(r6);	 Catch:{ ImsException -> 0x01cf }
-        r6 = r12.isRemoteVideoCapable();	 Catch:{ ImsException -> 0x01cf }
-        r5 = r5.append(r6);	 Catch:{ ImsException -> 0x01cf }
-        r5 = r5.toString();	 Catch:{ ImsException -> 0x01cf }
-        android.telephony.Rlog.d(r4, r5);	 Catch:{ ImsException -> 0x01cf }
-        if (r3 == 0) goto L_0x007c;
-    L_0x006d:
-        r3 = r3.mCallType;	 Catch:{ ImsException -> 0x01cf }
-        if (r3 != r7) goto L_0x0156;
-    L_0x0071:
-        r3 = r1;
-    L_0x0072:
-        r4 = r12.isRemoteVideoCapable();	 Catch:{ ImsException -> 0x01cf }
-        if (r4 == r3) goto L_0x007c;
-    L_0x0078:
-        r12.setRemoteVideoCapable(r3);	 Catch:{ ImsException -> 0x01cf }
-        r0 = r1;
-    L_0x007c:
-        r3 = r12.getCallSubstate();	 Catch:{ ImsException -> 0x01cf }
-        r4 = r13.getCallSubstate();	 Catch:{ ImsException -> 0x01cf }
-        if (r3 == r4) goto L_0x008a;
-    L_0x0086:
-        r12.setCallSubstate(r4);	 Catch:{ ImsException -> 0x01cf }
-        r0 = r1;
-    L_0x008a:
-        r3 = r13.getCallProfile();
-        if (r3 == 0) goto L_0x01db;
-    L_0x0090:
-        r4 = "oi";
-        r4 = r3.getCallExtra(r4);
-        r5 = "cna";
-        r5 = r3.getCallExtra(r5);
-        r6 = "oir";
-        r6 = r3.getCallExtraInt(r6);
-        r6 = com.android.ims.ImsCallProfile.OIRToPresentation(r6);
-        r7 = "cnap";
-        r7 = r3.getCallExtraInt(r7);
-        r7 = com.android.ims.ImsCallProfile.OIRToPresentation(r7);
-        r8 = "ImsPhoneConnection";
-        r9 = new java.lang.StringBuilder;
-        r9.<init>();
-        r10 = "address = ";
-        r9 = r9.append(r10);
-        r9 = r9.append(r4);
-        r10 = " name = ";
-        r9 = r9.append(r10);
-        r9 = r9.append(r5);
-        r10 = " nump = ";
-        r9 = r9.append(r10);
-        r9 = r9.append(r6);
-        r10 = " namep = ";
-        r9 = r9.append(r10);
-        r9 = r9.append(r7);
-        r9 = r9.toString();
-        android.telephony.Rlog.d(r8, r9);
-        r8 = r12.mAddress;
-        if (r8 != 0) goto L_0x00ec;
-    L_0x00ea:
-        if (r4 != 0) goto L_0x00f8;
-    L_0x00ec:
-        r8 = r12.mAddress;
-        if (r8 == 0) goto L_0x00ff;
-    L_0x00f0:
-        r8 = r12.mAddress;
-        r8 = r8.equals(r4);
-        if (r8 != 0) goto L_0x00ff;
-    L_0x00f8:
-        r0 = com.android.internal.telephony.TelBrand.IS_DCM;
-        if (r0 != 0) goto L_0x0159;
-    L_0x00fc:
-        r12.mAddress = r4;
-    L_0x00fe:
-        r0 = r1;
-    L_0x00ff:
-        r2 = android.text.TextUtils.isEmpty(r5);
-        if (r2 == 0) goto L_0x01be;
-    L_0x0105:
-        r2 = r12.mCnapName;
-        r2 = android.text.TextUtils.isEmpty(r2);
-        if (r2 != 0) goto L_0x0112;
-    L_0x010d:
-        r0 = "";
-        r12.mCnapName = r0;
-        r0 = r1;
-    L_0x0112:
-        r2 = r12.mNumberPresentation;
-        if (r2 == r6) goto L_0x0119;
-    L_0x0116:
-        r12.mNumberPresentation = r6;
-        r0 = r1;
-    L_0x0119:
-        r2 = r12.mCnapNamePresentation;
-        if (r2 == r7) goto L_0x0120;
-    L_0x011d:
-        r12.mCnapNamePresentation = r7;
-        r0 = r1;
-    L_0x0120:
-        r2 = r12.getVideoState();
-        r3 = com.android.ims.ImsCallProfile.getVideoStateFromImsCallProfile(r3);
-        if (r2 == r3) goto L_0x01d8;
-    L_0x012a:
-        r12.setVideoState(r3);
-        r2 = r1;
-    L_0x012e:
-        r0 = r13.getLocalCallProfile();	 Catch:{ ImsException -> 0x01d2 }
-        r3 = r13.getRemoteCallProfile();	 Catch:{ ImsException -> 0x01d2 }
-        if (r0 == 0) goto L_0x0148;
-    L_0x0138:
-        if (r3 == 0) goto L_0x0148;
-    L_0x013a:
-        r4 = r12.getAudioQuality();	 Catch:{ ImsException -> 0x01d2 }
-        r0 = r12.getAudioQualityFromCallProfile(r0, r3);	 Catch:{ ImsException -> 0x01d2 }
-        if (r4 == r0) goto L_0x0148;
-    L_0x0144:
-        r12.setAudioQuality(r0);	 Catch:{ ImsException -> 0x01d2 }
-        r2 = r1;
-    L_0x0148:
-        r0 = r12.isMultiparty();
-        r3 = r12.mMptyState;
-        if (r0 == r3) goto L_0x01d5;
-    L_0x0150:
-        r12.mMptyState = r0;
-    L_0x0152:
-        return r1;
-    L_0x0153:
-        r0 = r2;
-        goto L_0x0037;
-    L_0x0156:
-        r3 = r2;
-        goto L_0x0072;
-    L_0x0159:
-        r0 = "ImsPhoneConnection";
-        r8 = "update: phone # changed!";
-        android.telephony.Rlog.d(r0, r8);
-        r0 = android.text.TextUtils.isEmpty(r4);
-        if (r0 != 0) goto L_0x01b8;
-    L_0x0166:
-        r0 = 38;
-        r0 = r4.indexOf(r0);
-        r8 = -1;
-        if (r0 != r8) goto L_0x0174;
-    L_0x016f:
-        r12.mAddress = r4;
-        r12.redirectingNum = r11;
-        goto L_0x00fe;
-    L_0x0174:
-        r0 = "&";
-        r0 = r4.split(r0);
-        r2 = r0[r2];
-        r12.mAddress = r2;
-        r0 = r0[r1];
-        r12.redirectingNum = r0;
-        r0 = "ImsPhoneConnection";
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "update: address is ";
-        r2 = r2.append(r4);
-        r4 = r12.mAddress;
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        android.telephony.Rlog.d(r0, r2);
-        r0 = "ImsPhoneConnection";
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "update: redirectingNum is ";
-        r2 = r2.append(r4);
-        r4 = r12.redirectingNum;
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        android.telephony.Rlog.d(r0, r2);
-        goto L_0x00fe;
-    L_0x01b8:
-        r12.mAddress = r4;
-        r12.redirectingNum = r11;
-        goto L_0x00fe;
-    L_0x01be:
-        r2 = r12.mCnapName;
-        r2 = r5.equals(r2);
-        if (r2 != 0) goto L_0x0112;
-    L_0x01c6:
-        r12.mCnapName = r5;
-        r0 = r1;
-        goto L_0x0112;
-    L_0x01cb:
-        r0 = move-exception;
-        r0 = r2;
-        goto L_0x008a;
-    L_0x01cf:
-        r3 = move-exception;
-        goto L_0x008a;
-    L_0x01d2:
-        r0 = move-exception;
-        goto L_0x0148;
-    L_0x01d5:
-        r1 = r2;
-        goto L_0x0152;
-    L_0x01d8:
-        r2 = r0;
-        goto L_0x012e;
-    L_0x01db:
-        r2 = r0;
-        goto L_0x0148;
-    L_0x01de:
-        r0 = r2;
-        goto L_0x0041;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.imsphone.ImsPhoneConnection.update(com.android.ims.ImsCall):boolean");
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean update(ImsCall imsCall, State state) {
-        if (state == State.ACTIVE) {
-            if (TelBrand.IS_DCM) {
-                if (this.mParent.getState().isRinging() || this.mParent.getState().isDialing() || (this.mParent == this.mOwner.mRingingCall && this.mParent.getState() == State.DISCONNECTING)) {
+    public boolean update(ImsCall imsCall, Call.State state) {
+        if (state == Call.State.ACTIVE) {
+            if (!TelBrand.IS_DCM) {
+                if (this.mParent.getState().isRinging() || this.mParent.getState().isDialing()) {
                     onConnectedInOrOut();
                 }
-            } else if (this.mParent.getState().isRinging() || this.mParent.getState().isDialing()) {
+            } else if (this.mParent.getState().isRinging() || this.mParent.getState().isDialing() || (this.mParent == this.mOwner.mRingingCall && this.mParent.getState() == Call.State.DISCONNECTING)) {
                 onConnectedInOrOut();
             }
-            if (TelBrand.IS_DCM) {
-                if (this.mParent.getState().isRinging() || this.mParent == this.mOwner.mBackgroundCall || (this.mParent == this.mOwner.mRingingCall && this.mParent.getState() == State.DISCONNECTING)) {
+            if (!TelBrand.IS_DCM) {
+                if (this.mParent.getState().isRinging() || this.mParent == this.mOwner.mBackgroundCall) {
                     this.mParent.detach(this);
                     this.mParent = this.mOwner.mForegroundCall;
                     this.mParent.attach(this);
                 }
-            } else if (this.mParent.getState().isRinging() || this.mParent == this.mOwner.mBackgroundCall) {
+            } else if (this.mParent.getState().isRinging() || this.mParent == this.mOwner.mBackgroundCall || (this.mParent == this.mOwner.mRingingCall && this.mParent.getState() == Call.State.DISCONNECTING)) {
                 this.mParent.detach(this);
                 this.mParent = this.mOwner.mForegroundCall;
                 this.mParent.attach(this);
             }
-        } else if (state == State.HOLDING) {
+        } else if (state == Call.State.HOLDING) {
             onStartedHolding();
         }
         return update(imsCall) || this.mParent.update(this, imsCall, state);
+    }
+
+    public boolean update(ImsCall imsCall) {
+        int newAudioQuality;
+        boolean changed = false;
+        if (imsCall == null) {
+            return false;
+        }
+        try {
+            ImsCallProfile localCallProfile = imsCall.getLocalCallProfile();
+            Rlog.d(LOG_TAG, " update localCallProfile=" + localCallProfile + "isLocalVideoCapable()= " + isLocalVideoCapable());
+            if (localCallProfile != null) {
+                boolean newLocalVideoCapable = localCallProfile.mCallType == 4;
+                if (isLocalVideoCapable() != newLocalVideoCapable) {
+                    setLocalVideoCapable(newLocalVideoCapable);
+                    changed = true;
+                }
+            }
+            ImsCallProfile remoteCallProfile = imsCall.getRemoteCallProfile();
+            Rlog.d(LOG_TAG, " update remoteCallProfile=" + remoteCallProfile + "isRemoteVideoCapable()= " + isRemoteVideoCapable());
+            if (remoteCallProfile != null) {
+                boolean newRemoteVideoCapable = remoteCallProfile.mCallType == 4;
+                if (isRemoteVideoCapable() != newRemoteVideoCapable) {
+                    setRemoteVideoCapable(newRemoteVideoCapable);
+                    changed = true;
+                }
+            }
+            int callSubstate = getCallSubstate();
+            int newCallSubstate = imsCall.getCallSubstate();
+            if (callSubstate != newCallSubstate) {
+                setCallSubstate(newCallSubstate);
+                changed = true;
+            }
+        } catch (ImsException e) {
+        }
+        ImsCallProfile callProfile = imsCall.getCallProfile();
+        if (callProfile != null) {
+            String address = callProfile.getCallExtra("oi");
+            String name = callProfile.getCallExtra("cna");
+            int nump = ImsCallProfile.OIRToPresentation(callProfile.getCallExtraInt("oir"));
+            int namep = ImsCallProfile.OIRToPresentation(callProfile.getCallExtraInt("cnap"));
+            Rlog.d(LOG_TAG, "address = " + address + " name = " + name + " nump = " + nump + " namep = " + namep);
+            if ((this.mAddress == null && address != null) || (this.mAddress != null && !this.mAddress.equals(address))) {
+                if (!TelBrand.IS_DCM) {
+                    this.mAddress = address;
+                } else {
+                    Rlog.d(LOG_TAG, "update: phone # changed!");
+                    if (TextUtils.isEmpty(address)) {
+                        this.mAddress = address;
+                        this.redirectingNum = null;
+                    } else if (address.indexOf(38) == -1) {
+                        this.mAddress = address;
+                        this.redirectingNum = null;
+                    } else {
+                        String[] a = address.split("&");
+                        this.mAddress = a[0];
+                        this.redirectingNum = a[1];
+                        Rlog.d(LOG_TAG, "update: address is " + this.mAddress);
+                        Rlog.d(LOG_TAG, "update: redirectingNum is " + this.redirectingNum);
+                    }
+                }
+                changed = true;
+            }
+            if (TextUtils.isEmpty(name)) {
+                if (!TextUtils.isEmpty(this.mCnapName)) {
+                    this.mCnapName = "";
+                    changed = true;
+                }
+            } else if (!name.equals(this.mCnapName)) {
+                this.mCnapName = name;
+                changed = true;
+            }
+            if (this.mNumberPresentation != nump) {
+                this.mNumberPresentation = nump;
+                changed = true;
+            }
+            if (this.mCnapNamePresentation != namep) {
+                this.mCnapNamePresentation = namep;
+                changed = true;
+            }
+            int oldVideoState = getVideoState();
+            int newVideoState = ImsCallProfile.getVideoStateFromImsCallProfile(callProfile);
+            if (oldVideoState != newVideoState) {
+                setVideoState(newVideoState);
+                changed = true;
+            }
+            try {
+                ImsCallProfile localCallProfile2 = imsCall.getLocalCallProfile();
+                ImsCallProfile remoteCallProfile2 = imsCall.getRemoteCallProfile();
+                if (!(localCallProfile2 == null || remoteCallProfile2 == null || getAudioQuality() == (newAudioQuality = getAudioQualityFromCallProfile(localCallProfile2, remoteCallProfile2)))) {
+                    setAudioQuality(newAudioQuality);
+                    changed = true;
+                }
+            } catch (ImsException e2) {
+            }
+        }
+        boolean mptyState = isMultiparty();
+        if (mptyState == this.mMptyState) {
+            return changed;
+        }
+        this.mMptyState = mptyState;
+        return true;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public int getPreciseDisconnectCause() {
+        return 0;
+    }
+
+    public Bundle getCallExtras() {
+        return this.mCallExtras;
+    }
+
+    private boolean restrictedMergeFeatureEnabled() {
+        if (SystemProperties.get(PROPERTY_ENABLE_RESTRICT_NON_OWNER_MERGE, "false").equals("true")) {
+            return true;
+        }
+        return this.mContext.getResources().getBoolean(17957013);
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public void onDisconnectConferenceParticipant(Uri endpoint) {
+        ImsCall imsCall = getImsCall();
+        if (imsCall != null) {
+            try {
+                imsCall.removeParticipants(new String[]{endpoint.toString()});
+            } catch (ImsException e) {
+                Rlog.e(LOG_TAG, "onDisconnectConferenceParticipant: no session in place. Failed to disconnect endpoint = " + endpoint);
+            }
+        }
+    }
+
+    private boolean updateMediaCapabilities(ImsCall imsCall) {
+        if (imsCall == null) {
+            return false;
+        }
+        boolean changed = false;
+        try {
+            ImsCallProfile localCallProfile = imsCall.getLocalCallProfile();
+            ImsCallProfile remoteCallProfile = imsCall.getRemoteCallProfile();
+            if (localCallProfile != null) {
+                boolean newLocalVideoCapable = localCallProfile.mCallType == 4;
+                if (isLocalVideoCapable() != newLocalVideoCapable) {
+                    setLocalVideoCapable(newLocalVideoCapable);
+                    changed = true;
+                }
+            }
+            int newAudioQuality = getAudioQualityFromCallProfile(localCallProfile, remoteCallProfile);
+            if (getAudioQuality() == newAudioQuality) {
+                return changed;
+            }
+            setAudioQuality(newAudioQuality);
+            return true;
+        } catch (ImsException e) {
+            return changed;
+        }
+    }
+
+    private int getAudioQualityFromCallProfile(ImsCallProfile localCallProfile, ImsCallProfile remoteCallProfile) {
+        if (localCallProfile == null || remoteCallProfile == null || localCallProfile.mMediaProfile == null) {
+            return 1;
+        }
+        return !((localCallProfile.mMediaProfile.mAudioQuality == 2 || localCallProfile.mMediaProfile.mAudioQuality == 6) && remoteCallProfile.mRestrictCause == 0) ? 1 : 2;
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ImsPhoneConnection objId: ");
+        sb.append(System.identityHashCode(this));
+        sb.append(" address:");
+        sb.append(Log.pii(getAddress()));
+        sb.append(" ImsCall:");
+        if (this.mImsCall == null) {
+            sb.append("null");
+        } else {
+            sb.append(this.mImsCall);
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    @Override // com.android.internal.telephony.Connection
+    public String getBeforeFowardingNumber() {
+        return this.redirectingNum;
     }
 }

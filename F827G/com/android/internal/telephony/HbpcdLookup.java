@@ -3,6 +3,7 @@ package com.android.internal.telephony;
 import android.net.Uri;
 import android.provider.BaseColumns;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class HbpcdLookup {
     public static final String AUTHORITY = "hbpcd_lookup";
     public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup");
@@ -16,6 +17,7 @@ public class HbpcdLookup {
     public static final String PATH_NANP_AREA_CODE = "nanp";
     public static final String PATH_USERADD_COUNTRY = "useradd";
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class ArbitraryMccSidMatch implements BaseColumns {
         public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup/arbitrary");
         public static final String DEFAULT_SORT_ORDER = "MCC ASC";
@@ -23,6 +25,7 @@ public class HbpcdLookup {
         public static final String SID = "SID";
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class MccIdd implements BaseColumns {
         public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup/idd");
         public static final String DEFAULT_SORT_ORDER = "MCC ASC";
@@ -30,6 +33,7 @@ public class HbpcdLookup {
         public static final String MCC = "MCC";
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class MccLookup implements BaseColumns {
         public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup/lookup");
         public static final String COUNTRY_CODE = "Country_Code";
@@ -44,6 +48,7 @@ public class HbpcdLookup {
         public static final String NDD = "NDD";
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class MccSidConflicts implements BaseColumns {
         public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup/conflict");
         public static final String DEFAULT_SORT_ORDER = "MCC ASC";
@@ -51,6 +56,7 @@ public class HbpcdLookup {
         public static final String SID_CONFLICT = "SID_Conflict";
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class MccSidRange implements BaseColumns {
         public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup/range");
         public static final String DEFAULT_SORT_ORDER = "MCC ASC";
@@ -59,6 +65,7 @@ public class HbpcdLookup {
         public static final String RANGE_LOW = "SID_Range_Low";
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class NanpAreaCode implements BaseColumns {
         public static final String AREA_CODE = "Area_Code";
         public static final Uri CONTENT_URI = Uri.parse("content://hbpcd_lookup/nanp");

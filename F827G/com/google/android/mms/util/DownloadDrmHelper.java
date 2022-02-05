@@ -4,36 +4,23 @@ import android.content.Context;
 import android.drm.DrmManagerClient;
 import android.util.Log;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DownloadDrmHelper {
     public static final String EXTENSION_DRM_MESSAGE = ".dm";
     public static final String EXTENSION_INTERNAL_FWDL = ".fl";
     public static final String MIMETYPE_DRM_MESSAGE = "application/vnd.oma.drm.message";
     private static final String TAG = "DownloadDrmHelper";
 
-    public static String getOriginalMimeType(Context context, String str, String str2) {
-        DrmManagerClient drmManagerClient = new DrmManagerClient(context);
-        try {
-            return drmManagerClient.canHandle(str, null) ? drmManagerClient.getOriginalMimeType(str) : str2;
-        } catch (IllegalArgumentException e) {
-            Log.w(TAG, "Can't get original mime type since path is null or empty string.");
-            return str2;
-        } catch (IllegalStateException e2) {
-            Log.w(TAG, "DrmManagerClient didn't initialize properly.");
-            return str2;
-        }
-    }
-
-    public static boolean isDrmConvertNeeded(String str) {
-        return "application/vnd.oma.drm.message".equals(str);
-    }
-
-    public static boolean isDrmMimeType(Context context, String str) {
+    public static boolean isDrmMimeType(Context context, String mimetype) {
         if (context == null) {
             return false;
         }
         try {
-            DrmManagerClient drmManagerClient = new DrmManagerClient(context);
-            return (drmManagerClient == null || str == null || str.length() <= 0) ? false : drmManagerClient.canHandle("", str);
+            DrmManagerClient drmClient = new DrmManagerClient(context);
+            if (drmClient == null || mimetype == null || mimetype.length() <= 0) {
+                return false;
+            }
+            return drmClient.canHandle("", mimetype);
         } catch (IllegalArgumentException e) {
             Log.w(TAG, "DrmManagerClient instance could not be created, context is Illegal.");
             return false;
@@ -43,14 +30,34 @@ public class DownloadDrmHelper {
         }
     }
 
-    public static String modifyDrmFwLockFileExtension(String str) {
-        if (str == null) {
-            return str;
+    public static boolean isDrmConvertNeeded(String mimetype) {
+        return "application/vnd.oma.drm.message".equals(mimetype);
+    }
+
+    public static String modifyDrmFwLockFileExtension(String filename) {
+        if (filename == null) {
+            return filename;
         }
-        int lastIndexOf = str.lastIndexOf(".");
-        if (lastIndexOf != -1) {
-            str = str.substring(0, lastIndexOf);
+        int extensionIndex = filename.lastIndexOf(".");
+        if (extensionIndex != -1) {
+            filename = filename.substring(0, extensionIndex);
         }
-        return str.concat(EXTENSION_INTERNAL_FWDL);
+        return filename.concat(EXTENSION_INTERNAL_FWDL);
+    }
+
+    public static String getOriginalMimeType(Context context, String path, String containingMime) {
+        DrmManagerClient drmClient = new DrmManagerClient(context);
+        try {
+            if (drmClient.canHandle(path, (String) null)) {
+                return drmClient.getOriginalMimeType(path);
+            }
+            return containingMime;
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Can't get original mime type since path is null or empty string.");
+            return containingMime;
+        } catch (IllegalStateException e2) {
+            Log.w(TAG, "DrmManagerClient didn't initialize properly.");
+            return containingMime;
+        }
     }
 }

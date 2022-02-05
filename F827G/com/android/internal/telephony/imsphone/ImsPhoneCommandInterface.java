@@ -10,409 +10,545 @@ import com.android.internal.telephony.cdma.CdmaSmsBroadcastConfigInfo;
 import com.android.internal.telephony.dataconnection.DataProfile;
 import com.android.internal.telephony.gsm.SmsBroadcastConfigInfo;
 
-class ImsPhoneCommandInterface extends BaseCommands implements CommandsInterface {
-    ImsPhoneCommandInterface(Context context) {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class ImsPhoneCommandInterface extends BaseCommands implements CommandsInterface {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public ImsPhoneCommandInterface(Context context) {
         super(context);
     }
 
-    public void acceptCall(Message message) {
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void setOnNITZTime(Handler h, int what, Object obj) {
     }
 
-    public void acknowledgeIncomingGsmSmsWithPdu(boolean z, String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIccCardStatus(Message result) {
     }
 
-    public void acknowledgeLastIncomingCdmaSms(boolean z, int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPin(String pin, Message result) {
     }
 
-    public void acknowledgeLastIncomingGsmSms(boolean z, int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPuk(String puk, String newPin, Message result) {
     }
 
-    public void cancelPendingUssd(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPin2(String pin, Message result) {
     }
 
-    public void changeBarringPassword(String str, String str2, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPuk2(String puk, String newPin2, Message result) {
     }
 
-    public void changeIccPin(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPin(String oldPin, String newPin, Message result) {
     }
 
-    public void changeIccPin2(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPin2(String oldPin2, String newPin2, Message result) {
     }
 
-    public void changeIccPin2ForApp(String str, String str2, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeBarringPassword(String facility, String oldPwd, String newPwd, Message result) {
     }
 
-    public void changeIccPinForApp(String str, String str2, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyDepersonalization(String netpin, String type, Message result) {
     }
 
-    public void conference(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCurrentCalls(Message result) {
     }
 
-    public void deactivateDataCall(int i, int i2, Message message) {
-    }
-
-    public void deleteSmsOnRuim(int i, Message message) {
-    }
-
-    public void deleteSmsOnSim(int i, Message message) {
-    }
-
-    public void dial(String str, int i, Message message) {
-    }
-
-    public void dial(String str, int i, UUSInfo uUSInfo, Message message) {
-    }
-
-    public void exitEmergencyCallbackMode(Message message) {
-    }
-
-    public void explicitCallTransfer(Message message) {
-    }
-
-    public void getAvailableNetworks(Message message) {
-    }
-
-    public void getBasebandVersion(Message message) {
-    }
-
-    public void getCDMASubscription(Message message) {
-    }
-
-    public void getCLIR(Message message) {
-    }
-
-    public void getCdmaBroadcastConfig(Message message) {
-    }
-
-    public void getCdmaSubscriptionSource(Message message) {
-    }
-
-    public void getCellInfoList(Message message) {
-    }
-
-    public void getCurrentCalls(Message message) {
-    }
-
-    public void getDataCallList(Message message) {
-    }
-
-    public void getDataRegistrationState(Message message) {
-    }
-
-    public void getDeviceIdentity(Message message) {
-    }
-
-    public void getGsmBroadcastConfig(Message message) {
-    }
-
-    public void getHardwareConfig(Message message) {
-    }
-
-    public void getIMEI(Message message) {
-    }
-
-    public void getIMEISV(Message message) {
-    }
-
-    public void getIMSI(Message message) {
-    }
-
-    public void getIMSIForApp(String str, Message message) {
-    }
-
-    public void getIccCardStatus(Message message) {
-    }
-
-    public void getImsRegistrationState(Message message) {
-    }
-
-    public void getLastCallFailCause(Message message) {
-    }
-
-    public void getLastDataCallFailCause(Message message) {
-    }
-
+    @Override // com.android.internal.telephony.CommandsInterface
     @Deprecated
-    public void getLastPdpFailCause(Message message) {
+    public void getPDPContextList(Message result) {
     }
 
-    public void getMute(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getDataCallList(Message result) {
     }
 
-    public void getNeighboringCids(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void dial(String address, int clirMode, Message result) {
     }
 
-    public void getNetworkSelectionMode(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void dial(String address, int clirMode, UUSInfo uusInfo, Message result) {
     }
 
-    public void getOperator(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMSI(Message result) {
     }
 
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMSIForApp(String aid, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMEI(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMEISV(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void hangupConnection(int gsmIndex, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void hangupWaitingOrBackground(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void hangupForegroundResumeBackground(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void switchWaitingOrHoldingAndActive(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void conference(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setPreferredVoicePrivacy(boolean enable, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getPreferredVoicePrivacy(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void separateConnection(int gsmIndex, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acceptCall(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void rejectCall(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void explicitCallTransfer(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getLastCallFailCause(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
     @Deprecated
-    public void getPDPContextList(Message message) {
+    public void getLastPdpFailCause(Message result) {
     }
 
-    public void getPreferredNetworkType(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getLastDataCallFailCause(Message result) {
     }
 
-    public void getPreferredVoicePrivacy(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setMute(boolean enableMute, Message response) {
     }
 
-    public void getSignalStrength(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getMute(Message response) {
     }
 
-    public void getSmscAddress(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getSignalStrength(Message result) {
     }
 
-    public void getVoiceRadioTechnology(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getVoiceRegistrationState(Message result) {
     }
 
-    public void getVoiceRegistrationState(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getDataRegistrationState(Message result) {
     }
 
-    public void handleCallSetupRequestFromSim(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getOperator(Message result) {
     }
 
-    public void hangupConnection(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendDtmf(char c, Message result) {
     }
 
-    public void hangupForegroundResumeBackground(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void startDtmf(char c, Message result) {
     }
 
-    public void hangupWaitingOrBackground(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void stopDtmf(Message result) {
     }
 
-    public void iccIO(int i, int i2, String str, int i3, int i4, int i5, String str2, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendBurstDtmf(String dtmfString, int on, int off, Message result) {
     }
 
-    public void iccIOForApp(int i, int i2, String str, int i3, int i4, int i5, String str2, String str3, String str4, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendSMS(String smscPDU, String pdu, Message result) {
     }
 
-    public void invokeOemRilRequestRaw(byte[] bArr, Message message) {
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void sendSMSExpectMore(String smscPDU, String pdu, Message result) {
     }
 
-    public void invokeOemRilRequestStrings(String[] strArr, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendCdmaSms(byte[] pdu, Message result) {
     }
 
-    public void nvReadItem(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendImsGsmSms(String smscPDU, String pdu, int retry, int messageRef, Message response) {
     }
 
-    public void nvResetConfig(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendImsCdmaSms(byte[] pdu, int retry, int messageRef, Message response) {
     }
 
-    public void nvWriteCdmaPrl(byte[] bArr, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getImsRegistrationState(Message result) {
     }
 
-    public void nvWriteItem(int i, String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void deleteSmsOnSim(int index, Message response) {
     }
 
-    public void queryAvailableBandMode(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void deleteSmsOnRuim(int index, Message response) {
     }
 
-    public void queryCLIP(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void writeSmsToSim(int status, String smsc, String pdu, Message response) {
     }
 
-    public void queryCallForwardStatus(int i, int i2, String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void writeSmsToRuim(int status, String pdu, Message response) {
     }
 
-    public void queryCallWaiting(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setupDataCall(String radioTechnology, String profile, String apn, String user, String password, String authType, String protocol, Message result) {
     }
 
-    public void queryCdmaRoamingPreference(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void deactivateDataCall(int cid, int reason, Message result) {
     }
 
-    public void queryFacilityLock(String str, String str2, int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setRadioPower(boolean on, Message result) {
     }
 
-    public void queryFacilityLockForApp(String str, String str2, int i, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setSuppServiceNotifications(boolean enable, Message result) {
     }
 
-    public void queryTTYMode(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acknowledgeLastIncomingGsmSms(boolean success, int cause, Message result) {
     }
 
-    public void rejectCall(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acknowledgeLastIncomingCdmaSms(boolean success, int cause, Message result) {
     }
 
-    public void reportSmsMemoryStatus(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acknowledgeIncomingGsmSmsWithPdu(boolean success, String ackPdu, Message result) {
     }
 
-    public void reportStkServiceIsRunning(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void iccIO(int command, int fileid, String path, int p1, int p2, int p3, String data, String pin2, Message result) {
     }
 
-    public void requestIccSimAuthentication(int i, String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void iccIOForApp(int command, int fileid, String path, int p1, int p2, int p3, String data, String pin2, String aid, Message result) {
     }
 
-    public void requestIsimAuthentication(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCLIR(Message result) {
     }
 
-    public void requestShutdown(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCLIR(int clirMode, Message result) {
     }
 
-    public void resetRadio(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCallWaiting(int serviceClass, Message response) {
     }
 
-    public void sendBurstDtmf(String str, int i, int i2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCallWaiting(boolean enable, int serviceClass, Message response) {
     }
 
-    public void sendCDMAFeatureCode(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setNetworkSelectionModeAutomatic(Message response) {
     }
 
-    public void sendCdmaSms(byte[] bArr, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setNetworkSelectionModeManual(String operatorNumeric, Message response) {
     }
 
-    public void sendDtmf(char c, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getNetworkSelectionMode(Message response) {
     }
 
-    public void sendEnvelope(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getAvailableNetworks(Message response) {
     }
 
-    public void sendEnvelopeWithStatus(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCallForward(int action, int cfReason, int serviceClass, String number, int timeSeconds, Message response) {
     }
 
-    public void sendImsCdmaSms(byte[] bArr, int i, int i2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCallForwardStatus(int cfReason, int serviceClass, String number, Message response) {
     }
 
-    public void sendImsGsmSms(String str, String str2, int i, int i2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCLIP(Message response) {
     }
 
-    public void sendSMS(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getBasebandVersion(Message response) {
     }
 
-    public void sendSMSExpectMore(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryFacilityLock(String facility, String password, int serviceClass, Message response) {
     }
 
-    public void sendTerminalResponse(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryFacilityLockForApp(String facility, String password, int serviceClass, String appId, Message response) {
     }
 
-    public void sendUSSD(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setFacilityLock(String facility, boolean lockState, String password, int serviceClass, Message response) {
     }
 
-    public void separateConnection(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setFacilityLockForApp(String facility, boolean lockState, String password, int serviceClass, String appId, Message response) {
     }
 
-    public void setBandMode(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendUSSD(String ussdString, Message response) {
     }
 
-    public void setCLIR(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void cancelPendingUssd(Message response) {
     }
 
-    public void setCallForward(int i, int i2, int i3, String str, int i4, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void resetRadio(Message result) {
     }
 
-    public void setCallWaiting(boolean z, int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void invokeOemRilRequestRaw(byte[] data, Message response) {
     }
 
-    public void setCdmaBroadcastActivation(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void invokeOemRilRequestStrings(String[] strings, Message response) {
     }
 
-    public void setCdmaBroadcastConfig(CdmaSmsBroadcastConfigInfo[] cdmaSmsBroadcastConfigInfoArr, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setBandMode(int bandMode, Message response) {
     }
 
-    public void setCdmaRoamingPreference(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryAvailableBandMode(Message response) {
     }
 
-    public void setCdmaSubscriptionSource(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendTerminalResponse(String contents, Message response) {
     }
 
-    public void setCellInfoListRate(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendEnvelope(String contents, Message response) {
     }
 
-    public void setDataProfile(DataProfile[] dataProfileArr, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendEnvelopeWithStatus(String contents, Message response) {
     }
 
-    public void setFacilityLock(String str, boolean z, String str2, int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void handleCallSetupRequestFromSim(boolean accept, Message response) {
     }
 
-    public void setFacilityLockForApp(String str, boolean z, String str2, int i, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setPreferredNetworkType(int networkType, Message response) {
     }
 
-    public void setGsmBroadcastActivation(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getPreferredNetworkType(Message response) {
     }
 
-    public void setGsmBroadcastConfig(SmsBroadcastConfigInfo[] smsBroadcastConfigInfoArr, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getNeighboringCids(Message response) {
     }
 
-    public void setInitialAttachApn(String str, String str2, int i, String str3, String str4, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setLocationUpdates(boolean enable, Message response) {
     }
 
-    public void setLocationUpdates(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getSmscAddress(Message result) {
     }
 
-    public void setMute(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setSmscAddress(String address, Message result) {
     }
 
-    public void setNetworkSelectionModeAutomatic(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void reportSmsMemoryStatus(boolean available, Message result) {
     }
 
-    public void setNetworkSelectionModeManual(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void reportStkServiceIsRunning(Message result) {
     }
 
-    public void setOnNITZTime(Handler handler, int i, Object obj) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCdmaSubscriptionSource(Message response) {
     }
 
-    public void setPhoneType(int i) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getGsmBroadcastConfig(Message response) {
     }
 
-    public void setPreferredNetworkType(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setGsmBroadcastConfig(SmsBroadcastConfigInfo[] config, Message response) {
     }
 
-    public void setPreferredVoicePrivacy(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setGsmBroadcastActivation(boolean activate, Message response) {
     }
 
-    public void setRadioPower(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getDeviceIdentity(Message response) {
     }
 
-    public void setSmscAddress(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCDMASubscription(Message response) {
     }
 
-    public void setSuppServiceNotifications(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setPhoneType(int phoneType) {
     }
 
-    public void setTTYMode(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCdmaRoamingPreference(Message response) {
     }
 
-    public void setupDataCall(String str, String str2, String str3, String str4, String str5, String str6, String str7, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaRoamingPreference(int cdmaRoamingType, Message response) {
     }
 
-    public void startDtmf(char c, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaSubscriptionSource(int cdmaSubscription, Message response) {
     }
 
-    public void stopDtmf(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryTTYMode(Message response) {
     }
 
-    public void supplyDepersonalization(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setTTYMode(int ttyMode, Message response) {
     }
 
-    public void supplyIccPin(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendCDMAFeatureCode(String FeatureCode, Message response) {
     }
 
-    public void supplyIccPin2(String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCdmaBroadcastConfig(Message response) {
     }
 
-    public void supplyIccPin2ForApp(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaBroadcastConfig(CdmaSmsBroadcastConfigInfo[] configs, Message response) {
     }
 
-    public void supplyIccPinForApp(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaBroadcastActivation(boolean activate, Message response) {
     }
 
-    public void supplyIccPuk(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void exitEmergencyCallbackMode(Message response) {
     }
 
-    public void supplyIccPuk2(String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPinForApp(String pin, String aid, Message response) {
     }
 
-    public void supplyIccPuk2ForApp(String str, String str2, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPukForApp(String puk, String newPin, String aid, Message response) {
     }
 
-    public void supplyIccPukForApp(String str, String str2, String str3, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPin2ForApp(String pin2, String aid, Message response) {
     }
 
-    public void switchWaitingOrHoldingAndActive(Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPuk2ForApp(String puk2, String newPin2, String aid, Message response) {
     }
 
-    public void writeSmsToRuim(int i, String str, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPinForApp(String oldPin, String newPin, String aidPtr, Message response) {
     }
 
-    public void writeSmsToSim(int i, String str, String str2, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPin2ForApp(String oldPin2, String newPin2, String aidPtr, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void requestIsimAuthentication(String nonce, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void requestIccSimAuthentication(int authContext, String data, String aid, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getVoiceRadioTechnology(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCellInfoList(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCellInfoListRate(int rateInMillis, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setInitialAttachApn(String apn, String protocol, int authType, String username, String password, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void setDataProfile(DataProfile[] dps, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvReadItem(int itemID, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvWriteItem(int itemID, String itemValue, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvWriteCdmaPrl(byte[] preferredRoamingList, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvResetConfig(int resetType, Message response) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getHardwareConfig(Message result) {
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void requestShutdown(Message result) {
     }
 }

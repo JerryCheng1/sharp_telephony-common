@@ -2,36 +2,40 @@ package com.google.android.mms.pdu;
 
 import java.io.ByteArrayOutputStream;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class QuotedPrintable {
-    private static byte ESCAPE_CHAR = (byte) 61;
+    private static byte ESCAPE_CHAR = 61;
 
-    public static final byte[] decodeQuotedPrintable(byte[] bArr) {
-        if (bArr != null) {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            int i = 0;
-            while (i < bArr.length) {
-                byte b = bArr[i];
-                if (b != ESCAPE_CHAR) {
-                    byteArrayOutputStream.write(b);
-                } else if (13 == ((char) bArr[i + 1]) && 10 == ((char) bArr[i + 2])) {
-                    i += 2;
-                } else {
-                    i++;
-                    try {
-                        int digit = Character.digit((char) bArr[i], 16);
-                        i++;
-                        int digit2 = Character.digit((char) bArr[i], 16);
-                        if (!(digit == -1 || digit2 == -1)) {
-                            byteArrayOutputStream.write((char) ((digit << 4) + digit2));
-                        }
-                    } catch (ArrayIndexOutOfBoundsException e) {
-                        return null;
-                    }
-                }
-                i++;
-            }
-            return byteArrayOutputStream.toByteArray();
+    public static final byte[] decodeQuotedPrintable(byte[] bytes) {
+        if (bytes == null) {
+            return null;
         }
-        return null;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        int i = 0;
+        while (i < bytes.length) {
+            byte b = bytes[i];
+            if (b == ESCAPE_CHAR) {
+                try {
+                    if ('\r' == ((char) bytes[i + 1]) && '\n' == ((char) bytes[i + 2])) {
+                        i += 2;
+                    } else {
+                        int i2 = i + 1;
+                        int u = Character.digit((char) bytes[i2], 16);
+                        i = i2 + 1;
+                        int l = Character.digit((char) bytes[i], 16);
+                        if (u == -1 || l == -1) {
+                            return null;
+                        }
+                        buffer.write((char) ((u << 4) + l));
+                    }
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    return null;
+                }
+            } else {
+                buffer.write(b);
+            }
+            i++;
+        }
+        return buffer.toByteArray();
     }
 }

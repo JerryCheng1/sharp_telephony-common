@@ -8,15 +8,14 @@ import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Process;
 import android.os.UserHandle;
-import android.provider.Settings.Secure;
-import android.provider.Telephony.Sms.Intents;
+import android.provider.Settings;
+import android.provider.Telephony;
 import android.telephony.Rlog;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
@@ -26,6 +25,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class SmsApplication {
     private static final String BLUETOOTH_PACKAGE_NAME = "com.android.bluetooth";
     private static final boolean DEBUG_MULTIUSER = false;
@@ -39,6 +39,7 @@ public final class SmsApplication {
     private static final String SMS_BACKUP_PACKAGE_NAME = "jp.co.sharp.android.smsbackup";
     private static SmsPackageMonitor sSmsPackageMonitor = null;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class SmsApplicationData {
         public String mApplicationName;
         public String mMmsReceiverClass;
@@ -48,296 +49,262 @@ public final class SmsApplication {
         public String mSmsReceiverClass;
         public int mUid;
 
-        public SmsApplicationData(String str, String str2, int i) {
-            this.mApplicationName = str;
-            this.mPackageName = str2;
-            this.mUid = i;
-        }
-
         public boolean isComplete() {
             return (this.mSmsReceiverClass == null || this.mMmsReceiverClass == null || this.mRespondViaMessageClass == null || this.mSendToClass == null) ? false : true;
         }
+
+        public SmsApplicationData(String applicationName, String packageName, int uid) {
+            this.mApplicationName = applicationName;
+            this.mPackageName = packageName;
+            this.mUid = uid;
+        }
     }
 
-    private static final class SmsPackageMonitor extends PackageMonitor {
+    private static int getIncomingUserId(Context context) {
+        int contextUserId = context.getUserId();
+        int callingUid = Binder.getCallingUid();
+        return UserHandle.getAppId(callingUid) < 10000 ? contextUserId : UserHandle.getUserId(callingUid);
+    }
+
+    public static Collection<SmsApplicationData> getApplicationCollection(Context context) {
+        int userId = getIncomingUserId(context);
+        long token = Binder.clearCallingIdentity();
+        try {
+            return getApplicationCollectionInternal(context, userId);
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    private static Collection<SmsApplicationData> getApplicationCollectionInternal(Context context, int userId) {
+        String packageName;
+        SmsApplicationData smsApplicationData;
+        SmsApplicationData smsApplicationData2;
+        SmsApplicationData smsApplicationData3;
+        SmsApplicationData smsApplicationData4;
+        PackageManager packageManager = context.getPackageManager();
+        List<ResolveInfo> smsReceivers = packageManager.queryBroadcastReceivers(new Intent(Telephony.Sms.Intents.SMS_DELIVER_ACTION), 0, userId);
+        HashMap<String, SmsApplicationData> receivers = new HashMap<>();
+        for (ResolveInfo resolveInfo : smsReceivers) {
+            ActivityInfo activityInfo = resolveInfo.activityInfo;
+            if (activityInfo != null && "android.permission.BROADCAST_SMS".equals(activityInfo.permission)) {
+                String packageName2 = activityInfo.packageName;
+                if (!receivers.containsKey(packageName2)) {
+                    SmsApplicationData smsApplicationData5 = new SmsApplicationData(resolveInfo.loadLabel(packageManager).toString(), packageName2, activityInfo.applicationInfo.uid);
+                    smsApplicationData5.mSmsReceiverClass = activityInfo.name;
+                    receivers.put(packageName2, smsApplicationData5);
+                }
+            }
+        }
+        Intent intent = new Intent(Telephony.Sms.Intents.WAP_PUSH_DELIVER_ACTION);
+        intent.setDataAndType(null, "application/vnd.wap.mms-message");
+        for (ResolveInfo resolveInfo2 : packageManager.queryBroadcastReceivers(intent, 0, userId)) {
+            ActivityInfo activityInfo2 = resolveInfo2.activityInfo;
+            if (!(activityInfo2 == null || !"android.permission.BROADCAST_WAP_PUSH".equals(activityInfo2.permission) || (smsApplicationData4 = receivers.get(activityInfo2.packageName)) == null)) {
+                smsApplicationData4.mMmsReceiverClass = activityInfo2.name;
+            }
+        }
+        for (ResolveInfo resolveInfo3 : packageManager.queryIntentServicesAsUser(new Intent("android.intent.action.RESPOND_VIA_MESSAGE", Uri.fromParts(SCHEME_SMSTO, "", null)), 0, userId)) {
+            ServiceInfo serviceInfo = resolveInfo3.serviceInfo;
+            if (!(serviceInfo == null || !"android.permission.SEND_RESPOND_VIA_MESSAGE".equals(serviceInfo.permission) || (smsApplicationData3 = receivers.get(serviceInfo.packageName)) == null)) {
+                smsApplicationData3.mRespondViaMessageClass = serviceInfo.name;
+            }
+        }
+        for (ResolveInfo resolveInfo4 : packageManager.queryIntentActivitiesAsUser(new Intent("android.intent.action.SENDTO", Uri.fromParts(SCHEME_SMSTO, "", null)), 0, userId)) {
+            ActivityInfo activityInfo3 = resolveInfo4.activityInfo;
+            if (!(activityInfo3 == null || (smsApplicationData2 = receivers.get(activityInfo3.packageName)) == null)) {
+                smsApplicationData2.mSendToClass = activityInfo3.name;
+            }
+        }
+        for (ResolveInfo resolveInfo5 : smsReceivers) {
+            ActivityInfo activityInfo4 = resolveInfo5.activityInfo;
+            if (!(activityInfo4 == null || (smsApplicationData = receivers.get((packageName = activityInfo4.packageName))) == null || smsApplicationData.isComplete())) {
+                receivers.remove(packageName);
+            }
+        }
+        return receivers.values();
+    }
+
+    private static SmsApplicationData getApplicationForPackage(Collection<SmsApplicationData> applications, String packageName) {
+        if (packageName == null) {
+            return null;
+        }
+        for (SmsApplicationData application : applications) {
+            if (application.mPackageName.contentEquals(packageName)) {
+                return application;
+            }
+        }
+        return null;
+    }
+
+    private static SmsApplicationData getApplication(Context context, boolean updateIfNeeded, int userId) {
+        if (!((TelephonyManager) context.getSystemService("phone")).isSmsCapable()) {
+            return null;
+        }
+        Collection<SmsApplicationData> applications = getApplicationCollectionInternal(context, userId);
+        String defaultApplication = Settings.Secure.getStringForUser(context.getContentResolver(), "sms_default_application", userId);
+        SmsApplicationData applicationData = null;
+        if (defaultApplication != null) {
+            applicationData = getApplicationForPackage(applications, defaultApplication);
+        }
+        if (updateIfNeeded && applicationData == null) {
+            applicationData = getApplicationForPackage(applications, context.getResources().getString(17039435));
+            if (applicationData == null && applications.size() != 0) {
+                applicationData = (SmsApplicationData) applications.toArray()[0];
+            }
+            if (applicationData != null) {
+                setDefaultApplicationInternal(applicationData.mPackageName, context, userId);
+            }
+        }
+        if (applicationData == null) {
+            return applicationData;
+        }
+        AppOpsManager appOps = (AppOpsManager) context.getSystemService("appops");
+        if ((updateIfNeeded || applicationData.mUid == Process.myUid()) && appOps.checkOp(15, applicationData.mUid, applicationData.mPackageName) != 0) {
+            Rlog.e(LOG_TAG, applicationData.mPackageName + " lost OP_WRITE_SMS: " + (updateIfNeeded ? " (fixing)" : " (no permission to fix)"));
+            if (updateIfNeeded) {
+                appOps.setMode(15, applicationData.mUid, applicationData.mPackageName, 0);
+            } else {
+                applicationData = null;
+            }
+        }
+        if (!updateIfNeeded) {
+            return applicationData;
+        }
+        PackageManager packageManager = context.getPackageManager();
+        configurePreferredActivity(packageManager, new ComponentName(applicationData.mPackageName, applicationData.mSendToClass), userId);
+        try {
+            PackageInfo info = packageManager.getPackageInfo(PHONE_PACKAGE_NAME, 0);
+            if (appOps.checkOp(15, info.applicationInfo.uid, PHONE_PACKAGE_NAME) != 0) {
+                Rlog.e(LOG_TAG, "com.android.phone lost OP_WRITE_SMS:  (fixing)");
+                appOps.setMode(15, info.applicationInfo.uid, PHONE_PACKAGE_NAME, 0);
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            Rlog.e(LOG_TAG, "Phone package not found: com.android.phone");
+            applicationData = null;
+        }
+        try {
+            PackageInfo info2 = packageManager.getPackageInfo(BLUETOOTH_PACKAGE_NAME, 0);
+            if (appOps.checkOp(15, info2.applicationInfo.uid, BLUETOOTH_PACKAGE_NAME) != 0) {
+                Rlog.e(LOG_TAG, "com.android.bluetooth lost OP_WRITE_SMS:  (fixing)");
+                appOps.setMode(15, info2.applicationInfo.uid, BLUETOOTH_PACKAGE_NAME, 0);
+            }
+        } catch (PackageManager.NameNotFoundException e2) {
+            Rlog.e(LOG_TAG, "Bluetooth package not found: com.android.bluetooth");
+        }
+        try {
+            PackageInfo info3 = packageManager.getPackageInfo(MMS_SERVICE_PACKAGE_NAME, 0);
+            if (appOps.checkOp(15, info3.applicationInfo.uid, MMS_SERVICE_PACKAGE_NAME) != 0) {
+                Rlog.e(LOG_TAG, "com.android.mms.service lost OP_WRITE_SMS:  (fixing)");
+                appOps.setMode(15, info3.applicationInfo.uid, MMS_SERVICE_PACKAGE_NAME, 0);
+            }
+        } catch (PackageManager.NameNotFoundException e3) {
+            Rlog.e(LOG_TAG, "MmsService package not found: com.android.mms.service");
+            applicationData = null;
+        }
+        try {
+            PackageInfo info4 = packageManager.getPackageInfo(SMS_BACKUP_PACKAGE_NAME, 0);
+            if (appOps.checkOp(15, info4.applicationInfo.uid, SMS_BACKUP_PACKAGE_NAME) == 0) {
+                return applicationData;
+            }
+            Rlog.e(LOG_TAG, "jp.co.sharp.android.smsbackup lost OP_WRITE_SMS:  (fixing)");
+            appOps.setMode(15, info4.applicationInfo.uid, SMS_BACKUP_PACKAGE_NAME, 0);
+            return applicationData;
+        } catch (PackageManager.NameNotFoundException e4) {
+            Rlog.e(LOG_TAG, "SMSBackup package not found: jp.co.sharp.android.smsbackup");
+            return applicationData;
+        }
+    }
+
+    public static void setDefaultApplication(String packageName, Context context) {
+        if (((TelephonyManager) context.getSystemService("phone")).isSmsCapable()) {
+            int userId = getIncomingUserId(context);
+            long token = Binder.clearCallingIdentity();
+            try {
+                setDefaultApplicationInternal(packageName, context, userId);
+            } finally {
+                Binder.restoreCallingIdentity(token);
+            }
+        }
+    }
+
+    private static void setDefaultApplicationInternal(String packageName, Context context, int userId) {
+        String oldPackageName = Settings.Secure.getStringForUser(context.getContentResolver(), "sms_default_application", userId);
+        if (packageName == null || oldPackageName == null || !packageName.equals(oldPackageName)) {
+            PackageManager packageManager = context.getPackageManager();
+            SmsApplicationData applicationData = getApplicationForPackage(getApplicationCollection(context), packageName);
+            if (applicationData != null) {
+                AppOpsManager appOps = (AppOpsManager) context.getSystemService("appops");
+                if (oldPackageName != null) {
+                    try {
+                        appOps.setMode(15, packageManager.getPackageInfo(oldPackageName, SmsCbConstants.SERIAL_NUMBER_ETWS_EMERGENCY_USER_ALERT).applicationInfo.uid, oldPackageName, 1);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        Rlog.w(LOG_TAG, "Old SMS package not found: " + oldPackageName);
+                    }
+                }
+                Settings.Secure.putStringForUser(context.getContentResolver(), "sms_default_application", applicationData.mPackageName, userId);
+                configurePreferredActivity(packageManager, new ComponentName(applicationData.mPackageName, applicationData.mSendToClass), userId);
+                appOps.setMode(15, applicationData.mUid, applicationData.mPackageName, 0);
+                try {
+                    appOps.setMode(15, packageManager.getPackageInfo(PHONE_PACKAGE_NAME, 0).applicationInfo.uid, PHONE_PACKAGE_NAME, 0);
+                } catch (PackageManager.NameNotFoundException e2) {
+                    Rlog.e(LOG_TAG, "Phone package not found: com.android.phone");
+                }
+                try {
+                    appOps.setMode(15, packageManager.getPackageInfo(BLUETOOTH_PACKAGE_NAME, 0).applicationInfo.uid, BLUETOOTH_PACKAGE_NAME, 0);
+                } catch (PackageManager.NameNotFoundException e3) {
+                    Rlog.e(LOG_TAG, "Bluetooth package not found: com.android.bluetooth");
+                }
+                try {
+                    appOps.setMode(15, packageManager.getPackageInfo(MMS_SERVICE_PACKAGE_NAME, 0).applicationInfo.uid, MMS_SERVICE_PACKAGE_NAME, 0);
+                } catch (PackageManager.NameNotFoundException e4) {
+                    Rlog.e(LOG_TAG, "MmsService package not found: com.android.mms.service");
+                }
+                try {
+                    appOps.setMode(15, packageManager.getPackageInfo(SMS_BACKUP_PACKAGE_NAME, 0).applicationInfo.uid, SMS_BACKUP_PACKAGE_NAME, 0);
+                } catch (PackageManager.NameNotFoundException e5) {
+                    Rlog.e(LOG_TAG, "SMSBackup package not found: jp.co.sharp.android.smsbackup");
+                }
+            }
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static final class SmsPackageMonitor extends PackageMonitor {
         final Context mContext;
 
         public SmsPackageMonitor(Context context) {
             this.mContext = context;
         }
 
-        private void onPackageChanged(String str) {
+        public void onPackageDisappeared(String packageName, int reason) {
+            onPackageChanged(packageName);
+        }
+
+        public void onPackageAppeared(String packageName, int reason) {
+            onPackageChanged(packageName);
+        }
+
+        public void onPackageModified(String packageName) {
+            onPackageChanged(packageName);
+        }
+
+        private void onPackageChanged(String packageName) {
             PackageManager packageManager = this.mContext.getPackageManager();
-            Context context = this.mContext;
-            int sendingUserId = getSendingUserId();
-            if (sendingUserId != 0) {
+            Context userContext = this.mContext;
+            int userId = getSendingUserId();
+            if (userId != 0) {
                 try {
-                    context = this.mContext.createPackageContextAsUser(this.mContext.getPackageName(), 0, new UserHandle(sendingUserId));
-                } catch (NameNotFoundException e) {
+                    userContext = this.mContext.createPackageContextAsUser(this.mContext.getPackageName(), 0, new UserHandle(userId));
+                } catch (PackageManager.NameNotFoundException e) {
                 }
             }
-            ComponentName defaultSendToApplication = SmsApplication.getDefaultSendToApplication(context, true);
-            if (defaultSendToApplication != null) {
-                SmsApplication.configurePreferredActivity(packageManager, defaultSendToApplication, sendingUserId);
+            ComponentName componentName = SmsApplication.getDefaultSendToApplication(userContext, true);
+            if (componentName != null) {
+                SmsApplication.configurePreferredActivity(packageManager, componentName, userId);
             }
         }
-
-        public void onPackageAppeared(String str, int i) {
-            onPackageChanged(str);
-        }
-
-        public void onPackageDisappeared(String str, int i) {
-            onPackageChanged(str);
-        }
-
-        public void onPackageModified(String str) {
-            onPackageChanged(str);
-        }
-    }
-
-    private static void configurePreferredActivity(PackageManager packageManager, ComponentName componentName, int i) {
-        replacePreferredActivity(packageManager, componentName, i, SCHEME_SMS);
-        replacePreferredActivity(packageManager, componentName, i, SCHEME_SMSTO);
-        replacePreferredActivity(packageManager, componentName, i, SCHEME_MMS);
-        replacePreferredActivity(packageManager, componentName, i, SCHEME_MMSTO);
-    }
-
-    private static SmsApplicationData getApplication(Context context, boolean z, int i) {
-        SmsApplicationData smsApplicationData;
-        SmsApplicationData smsApplicationData2 = null;
-        if (((TelephonyManager) context.getSystemService("phone")).isSmsCapable()) {
-            Collection applicationCollectionInternal = getApplicationCollectionInternal(context, i);
-            String stringForUser = Secure.getStringForUser(context.getContentResolver(), "sms_default_application", i);
-            SmsApplicationData applicationForPackage = stringForUser != null ? getApplicationForPackage(applicationCollectionInternal, stringForUser) : null;
-            if (z && applicationForPackage == null) {
-                applicationForPackage = getApplicationForPackage(applicationCollectionInternal, context.getResources().getString(17039435));
-                if (applicationForPackage == null && applicationCollectionInternal.size() != 0) {
-                    applicationForPackage = (SmsApplicationData) applicationCollectionInternal.toArray()[0];
-                }
-                if (applicationForPackage != null) {
-                    setDefaultApplicationInternal(applicationForPackage.mPackageName, context, i);
-                }
-            }
-            if (applicationForPackage != null) {
-                AppOpsManager appOpsManager = (AppOpsManager) context.getSystemService("appops");
-                if ((z || applicationForPackage.mUid == Process.myUid()) && appOpsManager.checkOp(15, applicationForPackage.mUid, applicationForPackage.mPackageName) != 0) {
-                    Rlog.e(LOG_TAG, applicationForPackage.mPackageName + " lost OP_WRITE_SMS: " + (z ? " (fixing)" : " (no permission to fix)"));
-                    if (z) {
-                        appOpsManager.setMode(15, applicationForPackage.mUid, applicationForPackage.mPackageName, 0);
-                    } else {
-                        applicationForPackage = null;
-                    }
-                }
-                if (z) {
-                    PackageInfo packageInfo;
-                    PackageManager packageManager = context.getPackageManager();
-                    configurePreferredActivity(packageManager, new ComponentName(applicationForPackage.mPackageName, applicationForPackage.mSendToClass), i);
-                    try {
-                        packageInfo = packageManager.getPackageInfo(PHONE_PACKAGE_NAME, 0);
-                        if (appOpsManager.checkOp(15, packageInfo.applicationInfo.uid, PHONE_PACKAGE_NAME) != 0) {
-                            Rlog.e(LOG_TAG, "com.android.phone lost OP_WRITE_SMS:  (fixing)");
-                            appOpsManager.setMode(15, packageInfo.applicationInfo.uid, PHONE_PACKAGE_NAME, 0);
-                        }
-                    } catch (NameNotFoundException e) {
-                        Rlog.e(LOG_TAG, "Phone package not found: com.android.phone");
-                        applicationForPackage = null;
-                    }
-                    try {
-                        packageInfo = packageManager.getPackageInfo(BLUETOOTH_PACKAGE_NAME, 0);
-                        if (appOpsManager.checkOp(15, packageInfo.applicationInfo.uid, BLUETOOTH_PACKAGE_NAME) != 0) {
-                            Rlog.e(LOG_TAG, "com.android.bluetooth lost OP_WRITE_SMS:  (fixing)");
-                            appOpsManager.setMode(15, packageInfo.applicationInfo.uid, BLUETOOTH_PACKAGE_NAME, 0);
-                        }
-                    } catch (NameNotFoundException e2) {
-                        Rlog.e(LOG_TAG, "Bluetooth package not found: com.android.bluetooth");
-                    }
-                    try {
-                        packageInfo = packageManager.getPackageInfo(MMS_SERVICE_PACKAGE_NAME, 0);
-                        if (appOpsManager.checkOp(15, packageInfo.applicationInfo.uid, MMS_SERVICE_PACKAGE_NAME) != 0) {
-                            Rlog.e(LOG_TAG, "com.android.mms.service lost OP_WRITE_SMS:  (fixing)");
-                            appOpsManager.setMode(15, packageInfo.applicationInfo.uid, MMS_SERVICE_PACKAGE_NAME, 0);
-                            smsApplicationData2 = applicationForPackage;
-                        } else {
-                            smsApplicationData2 = applicationForPackage;
-                        }
-                    } catch (NameNotFoundException e3) {
-                        Rlog.e(LOG_TAG, "MmsService package not found: com.android.mms.service");
-                    }
-                    try {
-                        PackageInfo packageInfo2 = packageManager.getPackageInfo(SMS_BACKUP_PACKAGE_NAME, 0);
-                        if (appOpsManager.checkOp(15, packageInfo2.applicationInfo.uid, SMS_BACKUP_PACKAGE_NAME) != 0) {
-                            Rlog.e(LOG_TAG, "jp.co.sharp.android.smsbackup lost OP_WRITE_SMS:  (fixing)");
-                            appOpsManager.setMode(15, packageInfo2.applicationInfo.uid, SMS_BACKUP_PACKAGE_NAME, 0);
-                            return smsApplicationData2;
-                        }
-                        smsApplicationData = smsApplicationData2;
-                    } catch (NameNotFoundException e4) {
-                        Rlog.e(LOG_TAG, "SMSBackup package not found: jp.co.sharp.android.smsbackup");
-                        return smsApplicationData2;
-                    }
-                }
-            }
-            smsApplicationData = applicationForPackage;
-        } else {
-            smsApplicationData = null;
-        }
-        return smsApplicationData;
-    }
-
-    public static Collection<SmsApplicationData> getApplicationCollection(Context context) {
-        int incomingUserId = getIncomingUserId(context);
-        long clearCallingIdentity = Binder.clearCallingIdentity();
-        try {
-            Collection<SmsApplicationData> applicationCollectionInternal = getApplicationCollectionInternal(context, incomingUserId);
-            return applicationCollectionInternal;
-        } finally {
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-        }
-    }
-
-    private static Collection<SmsApplicationData> getApplicationCollectionInternal(Context context, int i) {
-        ActivityInfo activityInfo;
-        SmsApplicationData smsApplicationData;
-        PackageManager packageManager = context.getPackageManager();
-        List<ResolveInfo> queryBroadcastReceivers = packageManager.queryBroadcastReceivers(new Intent(Intents.SMS_DELIVER_ACTION), 0, i);
-        HashMap hashMap = new HashMap();
-        for (ResolveInfo resolveInfo : queryBroadcastReceivers) {
-            activityInfo = resolveInfo.activityInfo;
-            if (activityInfo != null && "android.permission.BROADCAST_SMS".equals(activityInfo.permission)) {
-                String str = activityInfo.packageName;
-                if (!hashMap.containsKey(str)) {
-                    SmsApplicationData smsApplicationData2 = new SmsApplicationData(resolveInfo.loadLabel(packageManager).toString(), str, activityInfo.applicationInfo.uid);
-                    smsApplicationData2.mSmsReceiverClass = activityInfo.name;
-                    hashMap.put(str, smsApplicationData2);
-                }
-            }
-        }
-        Intent intent = new Intent(Intents.WAP_PUSH_DELIVER_ACTION);
-        intent.setDataAndType(null, "application/vnd.wap.mms-message");
-        for (ResolveInfo resolveInfo2 : packageManager.queryBroadcastReceivers(intent, 0, i)) {
-            activityInfo = resolveInfo2.activityInfo;
-            if (activityInfo != null && "android.permission.BROADCAST_WAP_PUSH".equals(activityInfo.permission)) {
-                smsApplicationData = (SmsApplicationData) hashMap.get(activityInfo.packageName);
-                if (smsApplicationData != null) {
-                    smsApplicationData.mMmsReceiverClass = activityInfo.name;
-                }
-            }
-        }
-        for (ResolveInfo resolveInfo22 : packageManager.queryIntentServicesAsUser(new Intent("android.intent.action.RESPOND_VIA_MESSAGE", Uri.fromParts(SCHEME_SMSTO, "", null)), 0, i)) {
-            ServiceInfo serviceInfo = resolveInfo22.serviceInfo;
-            if (serviceInfo != null && "android.permission.SEND_RESPOND_VIA_MESSAGE".equals(serviceInfo.permission)) {
-                smsApplicationData = (SmsApplicationData) hashMap.get(serviceInfo.packageName);
-                if (smsApplicationData != null) {
-                    smsApplicationData.mRespondViaMessageClass = serviceInfo.name;
-                }
-            }
-        }
-        for (ResolveInfo resolveInfo222 : packageManager.queryIntentActivitiesAsUser(new Intent("android.intent.action.SENDTO", Uri.fromParts(SCHEME_SMSTO, "", null)), 0, i)) {
-            ActivityInfo activityInfo2 = resolveInfo222.activityInfo;
-            if (activityInfo2 != null) {
-                smsApplicationData = (SmsApplicationData) hashMap.get(activityInfo2.packageName);
-                if (smsApplicationData != null) {
-                    smsApplicationData.mSendToClass = activityInfo2.name;
-                }
-            }
-        }
-        for (ResolveInfo resolveInfo2222 : queryBroadcastReceivers) {
-            ActivityInfo activityInfo3 = resolveInfo2222.activityInfo;
-            if (activityInfo3 != null) {
-                String str2 = activityInfo3.packageName;
-                smsApplicationData = (SmsApplicationData) hashMap.get(str2);
-                if (!(smsApplicationData == null || smsApplicationData.isComplete())) {
-                    hashMap.remove(str2);
-                }
-            }
-        }
-        return hashMap.values();
-    }
-
-    private static SmsApplicationData getApplicationForPackage(Collection<SmsApplicationData> collection, String str) {
-        if (str == null) {
-            return null;
-        }
-        for (SmsApplicationData smsApplicationData : collection) {
-            if (smsApplicationData.mPackageName.contentEquals(str)) {
-                return smsApplicationData;
-            }
-        }
-        return null;
-    }
-
-    public static ComponentName getDefaultMmsApplication(Context context, boolean z) {
-        int incomingUserId = getIncomingUserId(context);
-        long clearCallingIdentity = Binder.clearCallingIdentity();
-        ComponentName componentName = null;
-        try {
-            SmsApplicationData application = getApplication(context, z, incomingUserId);
-            if (application != null) {
-                componentName = new ComponentName(application.mPackageName, application.mMmsReceiverClass);
-            }
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-            return componentName;
-        } catch (Throwable th) {
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-        }
-    }
-
-    public static ComponentName getDefaultRespondViaMessageApplication(Context context, boolean z) {
-        int incomingUserId = getIncomingUserId(context);
-        long clearCallingIdentity = Binder.clearCallingIdentity();
-        ComponentName componentName = null;
-        try {
-            SmsApplicationData application = getApplication(context, z, incomingUserId);
-            if (application != null) {
-                componentName = new ComponentName(application.mPackageName, application.mRespondViaMessageClass);
-            }
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-            return componentName;
-        } catch (Throwable th) {
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-        }
-    }
-
-    public static ComponentName getDefaultSendToApplication(Context context, boolean z) {
-        int incomingUserId = getIncomingUserId(context);
-        long clearCallingIdentity = Binder.clearCallingIdentity();
-        ComponentName componentName = null;
-        try {
-            SmsApplicationData application = getApplication(context, z, incomingUserId);
-            if (application != null) {
-                componentName = new ComponentName(application.mPackageName, application.mSendToClass);
-            }
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-            return componentName;
-        } catch (Throwable th) {
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-        }
-    }
-
-    public static ComponentName getDefaultSmsApplication(Context context, boolean z) {
-        int incomingUserId = getIncomingUserId(context);
-        long clearCallingIdentity = Binder.clearCallingIdentity();
-        ComponentName componentName = null;
-        try {
-            SmsApplicationData application = getApplication(context, z, incomingUserId);
-            if (application != null) {
-                componentName = new ComponentName(application.mPackageName, application.mSmsReceiverClass);
-            }
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-            return componentName;
-        } catch (Throwable th) {
-            Binder.restoreCallingIdentity(clearCallingIdentity);
-        }
-    }
-
-    private static int getIncomingUserId(Context context) {
-        int userId = context.getUserId();
-        int callingUid = Binder.getCallingUid();
-        return UserHandle.getAppId(callingUid) < 10000 ? userId : UserHandle.getUserId(callingUid);
-    }
-
-    public static SmsApplicationData getSmsApplicationData(String str, Context context) {
-        return getApplicationForPackage(getApplicationCollection(context), str);
     }
 
     public static void initSmsPackageMonitor(Context context) {
@@ -345,85 +312,102 @@ public final class SmsApplication {
         sSmsPackageMonitor.register(context, context.getMainLooper(), UserHandle.ALL, false);
     }
 
-    private static void replacePreferredActivity(PackageManager packageManager, ComponentName componentName, int i, String str) {
-        List queryIntentActivitiesAsUser = packageManager.queryIntentActivitiesAsUser(new Intent("android.intent.action.SENDTO", Uri.fromParts(str, "", null)), 65600, i);
-        int size = queryIntentActivitiesAsUser.size();
-        ComponentName[] componentNameArr = new ComponentName[size];
-        for (int i2 = 0; i2 < size; i2++) {
-            ResolveInfo resolveInfo = (ResolveInfo) queryIntentActivitiesAsUser.get(i2);
-            componentNameArr[i2] = new ComponentName(resolveInfo.activityInfo.packageName, resolveInfo.activityInfo.name);
+    /* JADX INFO: Access modifiers changed from: private */
+    public static void configurePreferredActivity(PackageManager packageManager, ComponentName componentName, int userId) {
+        replacePreferredActivity(packageManager, componentName, userId, SCHEME_SMS);
+        replacePreferredActivity(packageManager, componentName, userId, SCHEME_SMSTO);
+        replacePreferredActivity(packageManager, componentName, userId, SCHEME_MMS);
+        replacePreferredActivity(packageManager, componentName, userId, SCHEME_MMSTO);
+    }
+
+    private static void replacePreferredActivity(PackageManager packageManager, ComponentName componentName, int userId, String scheme) {
+        List<ResolveInfo> resolveInfoList = packageManager.queryIntentActivitiesAsUser(new Intent("android.intent.action.SENDTO", Uri.fromParts(scheme, "", null)), 65600, userId);
+        int n = resolveInfoList.size();
+        ComponentName[] set = new ComponentName[n];
+        for (int i = 0; i < n; i++) {
+            ResolveInfo info = resolveInfoList.get(i);
+            set[i] = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
         }
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction("android.intent.action.SENDTO");
         intentFilter.addCategory("android.intent.category.DEFAULT");
-        intentFilter.addDataScheme(str);
-        packageManager.replacePreferredActivityAsUser(intentFilter, 2129920, componentNameArr, componentName, i);
+        intentFilter.addDataScheme(scheme);
+        packageManager.replacePreferredActivityAsUser(intentFilter, 2129920, set, componentName, userId);
     }
 
-    public static void setDefaultApplication(String str, Context context) {
-        if (((TelephonyManager) context.getSystemService("phone")).isSmsCapable()) {
-            int incomingUserId = getIncomingUserId(context);
-            long clearCallingIdentity = Binder.clearCallingIdentity();
-            try {
-                setDefaultApplicationInternal(str, context, incomingUserId);
-            } finally {
-                Binder.restoreCallingIdentity(clearCallingIdentity);
+    public static SmsApplicationData getSmsApplicationData(String packageName, Context context) {
+        return getApplicationForPackage(getApplicationCollection(context), packageName);
+    }
+
+    public static ComponentName getDefaultSmsApplication(Context context, boolean updateIfNeeded) {
+        int userId = getIncomingUserId(context);
+        long token = Binder.clearCallingIdentity();
+        ComponentName component = null;
+        try {
+            SmsApplicationData smsApplicationData = getApplication(context, updateIfNeeded, userId);
+            if (smsApplicationData != null) {
+                component = new ComponentName(smsApplicationData.mPackageName, smsApplicationData.mSmsReceiverClass);
             }
+            return component;
+        } finally {
+            Binder.restoreCallingIdentity(token);
         }
     }
 
-    private static void setDefaultApplicationInternal(String str, Context context, int i) {
-        String stringForUser = Secure.getStringForUser(context.getContentResolver(), "sms_default_application", i);
-        if (str == null || stringForUser == null || !str.equals(stringForUser)) {
-            PackageManager packageManager = context.getPackageManager();
-            SmsApplicationData applicationForPackage = getApplicationForPackage(getApplicationCollection(context), str);
-            if (applicationForPackage != null) {
-                AppOpsManager appOpsManager = (AppOpsManager) context.getSystemService("appops");
-                if (stringForUser != null) {
-                    try {
-                        appOpsManager.setMode(15, packageManager.getPackageInfo(stringForUser, SmsCbConstants.SERIAL_NUMBER_ETWS_EMERGENCY_USER_ALERT).applicationInfo.uid, stringForUser, 1);
-                    } catch (NameNotFoundException e) {
-                        Rlog.w(LOG_TAG, "Old SMS package not found: " + stringForUser);
-                    }
-                }
-                Secure.putStringForUser(context.getContentResolver(), "sms_default_application", applicationForPackage.mPackageName, i);
-                configurePreferredActivity(packageManager, new ComponentName(applicationForPackage.mPackageName, applicationForPackage.mSendToClass), i);
-                appOpsManager.setMode(15, applicationForPackage.mUid, applicationForPackage.mPackageName, 0);
-                try {
-                    appOpsManager.setMode(15, packageManager.getPackageInfo(PHONE_PACKAGE_NAME, 0).applicationInfo.uid, PHONE_PACKAGE_NAME, 0);
-                } catch (NameNotFoundException e2) {
-                    Rlog.e(LOG_TAG, "Phone package not found: com.android.phone");
-                }
-                try {
-                    appOpsManager.setMode(15, packageManager.getPackageInfo(BLUETOOTH_PACKAGE_NAME, 0).applicationInfo.uid, BLUETOOTH_PACKAGE_NAME, 0);
-                } catch (NameNotFoundException e3) {
-                    Rlog.e(LOG_TAG, "Bluetooth package not found: com.android.bluetooth");
-                }
-                try {
-                    appOpsManager.setMode(15, packageManager.getPackageInfo(MMS_SERVICE_PACKAGE_NAME, 0).applicationInfo.uid, MMS_SERVICE_PACKAGE_NAME, 0);
-                } catch (NameNotFoundException e4) {
-                    Rlog.e(LOG_TAG, "MmsService package not found: com.android.mms.service");
-                }
-                try {
-                    appOpsManager.setMode(15, packageManager.getPackageInfo(SMS_BACKUP_PACKAGE_NAME, 0).applicationInfo.uid, SMS_BACKUP_PACKAGE_NAME, 0);
-                } catch (NameNotFoundException e5) {
-                    Rlog.e(LOG_TAG, "SMSBackup package not found: jp.co.sharp.android.smsbackup");
-                }
+    public static ComponentName getDefaultMmsApplication(Context context, boolean updateIfNeeded) {
+        int userId = getIncomingUserId(context);
+        long token = Binder.clearCallingIdentity();
+        ComponentName component = null;
+        try {
+            SmsApplicationData smsApplicationData = getApplication(context, updateIfNeeded, userId);
+            if (smsApplicationData != null) {
+                component = new ComponentName(smsApplicationData.mPackageName, smsApplicationData.mMmsReceiverClass);
             }
+            return component;
+        } finally {
+            Binder.restoreCallingIdentity(token);
         }
     }
 
-    public static boolean shouldWriteMessageForPackage(String str, Context context) {
-        if (!(str == null || SmsManager.getDefault().getAutoPersisting())) {
-            String str2 = null;
-            ComponentName defaultSmsApplication = getDefaultSmsApplication(context, false);
-            if (defaultSmsApplication != null) {
-                str2 = defaultSmsApplication.getPackageName();
+    public static ComponentName getDefaultRespondViaMessageApplication(Context context, boolean updateIfNeeded) {
+        int userId = getIncomingUserId(context);
+        long token = Binder.clearCallingIdentity();
+        ComponentName component = null;
+        try {
+            SmsApplicationData smsApplicationData = getApplication(context, updateIfNeeded, userId);
+            if (smsApplicationData != null) {
+                component = new ComponentName(smsApplicationData.mPackageName, smsApplicationData.mRespondViaMessageClass);
             }
-            if ((str2 != null && str2.equals(str)) || str.equals(BLUETOOTH_PACKAGE_NAME)) {
-                return false;
-            }
+            return component;
+        } finally {
+            Binder.restoreCallingIdentity(token);
         }
-        return true;
+    }
+
+    public static ComponentName getDefaultSendToApplication(Context context, boolean updateIfNeeded) {
+        int userId = getIncomingUserId(context);
+        long token = Binder.clearCallingIdentity();
+        ComponentName component = null;
+        try {
+            SmsApplicationData smsApplicationData = getApplication(context, updateIfNeeded, userId);
+            if (smsApplicationData != null) {
+                component = new ComponentName(smsApplicationData.mPackageName, smsApplicationData.mSendToClass);
+            }
+            return component;
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    public static boolean shouldWriteMessageForPackage(String packageName, Context context) {
+        if (packageName == null || SmsManager.getDefault().getAutoPersisting()) {
+            return true;
+        }
+        String defaultSmsPackage = null;
+        ComponentName component = getDefaultSmsApplication(context, false);
+        if (component != null) {
+            defaultSmsPackage = component.getPackageName();
+        }
+        return (defaultSmsPackage == null || !defaultSmsPackage.equals(packageName)) && !packageName.equals(BLUETOOTH_PACKAGE_NAME);
     }
 }

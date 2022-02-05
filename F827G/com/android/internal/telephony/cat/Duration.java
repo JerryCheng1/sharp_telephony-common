@@ -2,21 +2,26 @@ package com.android.internal.telephony.cat;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class Duration implements Parcelable {
-    public static final Creator<Duration> CREATOR = new Creator<Duration>() {
-        public Duration createFromParcel(Parcel parcel) {
-            return new Duration(parcel, null);
+    public static final Parcelable.Creator<Duration> CREATOR = new Parcelable.Creator<Duration>() { // from class: com.android.internal.telephony.cat.Duration.1
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public Duration createFromParcel(Parcel in) {
+            return new Duration(in);
         }
 
-        public Duration[] newArray(int i) {
-            return new Duration[i];
+        /* JADX WARN: Can't rename method to resolve collision */
+        @Override // android.os.Parcelable.Creator
+        public Duration[] newArray(int size) {
+            return new Duration[size];
         }
     };
     public int timeInterval;
     public TimeUnit timeUnit;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum TimeUnit {
         MINUTE(0),
         SECOND(1),
@@ -24,8 +29,8 @@ public class Duration implements Parcelable {
         
         private int mValue;
 
-        private TimeUnit(int i) {
-            this.mValue = i;
+        TimeUnit(int value) {
+            this.mValue = value;
         }
 
         public int value() {
@@ -33,22 +38,24 @@ public class Duration implements Parcelable {
         }
     }
 
-    public Duration(int i, TimeUnit timeUnit) {
-        this.timeInterval = i;
+    public Duration(int timeInterval, TimeUnit timeUnit) {
+        this.timeInterval = timeInterval;
         this.timeUnit = timeUnit;
     }
 
-    private Duration(Parcel parcel) {
-        this.timeInterval = parcel.readInt();
-        this.timeUnit = TimeUnit.values()[parcel.readInt()];
+    private Duration(Parcel in) {
+        this.timeInterval = in.readInt();
+        this.timeUnit = TimeUnit.values()[in.readInt()];
     }
 
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.timeInterval);
+        dest.writeInt(this.timeUnit.ordinal());
+    }
+
+    @Override // android.os.Parcelable
     public int describeContents() {
         return 0;
-    }
-
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeInt(this.timeInterval);
-        parcel.writeInt(this.timeUnit.ordinal());
     }
 }

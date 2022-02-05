@@ -1,5 +1,6 @@
 package com.android.internal.telephony;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class UUSInfo {
     public static final int UUS_DCS_IA5c = 4;
     public static final int UUS_DCS_OSIHLP = 1;
@@ -23,33 +24,33 @@ public class UUSInfo {
         this.mUusData = null;
     }
 
-    public UUSInfo(int i, int i2, byte[] bArr) {
-        this.mUusType = i;
-        this.mUusDcs = i2;
-        this.mUusData = bArr;
+    public UUSInfo(int uusType, int uusDcs, byte[] uusData) {
+        this.mUusType = uusType;
+        this.mUusDcs = uusDcs;
+        this.mUusData = uusData;
     }
 
     public int getDcs() {
         return this.mUusDcs;
     }
 
+    public void setDcs(int uusDcs) {
+        this.mUusDcs = uusDcs;
+    }
+
     public int getType() {
         return this.mUusType;
+    }
+
+    public void setType(int uusType) {
+        this.mUusType = uusType;
     }
 
     public byte[] getUserData() {
         return this.mUusData;
     }
 
-    public void setDcs(int i) {
-        this.mUusDcs = i;
-    }
-
-    public void setType(int i) {
-        this.mUusType = i;
-    }
-
-    public void setUserData(byte[] bArr) {
-        this.mUusData = bArr;
+    public void setUserData(byte[] uusData) {
+        this.mUusData = uusData;
     }
 }

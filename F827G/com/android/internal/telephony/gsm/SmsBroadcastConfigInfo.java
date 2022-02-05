@@ -1,5 +1,6 @@
 package com.android.internal.telephony.gsm;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class SmsBroadcastConfigInfo {
     private int mFromCodeScheme;
     private int mFromServiceId;
@@ -7,52 +8,52 @@ public final class SmsBroadcastConfigInfo {
     private int mToCodeScheme;
     private int mToServiceId;
 
-    public SmsBroadcastConfigInfo(int i, int i2, int i3, int i4, boolean z) {
-        this.mFromServiceId = i;
-        this.mToServiceId = i2;
-        this.mFromCodeScheme = i3;
-        this.mToCodeScheme = i4;
-        this.mSelected = z;
+    public SmsBroadcastConfigInfo(int fromId, int toId, int fromScheme, int toScheme, boolean selected) {
+        this.mFromServiceId = fromId;
+        this.mToServiceId = toId;
+        this.mFromCodeScheme = fromScheme;
+        this.mToCodeScheme = toScheme;
+        this.mSelected = selected;
     }
 
-    public int getFromCodeScheme() {
-        return this.mFromCodeScheme;
+    public void setFromServiceId(int fromServiceId) {
+        this.mFromServiceId = fromServiceId;
     }
 
     public int getFromServiceId() {
         return this.mFromServiceId;
     }
 
-    public int getToCodeScheme() {
-        return this.mToCodeScheme;
+    public void setToServiceId(int toServiceId) {
+        this.mToServiceId = toServiceId;
     }
 
     public int getToServiceId() {
         return this.mToServiceId;
     }
 
+    public void setFromCodeScheme(int fromCodeScheme) {
+        this.mFromCodeScheme = fromCodeScheme;
+    }
+
+    public int getFromCodeScheme() {
+        return this.mFromCodeScheme;
+    }
+
+    public void setToCodeScheme(int toCodeScheme) {
+        this.mToCodeScheme = toCodeScheme;
+    }
+
+    public int getToCodeScheme() {
+        return this.mToCodeScheme;
+    }
+
+    public void setSelected(boolean selected) {
+        this.mSelected = selected;
+    }
+
     public boolean isSelected() {
         return this.mSelected;
-    }
-
-    public void setFromCodeScheme(int i) {
-        this.mFromCodeScheme = i;
-    }
-
-    public void setFromServiceId(int i) {
-        this.mFromServiceId = i;
-    }
-
-    public void setSelected(boolean z) {
-        this.mSelected = z;
-    }
-
-    public void setToCodeScheme(int i) {
-        this.mToCodeScheme = i;
-    }
-
-    public void setToServiceId(int i) {
-        this.mToServiceId = i;
     }
 
     public String toString() {

@@ -4,6 +4,7 @@ import com.google.android.mms.InvalidHeaderValueException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class PduHeaders {
     public static final int ADAPTATION_ALLOWED = 188;
     public static final int ADDITIONAL_HEADERS = 176;
@@ -201,239 +202,293 @@ public class PduHeaders {
 
     public PduHeaders() {
         this.mHeaderMap = null;
-        this.mHeaderMap = new HashMap();
+        this.mHeaderMap = new HashMap<>();
     }
 
-    /* Access modifiers changed, original: protected */
-    public void appendEncodedStringValue(EncodedStringValue encodedStringValue, int i) {
-        if (encodedStringValue == null) {
-            throw new NullPointerException();
+    /* JADX INFO: Access modifiers changed from: protected */
+    public int getOctet(int field) {
+        Integer octet = (Integer) this.mHeaderMap.get(Integer.valueOf(field));
+        if (octet == null) {
+            return 0;
         }
-        switch (i) {
-            case 129:
-            case 130:
-            case 151:
-                ArrayList arrayList = (ArrayList) this.mHeaderMap.get(Integer.valueOf(i));
-                if (arrayList == null) {
-                    arrayList = new ArrayList();
-                }
-                arrayList.add(encodedStringValue);
-                this.mHeaderMap.put(Integer.valueOf(i), arrayList);
-                return;
-            default:
-                throw new RuntimeException("Invalid header field!");
-        }
+        return octet.intValue();
     }
 
-    /* Access modifiers changed, original: protected */
-    public EncodedStringValue getEncodedStringValue(int i) {
-        return (EncodedStringValue) this.mHeaderMap.get(Integer.valueOf(i));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public EncodedStringValue[] getEncodedStringValues(int i) {
-        ArrayList arrayList = (ArrayList) this.mHeaderMap.get(Integer.valueOf(i));
-        return arrayList == null ? null : (EncodedStringValue[]) arrayList.toArray(new EncodedStringValue[arrayList.size()]);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public long getLongInteger(int i) {
-        Long l = (Long) this.mHeaderMap.get(Integer.valueOf(i));
-        return l == null ? -1 : l.longValue();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public int getOctet(int i) {
-        Integer num = (Integer) this.mHeaderMap.get(Integer.valueOf(i));
-        return num == null ? 0 : num.intValue();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public byte[] getTextString(int i) {
-        return (byte[]) this.mHeaderMap.get(Integer.valueOf(i));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setEncodedStringValue(EncodedStringValue encodedStringValue, int i) {
-        if (encodedStringValue == null) {
-            throw new NullPointerException();
-        }
-        switch (i) {
-            case 137:
-            case 147:
-            case 150:
-            case 154:
-            case 160:
-            case MM_FLAGS /*164*/:
-            case STORE_STATUS_TEXT /*166*/:
-            case RECOMMENDED_RETRIEVAL_MODE_TEXT /*181*/:
-            case STATUS_TEXT /*182*/:
-                this.mHeaderMap.put(Integer.valueOf(i), encodedStringValue);
-                return;
-            default:
-                throw new RuntimeException("Invalid header field!");
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setEncodedStringValues(EncodedStringValue[] encodedStringValueArr, int i) {
-        if (encodedStringValueArr == null) {
-            throw new NullPointerException();
-        }
-        switch (i) {
-            case 129:
-            case 130:
-            case 151:
-                ArrayList arrayList = new ArrayList();
-                for (Object add : encodedStringValueArr) {
-                    arrayList.add(add);
-                }
-                this.mHeaderMap.put(Integer.valueOf(i), arrayList);
-                return;
-            default:
-                throw new RuntimeException("Invalid header field!");
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setLongInteger(long j, int i) {
-        switch (i) {
-            case 133:
-            case 135:
-            case 136:
-            case 142:
-            case 157:
-            case REPLY_CHARGING_SIZE /*159*/:
-            case PREVIOUSLY_SENT_DATE /*161*/:
-            case MESSAGE_COUNT /*173*/:
-            case START /*175*/:
-            case LIMIT /*179*/:
-                this.mHeaderMap.put(Integer.valueOf(i), Long.valueOf(j));
-                return;
-            default:
-                throw new RuntimeException("Invalid header field!");
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setOctet(int i, int i2) throws InvalidHeaderValueException {
-        switch (i2) {
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void setOctet(int value, int field) throws InvalidHeaderValueException {
+        switch (field) {
             case 134:
             case 144:
             case 145:
             case 148:
-            case STORE /*162*/:
+            case STORE /* 162 */:
             case 167:
-            case TOTALS /*169*/:
-            case QUOTAS /*171*/:
-            case DISTRIBUTION_INDICATOR /*177*/:
-            case DRM_CONTENT /*187*/:
-            case ADAPTATION_ALLOWED /*188*/:
-                if (!(128 == i || 129 == i)) {
+            case TOTALS /* 169 */:
+            case QUOTAS /* 171 */:
+            case DISTRIBUTION_INDICATOR /* 177 */:
+            case DRM_CONTENT /* 187 */:
+            case ADAPTATION_ALLOWED /* 188 */:
+                if (!(128 == value || 129 == value)) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
+                break;
+            case 135:
+            case 136:
+            case 137:
+            case 138:
+            case 139:
+            case 142:
+            case 147:
+            case 150:
+            case 151:
+            case 152:
+            case 154:
+            case 157:
+            case REPLY_CHARGING_ID /* 158 */:
+            case REPLY_CHARGING_SIZE /* 159 */:
+            case 160:
+            case PREVIOUSLY_SENT_DATE /* 161 */:
+            case MM_FLAGS /* 164 */:
+            case STORE_STATUS_TEXT /* 166 */:
+            case ATTRIBUTES /* 168 */:
+            case MBOX_TOTALS /* 170 */:
+            case MBOX_QUOTAS /* 172 */:
+            case MESSAGE_COUNT /* 173 */:
+            case 174:
+            case START /* 175 */:
+            case 176:
+            case ELEMENT_DESCRIPTOR /* 178 */:
+            case LIMIT /* 179 */:
+            case RECOMMENDED_RETRIEVAL_MODE_TEXT /* 181 */:
+            case STATUS_TEXT /* 182 */:
+            case APPLIC_ID /* 183 */:
+            case REPLY_APPLIC_ID /* 184 */:
+            case AUX_APPLIC_ID /* 185 */:
+            case REPLACE_ID /* 189 */:
+            case CANCEL_ID /* 190 */:
+            default:
+                throw new RuntimeException("Invalid header field!");
             case 140:
-                if (i < 128 || i > 151) {
+                if (value < 128 || value > 151) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
+                break;
             case 141:
-                if (i < 16 || i > 19) {
-                    i = 18;
+                if (value < 16 || value > 19) {
+                    value = 18;
                     break;
                 }
+                break;
             case 143:
-                if (i < 128 || i > 130) {
+                if (value < 128 || value > 130) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
+                break;
             case 146:
-                if (i <= 196 || i >= 224) {
-                    if ((i > RESPONSE_STATUS_ERROR_PERMANENT_LACK_OF_PREPAID && i <= 255) || i < 128 || ((i > 136 && i < 192) || i > 255)) {
-                        i = 224;
+                if (value <= 196 || value >= 224) {
+                    if ((value > 235 && value <= 255) || value < 128 || ((value > 136 && value < 192) || value > 255)) {
+                        value = 224;
                         break;
                     }
+                } else {
+                    value = 192;
+                    break;
                 }
-                i = 192;
-                break;
-                break;
             case 149:
                 break;
             case 153:
-                if (i <= 194 || i >= 224) {
-                    if (i <= 227 || i > 255) {
-                        if (i < 128 || ((i > 128 && i < 192) || i > 255)) {
-                            i = 224;
+                if (value <= 194 || value >= 224) {
+                    if (value <= 227 || value > 255) {
+                        if (value < 128 || ((value > 128 && value < 192) || value > 255)) {
+                            value = 224;
                             break;
                         }
+                    } else {
+                        value = 224;
+                        break;
                     }
-                    i = 224;
+                } else {
+                    value = 192;
                     break;
                 }
-                i = 192;
-                break;
-                break;
             case 155:
-                if (!(128 == i || 129 == i)) {
+                if (!(128 == value || 129 == value)) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
+                break;
             case 156:
-                if (i < 128 || i > 131) {
+                if (value < 128 || value > 131) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
-            case MM_STATE /*163*/:
-                if (i < 128 || i > 132) {
+                break;
+            case MM_STATE /* 163 */:
+                if (value < 128 || value > 132) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
-            case STORE_STATUS /*165*/:
-                if (i <= 193 || i >= 224) {
-                    if (i <= 228 || i > 255) {
-                        if (i < 128 || ((i > 128 && i < 192) || i > 255)) {
-                            i = 224;
+                break;
+            case STORE_STATUS /* 165 */:
+                if (value <= 193 || value >= 224) {
+                    if (value <= 228 || value > 255) {
+                        if (value < 128 || ((value > 128 && value < 192) || value > 255)) {
+                            value = 224;
                             break;
                         }
+                    } else {
+                        value = 224;
+                        break;
                     }
-                    i = 224;
+                } else {
+                    value = 192;
                     break;
                 }
-                i = 192;
-                break;
-                break;
-            case RECOMMENDED_RETRIEVAL_MODE /*180*/:
-                if (128 != i) {
+            case RECOMMENDED_RETRIEVAL_MODE /* 180 */:
+                if (128 != value) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
                 break;
-            case CONTENT_CLASS /*186*/:
-                if (i < 128 || i > 135) {
+            case CONTENT_CLASS /* 186 */:
+                if (value < 128 || value > 135) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
-            case CANCEL_STATUS /*191*/:
-                if (!(128 == i || 129 == i)) {
+                break;
+            case CANCEL_STATUS /* 191 */:
+                if (!(128 == value || 129 == value)) {
                     throw new InvalidHeaderValueException("Invalid Octet value!");
                 }
-            default:
-                throw new RuntimeException("Invalid header field!");
+                break;
         }
-        this.mHeaderMap.put(Integer.valueOf(i2), Integer.valueOf(i));
+        this.mHeaderMap.put(Integer.valueOf(field), Integer.valueOf(value));
     }
 
-    /* Access modifiers changed, original: protected */
-    public void setTextString(byte[] bArr, int i) {
-        if (bArr == null) {
+    /* JADX INFO: Access modifiers changed from: protected */
+    public byte[] getTextString(int field) {
+        return (byte[]) this.mHeaderMap.get(Integer.valueOf(field));
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void setTextString(byte[] value, int field) {
+        if (value == null) {
             throw new NullPointerException();
         }
-        switch (i) {
+        switch (field) {
             case 131:
             case 132:
             case 138:
             case 139:
             case 152:
-            case REPLY_CHARGING_ID /*158*/:
-            case APPLIC_ID /*183*/:
-            case REPLY_APPLIC_ID /*184*/:
-            case AUX_APPLIC_ID /*185*/:
-            case REPLACE_ID /*189*/:
-            case CANCEL_ID /*190*/:
-                this.mHeaderMap.put(Integer.valueOf(i), bArr);
+            case REPLY_CHARGING_ID /* 158 */:
+            case APPLIC_ID /* 183 */:
+            case REPLY_APPLIC_ID /* 184 */:
+            case AUX_APPLIC_ID /* 185 */:
+            case REPLACE_ID /* 189 */:
+            case CANCEL_ID /* 190 */:
+                this.mHeaderMap.put(Integer.valueOf(field), value);
+                return;
+            default:
+                throw new RuntimeException("Invalid header field!");
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public EncodedStringValue getEncodedStringValue(int field) {
+        return (EncodedStringValue) this.mHeaderMap.get(Integer.valueOf(field));
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public EncodedStringValue[] getEncodedStringValues(int field) {
+        ArrayList<EncodedStringValue> list = (ArrayList) this.mHeaderMap.get(Integer.valueOf(field));
+        if (list == null) {
+            return null;
+        }
+        return (EncodedStringValue[]) list.toArray(new EncodedStringValue[list.size()]);
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void setEncodedStringValue(EncodedStringValue value, int field) {
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        switch (field) {
+            case 137:
+            case 147:
+            case 150:
+            case 154:
+            case 160:
+            case MM_FLAGS /* 164 */:
+            case STORE_STATUS_TEXT /* 166 */:
+            case RECOMMENDED_RETRIEVAL_MODE_TEXT /* 181 */:
+            case STATUS_TEXT /* 182 */:
+                this.mHeaderMap.put(Integer.valueOf(field), value);
+                return;
+            default:
+                throw new RuntimeException("Invalid header field!");
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void setEncodedStringValues(EncodedStringValue[] value, int field) {
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        switch (field) {
+            case 129:
+            case 130:
+            case 151:
+                ArrayList<EncodedStringValue> list = new ArrayList<>();
+                for (EncodedStringValue encodedStringValue : value) {
+                    list.add(encodedStringValue);
+                }
+                this.mHeaderMap.put(Integer.valueOf(field), list);
+                return;
+            default:
+                throw new RuntimeException("Invalid header field!");
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void appendEncodedStringValue(EncodedStringValue value, int field) {
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        switch (field) {
+            case 129:
+            case 130:
+            case 151:
+                ArrayList<EncodedStringValue> list = (ArrayList) this.mHeaderMap.get(Integer.valueOf(field));
+                if (list == null) {
+                    list = new ArrayList<>();
+                }
+                list.add(value);
+                this.mHeaderMap.put(Integer.valueOf(field), list);
+                return;
+            default:
+                throw new RuntimeException("Invalid header field!");
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public long getLongInteger(int field) {
+        Long longInteger = (Long) this.mHeaderMap.get(Integer.valueOf(field));
+        if (longInteger == null) {
+            return -1L;
+        }
+        return longInteger.longValue();
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void setLongInteger(long value, int field) {
+        switch (field) {
+            case 133:
+            case 135:
+            case 136:
+            case 142:
+            case 157:
+            case REPLY_CHARGING_SIZE /* 159 */:
+            case PREVIOUSLY_SENT_DATE /* 161 */:
+            case MESSAGE_COUNT /* 173 */:
+            case START /* 175 */:
+            case LIMIT /* 179 */:
+                this.mHeaderMap.put(Integer.valueOf(field), Long.valueOf(value));
                 return;
             default:
                 throw new RuntimeException("Invalid header field!");

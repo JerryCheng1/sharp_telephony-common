@@ -8,43 +8,246 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.RemoteException;
 import android.os.SystemProperties;
-import android.provider.Settings.Global;
-import android.provider.Settings.SettingNotFoundException;
-import android.provider.Telephony.BaseMmsColumns;
-import android.provider.Telephony.Mms.Part;
+import android.provider.Settings;
+import android.provider.Telephony;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Slog;
+import com.android.internal.telephony.cat.BerTlv;
 import com.android.internal.telephony.cdma.sms.BearerData;
 import com.google.android.mms.pdu.PduHeaders;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import libcore.icu.ICU;
 import libcore.icu.TimeZoneNames;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class MccTable {
     static final String LOG_TAG = "MccTable";
-    static ArrayList<MccEntry> sTable = new ArrayList(240);
+    static ArrayList<MccEntry> sTable = new ArrayList<>(240);
 
-    static class MccEntry implements Comparable<MccEntry> {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class MccEntry implements Comparable<MccEntry> {
         final String mIso;
         final int mMcc;
         final int mSmallestDigitsMnc;
 
-        MccEntry(int i, String str, int i2) {
-            if (str == null) {
+        MccEntry(int mnc, String iso, int smallestDigitsMCC) {
+            if (iso == null) {
                 throw new NullPointerException();
             }
-            this.mMcc = i;
-            this.mIso = str;
-            this.mSmallestDigitsMnc = i2;
+            this.mMcc = mnc;
+            this.mIso = iso;
+            this.mSmallestDigitsMnc = smallestDigitsMCC;
         }
 
-        public int compareTo(MccEntry mccEntry) {
-            return this.mMcc - mccEntry.mMcc;
+        public int compareTo(MccEntry o) {
+            return this.mMcc - o.mMcc;
         }
+    }
+
+    private static MccEntry entryForMcc(int mcc) {
+        int index = Collections.binarySearch(sTable, new MccEntry(mcc, "", 0));
+        if (index < 0) {
+            return null;
+        }
+        return sTable.get(index);
+    }
+
+    public static String defaultTimeZoneForMcc(int mcc) {
+        MccEntry entry = entryForMcc(mcc);
+        if (entry == null) {
+            return null;
+        }
+        String[] tz = TimeZoneNames.forLocale(new Locale("", entry.mIso));
+        if (tz.length != 0) {
+            return tz[0];
+        }
+        return null;
+    }
+
+    public static String countryCodeForMcc(int mcc) {
+        MccEntry entry = entryForMcc(mcc);
+        return entry == null ? "" : entry.mIso;
+    }
+
+    public static String defaultLanguageForMcc(int mcc) {
+        MccEntry entry = entryForMcc(mcc);
+        if (entry == null) {
+            Slog.d(LOG_TAG, "defaultLanguageForMcc(" + mcc + "): no country for mcc");
+            return null;
+        }
+        String likelyLanguage = ICU.addLikelySubtags(new Locale("und", entry.mIso)).getLanguage();
+        Slog.d(LOG_TAG, "defaultLanguageForMcc(" + mcc + "): country " + entry.mIso + " uses " + likelyLanguage);
+        return likelyLanguage;
+    }
+
+    public static int smallestDigitsMccForMnc(int mcc) {
+        MccEntry entry = entryForMcc(mcc);
+        if (entry == null) {
+            return 2;
+        }
+        return entry.mSmallestDigitsMnc;
+    }
+
+    public static void updateMccMncConfiguration(Context context, String mccmnc, boolean fromServiceState) {
+        Slog.d(LOG_TAG, "updateMccMncConfiguration mccmnc='" + mccmnc + "' fromServiceState=" + fromServiceState);
+        if (Build.IS_DEBUGGABLE) {
+            String overrideMcc = SystemProperties.get("persist.sys.override_mcc");
+            if (!TextUtils.isEmpty(overrideMcc)) {
+                mccmnc = overrideMcc;
+                Slog.d(LOG_TAG, "updateMccMncConfiguration overriding mccmnc='" + mccmnc + "'");
+            }
+        }
+        if (!TextUtils.isEmpty(mccmnc)) {
+            Slog.d(LOG_TAG, "updateMccMncConfiguration defaultMccMnc=" + TelephonyManager.getDefault().getSimOperator());
+            try {
+                int mcc = Integer.parseInt(mccmnc.substring(0, 3));
+                int mnc = Integer.parseInt(mccmnc.substring(3));
+                Slog.d(LOG_TAG, "updateMccMncConfiguration: mcc=" + mcc + ", mnc=" + mnc);
+                Locale locale = null;
+                if (mcc != 0) {
+                    setTimezoneFromMccIfNeeded(context, mcc);
+                    locale = getLocaleFromMcc(context, mcc);
+                }
+                if (fromServiceState) {
+                    setWifiCountryCodeFromMcc(context, mcc);
+                    return;
+                }
+                try {
+                    Configuration config = new Configuration();
+                    boolean updateConfig = false;
+                    if (mcc != 0) {
+                        config.mcc = mcc;
+                        if (mnc == 0) {
+                            mnc = 65535;
+                        }
+                        config.mnc = mnc;
+                        updateConfig = true;
+                    }
+                    if (locale != null) {
+                        config.setLocale(locale);
+                        updateConfig = true;
+                    }
+                    if (updateConfig) {
+                        Slog.d(LOG_TAG, "updateMccMncConfiguration updateConfig config=" + config);
+                        ActivityManagerNative.getDefault().updateConfiguration(config);
+                        return;
+                    }
+                    Slog.d(LOG_TAG, "updateMccMncConfiguration nothing to update");
+                } catch (RemoteException e) {
+                    Slog.e(LOG_TAG, "Can't update configuration", e);
+                }
+            } catch (NumberFormatException e2) {
+                Slog.e(LOG_TAG, "Error parsing IMSI: " + mccmnc);
+            }
+        } else if (fromServiceState) {
+            setWifiCountryCodeFromMcc(context, 0);
+        }
+    }
+
+    private static boolean canUpdateLocale(Context context) {
+        return !userHasPersistedLocale() && !isDeviceProvisioned(context);
+    }
+
+    private static boolean userHasPersistedLocale() {
+        return !SystemProperties.get("persist.sys.language", "").isEmpty() || !SystemProperties.get("persist.sys.country", "").isEmpty();
+    }
+
+    private static boolean isDeviceProvisioned(Context context) {
+        try {
+            return Settings.Global.getInt(context.getContentResolver(), "device_provisioned") != 0;
+        } catch (Settings.SettingNotFoundException e) {
+            return false;
+        }
+    }
+
+    private static Locale getLocaleForLanguageCountry(Context context, String language, String country) {
+        Locale firstMatch;
+        if (language == null) {
+            Slog.d(LOG_TAG, "getLocaleForLanguageCountry: skipping no language");
+            return null;
+        }
+        if (country == null) {
+            country = "";
+        }
+        if (isDebuggingMccOverride() || canUpdateLocale(context)) {
+            Locale target = new Locale(language, country);
+            try {
+                List<String> locales = new ArrayList<>(Arrays.asList(context.getAssets().getLocales()));
+                locales.remove("ar-XB");
+                locales.remove("en-XA");
+                firstMatch = null;
+                for (String locale : locales) {
+                    Locale l = Locale.forLanguageTag(locale.replace('_', '-'));
+                    if (l != null && !"und".equals(l.getLanguage()) && !l.getLanguage().isEmpty() && !l.getCountry().isEmpty() && l.getLanguage().equals(target.getLanguage())) {
+                        if (l.getCountry().equals(target.getCountry())) {
+                            Slog.d(LOG_TAG, "getLocaleForLanguageCountry: got perfect match: " + l.toLanguageTag());
+                            return l;
+                        } else if (firstMatch == null) {
+                            firstMatch = l;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Slog.d(LOG_TAG, "getLocaleForLanguageCountry: exception", e);
+            }
+            if (firstMatch != null) {
+                Slog.d(LOG_TAG, "getLocaleForLanguageCountry: got a language-only match: " + firstMatch.toLanguageTag());
+                return firstMatch;
+            }
+            Slog.d(LOG_TAG, "getLocaleForLanguageCountry: no locales for language " + language);
+            return null;
+        }
+        Slog.d(LOG_TAG, "getLocaleForLanguageCountry: not permitted to update locale");
+        return null;
+    }
+
+    private static boolean isDebuggingMccOverride() {
+        return Build.IS_DEBUGGABLE && !SystemProperties.get("persist.sys.override_mcc", "").isEmpty();
+    }
+
+    public static void setSystemLocale(Context context, String language, String country) {
+        Locale locale = getLocaleForLanguageCountry(context, language, country);
+        if (locale != null) {
+            Configuration config = new Configuration();
+            config.setLocale(locale);
+            config.userSetLocale = false;
+            Slog.d(LOG_TAG, "setSystemLocale: updateLocale config=" + config);
+            try {
+                ActivityManagerNative.getDefault().updateConfiguration(config);
+            } catch (RemoteException e) {
+                Slog.d(LOG_TAG, "setSystemLocale exception", e);
+            }
+        } else {
+            Slog.d(LOG_TAG, "setSystemLocale: no locale");
+        }
+    }
+
+    private static void setTimezoneFromMccIfNeeded(Context context, int mcc) {
+        String zoneId;
+        String timezone = SystemProperties.get("persist.sys.timezone");
+        if ((timezone == null || timezone.length() == 0) && (zoneId = defaultTimeZoneForMcc(mcc)) != null && zoneId.length() > 0) {
+            ((AlarmManager) context.getSystemService("alarm")).setTimeZone(zoneId);
+            Slog.d(LOG_TAG, "timezone set to " + zoneId);
+        }
+    }
+
+    private static Locale getLocaleFromMcc(Context context, int mcc) {
+        String language = defaultLanguageForMcc(mcc);
+        String country = countryCodeForMcc(mcc);
+        Slog.d(LOG_TAG, "getLocaleFromMcc to " + language + "_" + country + " mcc=" + mcc);
+        return getLocaleForLanguageCountry(context, language, country);
+    }
+
+    private static void setWifiCountryCodeFromMcc(Context context, int mcc) {
+        String country = countryCodeForMcc(mcc);
+        Slog.d(LOG_TAG, "WIFI_COUNTRY_CODE set to " + country);
+        ((WifiManager) context.getSystemService("wifi")).setCountryCode(country, true);
     }
 
     static {
@@ -234,7 +437,7 @@ public final class MccTable {
         sTable.add(new MccEntry(623, "cf", 2));
         sTable.add(new MccEntry(624, "cm", 2));
         sTable.add(new MccEntry(625, "cv", 2));
-        sTable.add(new MccEntry(626, BaseMmsColumns.STATUS, 2));
+        sTable.add(new MccEntry(626, Telephony.BaseMmsColumns.STATUS, 2));
         sTable.add(new MccEntry(627, "gq", 2));
         sTable.add(new MccEntry(628, "ga", 2));
         sTable.add(new MccEntry(629, "cg", 2));
@@ -276,7 +479,7 @@ public final class MccTable {
         sTable.add(new MccEntry(716, "pe", 2));
         sTable.add(new MccEntry(722, "ar", 3));
         sTable.add(new MccEntry(724, "br", 2));
-        sTable.add(new MccEntry(730, Part.CONTENT_LOCATION, 2));
+        sTable.add(new MccEntry(730, Telephony.Mms.Part.CONTENT_LOCATION, 2));
         sTable.add(new MccEntry(732, "co", 3));
         sTable.add(new MccEntry(734, "ve", 2));
         sTable.add(new MccEntry(736, "bo", 2));
@@ -288,203 +491,5 @@ public final class MccTable {
         sTable.add(new MccEntry(748, "uy", 2));
         sTable.add(new MccEntry(750, "fk", 2));
         Collections.sort(sTable);
-    }
-
-    private static boolean canUpdateLocale(Context context) {
-        return (userHasPersistedLocale() || isDeviceProvisioned(context)) ? false : true;
-    }
-
-    public static String countryCodeForMcc(int i) {
-        MccEntry entryForMcc = entryForMcc(i);
-        return entryForMcc == null ? "" : entryForMcc.mIso;
-    }
-
-    public static String defaultLanguageForMcc(int i) {
-        MccEntry entryForMcc = entryForMcc(i);
-        if (entryForMcc == null) {
-            Slog.d(LOG_TAG, "defaultLanguageForMcc(" + i + "): no country for mcc");
-            return null;
-        }
-        String language = ICU.addLikelySubtags(new Locale("und", entryForMcc.mIso)).getLanguage();
-        Slog.d(LOG_TAG, "defaultLanguageForMcc(" + i + "): country " + entryForMcc.mIso + " uses " + language);
-        return language;
-    }
-
-    public static String defaultTimeZoneForMcc(int i) {
-        MccEntry entryForMcc = entryForMcc(i);
-        if (entryForMcc != null) {
-            String[] forLocale = TimeZoneNames.forLocale(new Locale("", entryForMcc.mIso));
-            if (forLocale.length != 0) {
-                return forLocale[0];
-            }
-        }
-        return null;
-    }
-
-    private static MccEntry entryForMcc(int i) {
-        int binarySearch = Collections.binarySearch(sTable, new MccEntry(i, "", 0));
-        return binarySearch < 0 ? null : (MccEntry) sTable.get(binarySearch);
-    }
-
-    private static Locale getLocaleForLanguageCountry(Context context, String str, String str2) {
-        if (str == null) {
-            Slog.d(LOG_TAG, "getLocaleForLanguageCountry: skipping no language");
-            return null;
-        }
-        if (str2 == null) {
-            str2 = "";
-        }
-        if (isDebuggingMccOverride() || canUpdateLocale(context)) {
-            Locale locale = new Locale(str, str2);
-            try {
-                ArrayList<String> arrayList = new ArrayList(Arrays.asList(context.getAssets().getLocales()));
-                arrayList.remove("ar-XB");
-                arrayList.remove("en-XA");
-                Locale locale2 = null;
-                for (String replace : arrayList) {
-                    Locale forLanguageTag = Locale.forLanguageTag(replace.replace('_', '-'));
-                    if (!(forLanguageTag == null || "und".equals(forLanguageTag.getLanguage()) || forLanguageTag.getLanguage().isEmpty() || forLanguageTag.getCountry().isEmpty() || !forLanguageTag.getLanguage().equals(locale.getLanguage()))) {
-                        if (forLanguageTag.getCountry().equals(locale.getCountry())) {
-                            Slog.d(LOG_TAG, "getLocaleForLanguageCountry: got perfect match: " + forLanguageTag.toLanguageTag());
-                            return forLanguageTag;
-                        } else if (locale2 == null) {
-                            locale2 = forLanguageTag;
-                        }
-                    }
-                }
-                if (locale2 != null) {
-                    Slog.d(LOG_TAG, "getLocaleForLanguageCountry: got a language-only match: " + locale2.toLanguageTag());
-                    return locale2;
-                }
-                Slog.d(LOG_TAG, "getLocaleForLanguageCountry: no locales for language " + str);
-                return null;
-            } catch (Exception e) {
-                Slog.d(LOG_TAG, "getLocaleForLanguageCountry: exception", e);
-            }
-        } else {
-            Slog.d(LOG_TAG, "getLocaleForLanguageCountry: not permitted to update locale");
-            return null;
-        }
-    }
-
-    private static Locale getLocaleFromMcc(Context context, int i) {
-        String defaultLanguageForMcc = defaultLanguageForMcc(i);
-        String countryCodeForMcc = countryCodeForMcc(i);
-        Slog.d(LOG_TAG, "getLocaleFromMcc to " + defaultLanguageForMcc + "_" + countryCodeForMcc + " mcc=" + i);
-        return getLocaleForLanguageCountry(context, defaultLanguageForMcc, countryCodeForMcc);
-    }
-
-    private static boolean isDebuggingMccOverride() {
-        return Build.IS_DEBUGGABLE && !SystemProperties.get("persist.sys.override_mcc", "").isEmpty();
-    }
-
-    private static boolean isDeviceProvisioned(Context context) {
-        try {
-            return Global.getInt(context.getContentResolver(), "device_provisioned") != 0;
-        } catch (SettingNotFoundException e) {
-            return false;
-        }
-    }
-
-    public static void setSystemLocale(Context context, String str, String str2) {
-        Locale localeForLanguageCountry = getLocaleForLanguageCountry(context, str, str2);
-        if (localeForLanguageCountry != null) {
-            Configuration configuration = new Configuration();
-            configuration.setLocale(localeForLanguageCountry);
-            configuration.userSetLocale = false;
-            Slog.d(LOG_TAG, "setSystemLocale: updateLocale config=" + configuration);
-            try {
-                ActivityManagerNative.getDefault().updateConfiguration(configuration);
-                return;
-            } catch (RemoteException e) {
-                Slog.d(LOG_TAG, "setSystemLocale exception", e);
-                return;
-            }
-        }
-        Slog.d(LOG_TAG, "setSystemLocale: no locale");
-    }
-
-    private static void setTimezoneFromMccIfNeeded(Context context, int i) {
-        String str = SystemProperties.get("persist.sys.timezone");
-        if (str == null || str.length() == 0) {
-            String defaultTimeZoneForMcc = defaultTimeZoneForMcc(i);
-            if (defaultTimeZoneForMcc != null && defaultTimeZoneForMcc.length() > 0) {
-                ((AlarmManager) context.getSystemService("alarm")).setTimeZone(defaultTimeZoneForMcc);
-                Slog.d(LOG_TAG, "timezone set to " + defaultTimeZoneForMcc);
-            }
-        }
-    }
-
-    private static void setWifiCountryCodeFromMcc(Context context, int i) {
-        String countryCodeForMcc = countryCodeForMcc(i);
-        Slog.d(LOG_TAG, "WIFI_COUNTRY_CODE set to " + countryCodeForMcc);
-        ((WifiManager) context.getSystemService("wifi")).setCountryCode(countryCodeForMcc, true);
-    }
-
-    public static int smallestDigitsMccForMnc(int i) {
-        MccEntry entryForMcc = entryForMcc(i);
-        return entryForMcc == null ? 2 : entryForMcc.mSmallestDigitsMnc;
-    }
-
-    public static void updateMccMncConfiguration(Context context, String str, boolean z) {
-        CharSequence str2;
-        Slog.d(LOG_TAG, "updateMccMncConfiguration mccmnc='" + str2 + "' fromServiceState=" + z);
-        if (Build.IS_DEBUGGABLE) {
-            String str3 = SystemProperties.get("persist.sys.override_mcc");
-            if (!TextUtils.isEmpty(str3)) {
-                Slog.d(LOG_TAG, "updateMccMncConfiguration overriding mccmnc='" + str3 + "'");
-                str2 = str3;
-            }
-        }
-        if (!TextUtils.isEmpty(str2)) {
-            Slog.d(LOG_TAG, "updateMccMncConfiguration defaultMccMnc=" + TelephonyManager.getDefault().getSimOperator());
-            try {
-                int parseInt = Integer.parseInt(str2.substring(0, 3));
-                int parseInt2 = Integer.parseInt(str2.substring(3));
-                Slog.d(LOG_TAG, "updateMccMncConfiguration: mcc=" + parseInt + ", mnc=" + parseInt2);
-                Locale locale = null;
-                if (parseInt != 0) {
-                    setTimezoneFromMccIfNeeded(context, parseInt);
-                    locale = getLocaleFromMcc(context, parseInt);
-                }
-                if (z) {
-                    setWifiCountryCodeFromMcc(context, parseInt);
-                    return;
-                }
-                try {
-                    Configuration configuration = new Configuration();
-                    if (parseInt != 0) {
-                        configuration.mcc = parseInt;
-                        if (parseInt2 == 0) {
-                            parseInt2 = 65535;
-                        }
-                        configuration.mnc = parseInt2;
-                        parseInt2 = 1;
-                    } else {
-                        parseInt2 = 0;
-                    }
-                    if (locale != null) {
-                        configuration.setLocale(locale);
-                        parseInt2 = 1;
-                    }
-                    if (parseInt2 != 0) {
-                        Slog.d(LOG_TAG, "updateMccMncConfiguration updateConfig config=" + configuration);
-                        ActivityManagerNative.getDefault().updateConfiguration(configuration);
-                        return;
-                    }
-                    Slog.d(LOG_TAG, "updateMccMncConfiguration nothing to update");
-                } catch (RemoteException e) {
-                    Slog.e(LOG_TAG, "Can't update configuration", e);
-                }
-            } catch (NumberFormatException e2) {
-                Slog.e(LOG_TAG, "Error parsing IMSI: " + str2);
-            }
-        } else if (z) {
-            setWifiCountryCodeFromMcc(context, 0);
-        }
-    }
-
-    private static boolean userHasPersistedLocale() {
-        return (SystemProperties.get("persist.sys.language", "").isEmpty() && SystemProperties.get("persist.sys.country", "").isEmpty()) ? false : true;
     }
 }

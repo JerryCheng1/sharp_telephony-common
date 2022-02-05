@@ -1,5 +1,6 @@
 package com.android.internal.telephony;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class SmsAddress {
     public static final int TON_ABBREVIATED = 6;
     public static final int TON_ALPHANUMERIC = 5;
@@ -12,10 +13,6 @@ public abstract class SmsAddress {
     public byte[] origBytes;
     public int ton;
 
-    public boolean couldBeEmailGateway() {
-        return this.address.length() <= 4;
-    }
-
     public String getAddressString() {
         return this.address;
     }
@@ -26,5 +23,9 @@ public abstract class SmsAddress {
 
     public boolean isNetworkSpecific() {
         return this.ton == 3;
+    }
+
+    public boolean couldBeEmailGateway() {
+        return this.address.length() <= 4;
     }
 }

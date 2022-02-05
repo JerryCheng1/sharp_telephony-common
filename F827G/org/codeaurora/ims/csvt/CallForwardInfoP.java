@@ -2,16 +2,18 @@ package org.codeaurora.ims.csvt;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class CallForwardInfoP implements Parcelable {
-    public static final Creator<CallForwardInfoP> CREATOR = new Creator<CallForwardInfoP>() {
-        public CallForwardInfoP createFromParcel(Parcel parcel) {
-            return new CallForwardInfoP(parcel);
+    public static final Parcelable.Creator<CallForwardInfoP> CREATOR = new Parcelable.Creator<CallForwardInfoP>() { // from class: org.codeaurora.ims.csvt.CallForwardInfoP.1
+        @Override // android.os.Parcelable.Creator
+        public CallForwardInfoP createFromParcel(Parcel in) {
+            return new CallForwardInfoP(in);
         }
 
-        public CallForwardInfoP[] newArray(int i) {
-            return new CallForwardInfoP[i];
+        @Override // android.os.Parcelable.Creator
+        public CallForwardInfoP[] newArray(int size) {
+            return new CallForwardInfoP[size];
         }
     };
     public String number;
@@ -21,25 +23,30 @@ public class CallForwardInfoP implements Parcelable {
     public int timeSeconds;
     public int toa;
 
-    public CallForwardInfoP(Parcel parcel) {
-        this.status = parcel.readInt();
-        this.reason = parcel.readInt();
-        this.toa = parcel.readInt();
-        this.number = parcel.readString();
-        this.timeSeconds = parcel.readInt();
-        this.serviceClass = parcel.readInt();
-    }
-
+    @Override // android.os.Parcelable
     public int describeContents() {
         return 0;
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeInt(this.status);
-        parcel.writeInt(this.reason);
-        parcel.writeInt(this.toa);
-        parcel.writeString(this.number);
-        parcel.writeInt(this.timeSeconds);
-        parcel.writeInt(this.serviceClass);
+    public CallForwardInfoP() {
+    }
+
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel out, int flags) {
+        out.writeInt(this.status);
+        out.writeInt(this.reason);
+        out.writeInt(this.toa);
+        out.writeString(this.number);
+        out.writeInt(this.timeSeconds);
+        out.writeInt(this.serviceClass);
+    }
+
+    public CallForwardInfoP(Parcel in) {
+        this.status = in.readInt();
+        this.reason = in.readInt();
+        this.toa = in.readInt();
+        this.number = in.readString();
+        this.timeSeconds = in.readInt();
+        this.serviceClass = in.readInt();
     }
 }

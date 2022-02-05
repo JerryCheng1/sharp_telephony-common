@@ -6,15 +6,14 @@ import android.os.Handler;
 import android.os.Message;
 import android.telephony.Rlog;
 import com.android.internal.telephony.CommandException;
-import com.android.internal.telephony.CommandException.Error;
 import com.android.internal.telephony.MmiCode;
-import com.android.internal.telephony.MmiCode.State;
 import com.android.internal.telephony.Phone;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppState;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.UiccCardApplication;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class CdmaMmiCode extends Handler implements MmiCode {
     static final String ACTION_REGISTER = "**";
     static final int EVENT_SET_COMPLETE = 1;
@@ -43,177 +42,108 @@ public final class CdmaMmiCode extends Handler implements MmiCode {
     String mSia;
     String mSib;
     String mSic;
-    State mState = State.PENDING;
+    MmiCode.State mState = MmiCode.State.PENDING;
     UiccCardApplication mUiccApplication;
 
-    CdmaMmiCode(CDMAPhone cDMAPhone, UiccCardApplication uiccCardApplication) {
-        super(cDMAPhone.getHandler().getLooper());
-        this.mPhone = cDMAPhone;
-        this.mContext = cDMAPhone.getContext();
-        this.mUiccApplication = uiccCardApplication;
-    }
-
-    private CharSequence getScString() {
-        return (this.mSc == null || !isPinPukCommand()) ? "" : this.mContext.getText(17039573);
-    }
-
-    private void handlePasswordError(int i) {
-        this.mState = State.FAILED;
-        StringBuilder stringBuilder = new StringBuilder(getScString());
-        stringBuilder.append("\n");
-        stringBuilder.append(this.mContext.getText(i));
-        this.mMessage = stringBuilder;
-        this.mPhone.onMMIDone(this);
-    }
-
-    private static String makeEmptyNull(String str) {
-        return (str == null || str.length() != 0) ? str : null;
-    }
-
-    public static CdmaMmiCode newFromDialString(String str, CDMAPhone cDMAPhone, UiccCardApplication uiccCardApplication) {
-        Matcher matcher = sPatternSuppService.matcher(str);
-        if (!matcher.matches()) {
+    public static CdmaMmiCode newFromDialString(String dialString, CDMAPhone phone, UiccCardApplication app) {
+        Matcher m = sPatternSuppService.matcher(dialString);
+        if (!m.matches()) {
             return null;
         }
-        CdmaMmiCode cdmaMmiCode = new CdmaMmiCode(cDMAPhone, uiccCardApplication);
-        cdmaMmiCode.mPoundString = makeEmptyNull(matcher.group(1));
-        cdmaMmiCode.mAction = makeEmptyNull(matcher.group(2));
-        cdmaMmiCode.mSc = makeEmptyNull(matcher.group(3));
-        cdmaMmiCode.mSia = makeEmptyNull(matcher.group(5));
-        cdmaMmiCode.mSib = makeEmptyNull(matcher.group(7));
-        cdmaMmiCode.mSic = makeEmptyNull(matcher.group(9));
-        cdmaMmiCode.mPwd = makeEmptyNull(matcher.group(11));
-        cdmaMmiCode.mDialingNumber = makeEmptyNull(matcher.group(12));
-        return cdmaMmiCode;
+        CdmaMmiCode ret = new CdmaMmiCode(phone, app);
+        ret.mPoundString = makeEmptyNull(m.group(1));
+        ret.mAction = makeEmptyNull(m.group(2));
+        ret.mSc = makeEmptyNull(m.group(3));
+        ret.mSia = makeEmptyNull(m.group(5));
+        ret.mSib = makeEmptyNull(m.group(7));
+        ret.mSic = makeEmptyNull(m.group(9));
+        ret.mPwd = makeEmptyNull(m.group(11));
+        ret.mDialingNumber = makeEmptyNull(m.group(12));
+        return ret;
     }
 
-    private void onSetComplete(Message message, AsyncResult asyncResult) {
-        StringBuilder stringBuilder = new StringBuilder(getScString());
-        stringBuilder.append("\n");
-        if (asyncResult.exception != null) {
-            this.mState = State.FAILED;
-            if (asyncResult.exception instanceof CommandException) {
-                Error commandError = ((CommandException) asyncResult.exception).getCommandError();
-                if (commandError == Error.PASSWORD_INCORRECT) {
-                    if (isPinPukCommand()) {
-                        if (this.mSc.equals(SC_PUK) || this.mSc.equals(SC_PUK2)) {
-                            stringBuilder.append(this.mContext.getText(17039556));
-                        } else {
-                            stringBuilder.append(this.mContext.getText(17039555));
-                        }
-                        int i = message.arg1;
-                        if (i <= 0) {
-                            Rlog.d(LOG_TAG, "onSetComplete: PUK locked, cancel as lock screen will handle this");
-                            this.mState = State.CANCELLED;
-                        } else if (i > 0) {
-                            Rlog.d(LOG_TAG, "onSetComplete: attemptsRemaining=" + i);
-                            stringBuilder.append(this.mContext.getResources().getQuantityString(18087936, i, new Object[]{Integer.valueOf(i)}));
-                        }
-                    } else {
-                        stringBuilder.append(this.mContext.getText(17039553));
-                    }
-                } else if (commandError == Error.SIM_PUK2) {
-                    stringBuilder.append(this.mContext.getText(17039555));
-                    stringBuilder.append("\n");
-                    stringBuilder.append(this.mContext.getText(17039561));
-                } else if (commandError != Error.REQUEST_NOT_SUPPORTED) {
-                    stringBuilder.append(this.mContext.getText(17039546));
-                } else if (this.mSc.equals(SC_PIN)) {
-                    stringBuilder.append(this.mContext.getText(17039562));
-                }
-            } else {
-                stringBuilder.append(this.mContext.getText(17039546));
-            }
-        } else if (isRegister()) {
-            this.mState = State.COMPLETE;
-            stringBuilder.append(this.mContext.getText(17039551));
-        } else {
-            this.mState = State.FAILED;
-            stringBuilder.append(this.mContext.getText(17039546));
+    private static String makeEmptyNull(String s) {
+        if (s == null || s.length() != 0) {
+            return s;
         }
-        this.mMessage = stringBuilder;
-        this.mPhone.onMMIDone(this);
-    }
-
-    public void cancel() {
-        if (this.mState != State.COMPLETE && this.mState != State.FAILED) {
-            this.mState = State.CANCELLED;
-            this.mPhone.onMMIDone(this);
-        }
-    }
-
-    public String getDialString() {
         return null;
     }
 
+    CdmaMmiCode(CDMAPhone phone, UiccCardApplication app) {
+        super(phone.getHandler().getLooper());
+        this.mPhone = phone;
+        this.mContext = phone.getContext();
+        this.mUiccApplication = app;
+    }
+
+    @Override // com.android.internal.telephony.MmiCode
+    public MmiCode.State getState() {
+        return this.mState;
+    }
+
+    @Override // com.android.internal.telephony.MmiCode
     public CharSequence getMessage() {
         return this.mMessage;
     }
 
+    @Override // com.android.internal.telephony.MmiCode
     public Phone getPhone() {
         return this.mPhone;
     }
 
-    public State getState() {
-        return this.mState;
-    }
-
-    public CharSequence getUssdCode() {
-        return null;
-    }
-
-    public void handleMessage(Message message) {
-        if (message.what == 1) {
-            onSetComplete(message, (AsyncResult) message.obj);
-        } else {
-            Rlog.e(LOG_TAG, "Unexpected reply");
+    @Override // com.android.internal.telephony.MmiCode
+    public void cancel() {
+        if (this.mState != MmiCode.State.COMPLETE && this.mState != MmiCode.State.FAILED) {
+            this.mState = MmiCode.State.CANCELLED;
+            this.mPhone.onMMIDone(this);
         }
     }
 
+    @Override // com.android.internal.telephony.MmiCode
     public boolean isCancelable() {
         return false;
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public boolean isPinPukCommand() {
         return this.mSc != null && (this.mSc.equals(SC_PIN) || this.mSc.equals(SC_PIN2) || this.mSc.equals(SC_PUK) || this.mSc.equals(SC_PUK2));
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean isRegister() {
+    boolean isRegister() {
         return this.mAction != null && this.mAction.equals(ACTION_REGISTER);
     }
 
+    @Override // com.android.internal.telephony.MmiCode
     public boolean isUssdRequest() {
         Rlog.w(LOG_TAG, "isUssdRequest is not implemented in CdmaMmiCode");
         return false;
     }
 
-    /* Access modifiers changed, original: 0000 */
+    /* JADX INFO: Access modifiers changed from: package-private */
     public void processCode() {
         try {
             if (isPinPukCommand()) {
-                String str = this.mSia;
-                String str2 = this.mSib;
-                int length = str2.length();
+                String oldPinOrPuk = this.mSia;
+                String newPinOrPuk = this.mSib;
+                int pinLen = newPinOrPuk.length();
                 if (!isRegister()) {
                     throw new RuntimeException("Ivalid register/action=" + this.mAction);
-                } else if (!str2.equals(this.mSic)) {
+                } else if (!newPinOrPuk.equals(this.mSic)) {
                     handlePasswordError(17039557);
-                } else if (length < 4 || length > 8) {
+                } else if (pinLen < 4 || pinLen > 8) {
                     handlePasswordError(17039558);
-                } else if (this.mSc.equals(SC_PIN) && this.mUiccApplication != null && this.mUiccApplication.getState() == AppState.APPSTATE_PUK) {
+                } else if (this.mSc.equals(SC_PIN) && this.mUiccApplication != null && this.mUiccApplication.getState() == IccCardApplicationStatus.AppState.APPSTATE_PUK) {
                     handlePasswordError(17039560);
                 } else if (this.mUiccApplication != null) {
                     Rlog.d(LOG_TAG, "process mmi service code using UiccApp sc=" + this.mSc);
                     if (this.mSc.equals(SC_PIN)) {
-                        this.mUiccApplication.changeIccLockPassword(str, str2, obtainMessage(1, this));
+                        this.mUiccApplication.changeIccLockPassword(oldPinOrPuk, newPinOrPuk, obtainMessage(1, this));
                     } else if (this.mSc.equals(SC_PIN2)) {
-                        this.mUiccApplication.changeIccFdnPassword(str, str2, obtainMessage(1, this));
+                        this.mUiccApplication.changeIccFdnPassword(oldPinOrPuk, newPinOrPuk, obtainMessage(1, this));
                     } else if (this.mSc.equals(SC_PUK)) {
-                        this.mUiccApplication.supplyPuk(str, str2, obtainMessage(1, this));
+                        this.mUiccApplication.supplyPuk(oldPinOrPuk, newPinOrPuk, obtainMessage(1, this));
                     } else if (this.mSc.equals(SC_PUK2)) {
-                        this.mUiccApplication.supplyPuk2(str, str2, obtainMessage(1, this));
+                        this.mUiccApplication.supplyPuk2(oldPinOrPuk, newPinOrPuk, obtainMessage(1, this));
                     } else {
                         throw new RuntimeException("Unsupported service code=" + this.mSc);
                     }
@@ -222,9 +152,89 @@ public final class CdmaMmiCode extends Handler implements MmiCode {
                 }
             }
         } catch (RuntimeException e) {
-            this.mState = State.FAILED;
+            this.mState = MmiCode.State.FAILED;
             this.mMessage = this.mContext.getText(17039546);
             this.mPhone.onMMIDone(this);
         }
+    }
+
+    private void handlePasswordError(int res) {
+        this.mState = MmiCode.State.FAILED;
+        StringBuilder sb = new StringBuilder(getScString());
+        sb.append("\n");
+        sb.append(this.mContext.getText(res));
+        this.mMessage = sb;
+        this.mPhone.onMMIDone(this);
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        if (msg.what == 1) {
+            onSetComplete(msg, (AsyncResult) msg.obj);
+        } else {
+            Rlog.e(LOG_TAG, "Unexpected reply");
+        }
+    }
+
+    private CharSequence getScString() {
+        return (this.mSc == null || !isPinPukCommand()) ? "" : this.mContext.getText(17039573);
+    }
+
+    private void onSetComplete(Message msg, AsyncResult ar) {
+        StringBuilder sb = new StringBuilder(getScString());
+        sb.append("\n");
+        if (ar.exception != null) {
+            this.mState = MmiCode.State.FAILED;
+            if (ar.exception instanceof CommandException) {
+                CommandException.Error err = ((CommandException) ar.exception).getCommandError();
+                if (err == CommandException.Error.PASSWORD_INCORRECT) {
+                    if (isPinPukCommand()) {
+                        if (this.mSc.equals(SC_PUK) || this.mSc.equals(SC_PUK2)) {
+                            sb.append(this.mContext.getText(17039556));
+                        } else {
+                            sb.append(this.mContext.getText(17039555));
+                        }
+                        int attemptsRemaining = msg.arg1;
+                        if (attemptsRemaining <= 0) {
+                            Rlog.d(LOG_TAG, "onSetComplete: PUK locked, cancel as lock screen will handle this");
+                            this.mState = MmiCode.State.CANCELLED;
+                        } else if (attemptsRemaining > 0) {
+                            Rlog.d(LOG_TAG, "onSetComplete: attemptsRemaining=" + attemptsRemaining);
+                            sb.append(this.mContext.getResources().getQuantityString(18087936, attemptsRemaining, Integer.valueOf(attemptsRemaining)));
+                        }
+                    } else {
+                        sb.append(this.mContext.getText(17039553));
+                    }
+                } else if (err == CommandException.Error.SIM_PUK2) {
+                    sb.append(this.mContext.getText(17039555));
+                    sb.append("\n");
+                    sb.append(this.mContext.getText(17039561));
+                } else if (err != CommandException.Error.REQUEST_NOT_SUPPORTED) {
+                    sb.append(this.mContext.getText(17039546));
+                } else if (this.mSc.equals(SC_PIN)) {
+                    sb.append(this.mContext.getText(17039562));
+                }
+            } else {
+                sb.append(this.mContext.getText(17039546));
+            }
+        } else if (isRegister()) {
+            this.mState = MmiCode.State.COMPLETE;
+            sb.append(this.mContext.getText(17039551));
+        } else {
+            this.mState = MmiCode.State.FAILED;
+            sb.append(this.mContext.getText(17039546));
+        }
+        this.mMessage = sb;
+        this.mPhone.onMMIDone(this);
+    }
+
+    @Override // com.android.internal.telephony.MmiCode
+    public CharSequence getUssdCode() {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.MmiCode
+    public String getDialString() {
+        return null;
     }
 }

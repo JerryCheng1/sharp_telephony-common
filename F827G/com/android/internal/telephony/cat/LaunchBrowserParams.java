@@ -2,24 +2,29 @@ package com.android.internal.telephony.cat;
 
 import android.graphics.Bitmap;
 
-class LaunchBrowserParams extends CommandParams {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* compiled from: CommandParams.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class LaunchBrowserParams extends CommandParams {
     TextMessage mConfirmMsg;
     LaunchBrowserMode mMode;
     String mUrl;
 
-    LaunchBrowserParams(CommandDetails commandDetails, TextMessage textMessage, String str, LaunchBrowserMode launchBrowserMode) {
-        super(commandDetails);
-        this.mConfirmMsg = textMessage;
-        this.mMode = launchBrowserMode;
-        this.mUrl = str;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public LaunchBrowserParams(CommandDetails cmdDet, TextMessage confirmMsg, String url, LaunchBrowserMode mode) {
+        super(cmdDet);
+        this.mConfirmMsg = confirmMsg;
+        this.mMode = mode;
+        this.mUrl = url;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean setIcon(Bitmap bitmap) {
-        if (bitmap == null || this.mConfirmMsg == null) {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    @Override // com.android.internal.telephony.cat.CommandParams
+    public boolean setIcon(Bitmap icon) {
+        if (icon == null || this.mConfirmMsg == null) {
             return false;
         }
-        this.mConfirmMsg.icon = bitmap;
+        this.mConfirmMsg.icon = icon;
         return true;
     }
 }

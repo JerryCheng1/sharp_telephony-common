@@ -1,18 +1,23 @@
 package com.android.internal.telephony.cat;
 
-class RilMessage {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* compiled from: CatService.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class RilMessage {
     Object mData;
     int mId;
     ResultCode mResCode;
 
-    RilMessage(int i, String str) {
-        this.mId = i;
-        this.mData = str;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public RilMessage(int msgId, String rawData) {
+        this.mId = msgId;
+        this.mData = rawData;
     }
 
-    RilMessage(RilMessage rilMessage) {
-        this.mId = rilMessage.mId;
-        this.mData = rilMessage.mData;
-        this.mResCode = rilMessage.mResCode;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public RilMessage(RilMessage other) {
+        this.mId = other.mId;
+        this.mData = other.mData;
+        this.mResCode = other.mResCode;
     }
 }

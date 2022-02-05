@@ -5,75 +5,73 @@ import com.android.internal.telephony.GsmAlphabet;
 import java.io.ByteArrayOutputStream;
 import java.io.UnsupportedEncodingException;
 
+/* compiled from: ResponseData.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 class GetInkeyInputResponseData extends ResponseData {
-    protected static final byte GET_INKEY_NO = (byte) 0;
-    protected static final byte GET_INKEY_YES = (byte) 1;
+    protected static final byte GET_INKEY_NO = 0;
+    protected static final byte GET_INKEY_YES = 1;
     public String mInData;
     private boolean mIsPacked;
     private boolean mIsUcs2;
     private boolean mIsYesNo;
     private boolean mYesNoResponse;
 
-    public GetInkeyInputResponseData(String str, boolean z, boolean z2) {
-        this.mIsUcs2 = z;
-        this.mIsPacked = z2;
-        this.mInData = str;
+    public GetInkeyInputResponseData(String inData, boolean ucs2, boolean packed) {
+        this.mIsUcs2 = ucs2;
+        this.mIsPacked = packed;
+        this.mInData = inData;
         this.mIsYesNo = false;
     }
 
-    public GetInkeyInputResponseData(boolean z) {
+    public GetInkeyInputResponseData(boolean yesNoResponse) {
         this.mIsUcs2 = false;
         this.mIsPacked = false;
         this.mInData = "";
         this.mIsYesNo = true;
-        this.mYesNoResponse = z;
+        this.mYesNoResponse = yesNoResponse;
     }
 
-    public void format(ByteArrayOutputStream byteArrayOutputStream) {
-        byte b = (byte) 1;
-        int i = 0;
-        if (byteArrayOutputStream != null) {
-            byte[] bArr;
-            int length;
-            byteArrayOutputStream.write(ComprehensionTlvTag.TEXT_STRING.value() | 128);
+    @Override // com.android.internal.telephony.cat.ResponseData
+    public void format(ByteArrayOutputStream buf) {
+        byte[] data;
+        byte b = 1;
+        if (buf != null) {
+            buf.write(ComprehensionTlvTag.TEXT_STRING.value() | 128);
             if (this.mIsYesNo) {
-                byte[] bArr2 = new byte[1];
+                data = new byte[1];
                 if (!this.mYesNoResponse) {
-                    b = GET_INKEY_NO;
+                    b = 0;
                 }
-                bArr2[0] = b;
-                bArr = bArr2;
+                data[0] = b;
             } else if (this.mInData == null || this.mInData.length() <= 0) {
-                bArr = new byte[0];
+                data = new byte[0];
             } else {
                 try {
                     if (this.mIsUcs2) {
-                        bArr = this.mInData.getBytes("UTF-16BE");
+                        data = this.mInData.getBytes("UTF-16BE");
                     } else if (this.mIsPacked) {
-                        length = this.mInData.length();
-                        bArr = new byte[length];
-                        System.arraycopy(GsmAlphabet.stringToGsm7BitPacked(this.mInData, 0, 0), 1, bArr, 0, length);
+                        int size = this.mInData.length();
+                        data = new byte[size];
+                        System.arraycopy(GsmAlphabet.stringToGsm7BitPacked(this.mInData, 0, 0), 1, data, 0, size);
                     } else {
-                        bArr = GsmAlphabet.stringToGsm8BitPacked(this.mInData);
+                        data = GsmAlphabet.stringToGsm8BitPacked(this.mInData);
                     }
-                } catch (UnsupportedEncodingException e) {
-                    bArr = new byte[0];
-                } catch (EncodeException e2) {
-                    bArr = new byte[0];
+                } catch (EncodeException e) {
+                    data = new byte[0];
+                } catch (UnsupportedEncodingException e2) {
+                    data = new byte[0];
                 }
             }
-            ResponseData.writeLength(byteArrayOutputStream, bArr.length + 1);
+            writeLength(buf, data.length + 1);
             if (this.mIsUcs2) {
-                byteArrayOutputStream.write(8);
+                buf.write(8);
             } else if (this.mIsPacked) {
-                byteArrayOutputStream.write(0);
+                buf.write(0);
             } else {
-                byteArrayOutputStream.write(4);
+                buf.write(4);
             }
-            length = bArr.length;
-            while (i < length) {
-                byteArrayOutputStream.write(bArr[i]);
-                i++;
+            for (byte b2 : data) {
+                buf.write(b2);
             }
         }
     }

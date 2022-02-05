@@ -8,8 +8,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.SystemProperties;
 import android.os.UserHandle;
-import android.provider.Settings.Global;
-import android.provider.Settings.SettingNotFoundException;
+import android.provider.Settings;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
@@ -18,7 +17,9 @@ import com.android.internal.telephony.uicc.IccRefreshResponse;
 import com.android.internal.telephony.uicc.UiccCard;
 import com.android.internal.telephony.uicc.UiccController;
 
-class SubscriptionHelper extends Handler {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class SubscriptionHelper extends Handler {
     private static final String APM_SIM_NOT_PWDN_PROPERTY = "persist.radio.apm_sim_not_pwdn";
     private static final int EVENT_REFRESH = 2;
     private static final int EVENT_SET_UICC_SUBSCRIPTION_DONE = 1;
@@ -27,25 +28,37 @@ class SubscriptionHelper extends Handler {
     public static final int SUB_SET_UICC_FAIL = -100;
     public static final int SUB_SET_UICC_SUCCESS = 1;
     public static final int SUB_SIM_NOT_INSERTED = -99;
-    private static boolean mNwModeUpdated = false;
+    private static boolean mNwModeUpdated;
     private static final boolean sApmSIMNotPwdn;
     private static SubscriptionHelper sInstance;
     private static int sNumPhones;
     private static boolean sTriggerDds = false;
     private CommandsInterface[] mCi;
     private Context mContext;
-    private SetUiccTransaction[] mSetUiccTransaction;
-    private int[] mSubStatus;
-    private final ContentObserver nwModeObserver = new ContentObserver(new Handler()) {
-        public void onChange(boolean z) {
+    private final ContentObserver nwModeObserver = new ContentObserver(new Handler()) { // from class: com.android.internal.telephony.SubscriptionHelper.1
+        @Override // android.database.ContentObserver
+        public void onChange(boolean selfUpdate) {
             SubscriptionHelper.logd("NwMode Observer onChange hit !!!");
             if (SubscriptionHelper.mNwModeUpdated) {
                 SubscriptionHelper.this.updateNwModesInSubIdTable(true);
             }
         }
     };
+    private int[] mSubStatus = new int[sNumPhones];
+    private SetUiccTransaction[] mSetUiccTransaction = new SetUiccTransaction[sNumPhones];
 
-    private class SetUiccTransaction {
+    static {
+        boolean z = true;
+        if (SystemProperties.getInt(APM_SIM_NOT_PWDN_PROPERTY, 0) != 1) {
+            z = false;
+        }
+        sApmSIMNotPwdn = z;
+        mNwModeUpdated = false;
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class SetUiccTransaction {
         int mApp3gpp2Result;
         int mApp3gppResult;
         int mRequestCount;
@@ -54,23 +67,37 @@ class SubscriptionHelper extends Handler {
             resetToDefault();
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public int getTransactionResult(int i) {
-            return (i == 1 && this.mApp3gppResult == -100 && this.mApp3gpp2Result == -100) ? 1 : (i == 0 && (this.mApp3gppResult == -100 || this.mApp3gpp2Result == -100)) ? 1 : 0;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public void incrementReqCount() {
+        void incrementReqCount() {
             this.mRequestCount++;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean isResponseReceivedForAllApps() {
+        void updateAppResult(int appType, int result) {
+            this.mRequestCount--;
+            if (appType == 2 || appType == 1) {
+                this.mApp3gppResult = result;
+            } else if (appType == 4 || appType == 3) {
+                this.mApp3gpp2Result = result;
+            }
+        }
+
+        boolean isResponseReceivedForAllApps() {
             return this.mRequestCount == 0;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public void resetToDefault() {
+        int getTransactionResult(int newSubState) {
+            if (newSubState == 1 && this.mApp3gppResult == -100 && this.mApp3gpp2Result == -100) {
+                return 1;
+            }
+            if (newSubState != 0) {
+                return 0;
+            }
+            if (this.mApp3gppResult == -100 || this.mApp3gpp2Result == -100) {
+                return 1;
+            }
+            return 0;
+        }
+
+        void resetToDefault() {
             this.mApp3gppResult = -1;
             this.mApp3gpp2Result = -1;
             this.mRequestCount = 0;
@@ -79,49 +106,19 @@ class SubscriptionHelper extends Handler {
         public String toString() {
             return "reqCount " + this.mRequestCount + " 3gppApp result " + this.mApp3gppResult + " 3gpp2 app result " + this.mApp3gpp2Result;
         }
+    }
 
-        /* Access modifiers changed, original: 0000 */
-        public void updateAppResult(int i, int i2) {
-            this.mRequestCount--;
-            if (i == 2 || i == 1) {
-                this.mApp3gppResult = i2;
-            } else if (i == 4 || i == 3) {
-                this.mApp3gpp2Result = i2;
+    public static SubscriptionHelper init(Context c, CommandsInterface[] ci) {
+        SubscriptionHelper subscriptionHelper;
+        synchronized (SubscriptionHelper.class) {
+            if (sInstance == null) {
+                sInstance = new SubscriptionHelper(c, ci);
+            } else {
+                Log.wtf(LOG_TAG, "init() called multiple times!  sInstance = " + sInstance);
             }
+            subscriptionHelper = sInstance;
         }
-    }
-
-    static {
-        boolean z = true;
-        if (SystemProperties.getInt(APM_SIM_NOT_PWDN_PROPERTY, 0) != 1) {
-            z = false;
-        }
-        sApmSIMNotPwdn = z;
-    }
-
-    private SubscriptionHelper(Context context, CommandsInterface[] commandsInterfaceArr) {
-        this.mContext = context;
-        this.mCi = commandsInterfaceArr;
-        sNumPhones = TelephonyManager.getDefault().getPhoneCount();
-        this.mSubStatus = new int[sNumPhones];
-        this.mSetUiccTransaction = new SetUiccTransaction[sNumPhones];
-        for (int i = 0; i < sNumPhones; i++) {
-            this.mSubStatus[i] = -1;
-            this.mCi[i].registerForIccRefresh(this, 2, new Integer(i));
-            this.mSetUiccTransaction[i] = new SetUiccTransaction();
-        }
-        this.mContext.getContentResolver().registerContentObserver(Global.getUriFor("preferred_network_mode"), false, this.nwModeObserver);
-        logd("SubscriptionHelper init by Context, num phones = " + sNumPhones + " ApmSIMNotPwdn = " + sApmSIMNotPwdn);
-    }
-
-    private void broadcastSetUiccResult(int i, int i2, int i3) {
-        int[] subIdUsingSlotId = SubscriptionController.getInstance().getSubIdUsingSlotId(i);
-        Intent intent = new Intent("org.codeaurora.intent.action.ACTION_SUBSCRIPTION_SET_UICC_RESULT");
-        intent.addFlags(536870912);
-        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, i, subIdUsingSlotId[0]);
-        intent.putExtra("operationResult", i3);
-        intent.putExtra("newSubState", i2);
-        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
+        return subscriptionHelper;
     }
 
     public static SubscriptionHelper getInstance() {
@@ -131,225 +128,222 @@ class SubscriptionHelper extends Handler {
         return sInstance;
     }
 
-    public static SubscriptionHelper init(Context context, CommandsInterface[] commandsInterfaceArr) {
-        SubscriptionHelper subscriptionHelper;
-        synchronized (SubscriptionHelper.class) {
-            try {
-                if (sInstance == null) {
-                    sInstance = new SubscriptionHelper(context, commandsInterfaceArr);
-                } else {
-                    Log.wtf(LOG_TAG, "init() called multiple times!  sInstance = " + sInstance);
-                }
-                subscriptionHelper = sInstance;
-            } catch (Throwable th) {
-                Class cls = SubscriptionHelper.class;
-            }
-        }
-        return subscriptionHelper;
-    }
-
-    private boolean isAllSubsAvailable() {
-        boolean z = true;
+    private SubscriptionHelper(Context c, CommandsInterface[] ci) {
+        this.mContext = c;
+        this.mCi = ci;
+        sNumPhones = TelephonyManager.getDefault().getPhoneCount();
         for (int i = 0; i < sNumPhones; i++) {
-            if (this.mSubStatus[i] == -1) {
-                z = false;
-            }
+            this.mSubStatus[i] = -1;
+            this.mCi[i].registerForIccRefresh(this, 2, new Integer(i));
+            this.mSetUiccTransaction[i] = new SetUiccTransaction();
         }
-        return z;
+        this.mContext.getContentResolver().registerContentObserver(Settings.Global.getUriFor("preferred_network_mode"), false, this.nwModeObserver);
+        logd("SubscriptionHelper init by Context, num phones = " + sNumPhones + " ApmSIMNotPwdn = " + sApmSIMNotPwdn);
     }
 
-    private static void logd(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    private void loge(String str) {
-        Rlog.e(LOG_TAG, str);
-    }
-
-    private void logi(String str) {
-        Rlog.i(LOG_TAG, str);
-    }
-
-    private void processSetUiccSubscriptionDone(Message message) {
-        SubscriptionController instance = SubscriptionController.getInstance();
-        AsyncResult asyncResult = (AsyncResult) message.obj;
-        int i = message.arg1;
-        int i2 = message.arg2;
-        int[] subIdUsingSlotId = instance.getSubIdUsingSlotId(i);
-        this.mSetUiccTransaction[i].updateAppResult(((Integer) asyncResult.userObj).intValue(), asyncResult.exception != null ? -100 : 1);
-        if (this.mSetUiccTransaction[i].isResponseReceivedForAllApps()) {
-            logd(" SubParams info " + this.mSetUiccTransaction[i] + " slotId " + i);
-            if (this.mSetUiccTransaction[i].getTransactionResult(i2) == 1) {
-                loge("Exception in SET_UICC_SUBSCRIPTION, slotId = " + i + " newSubState " + i2);
-                this.mSubStatus[i] = -100;
-                broadcastSetUiccResult(i, i2, 1);
-                this.mSetUiccTransaction[i].resetToDefault();
-                return;
-            }
-            this.mSetUiccTransaction[i].resetToDefault();
-            if (i2 != instance.getSubState(subIdUsingSlotId[0])) {
-                instance.setSubState(subIdUsingSlotId[0], i2);
-            }
-            broadcastSetUiccResult(i, i2, 0);
-            this.mSubStatus[i] = i2;
-            if (isAllSubsAvailable()) {
-                logd("Received all subs, now update user preferred subs, slotid = " + i + " newSubState = " + i2 + " sTriggerDds = " + sTriggerDds);
-                instance.updateUserPrefs(sTriggerDds);
-                sTriggerDds = false;
-                return;
-            }
-            return;
-        }
-        logi("Waiting for more responses " + this.mSetUiccTransaction[i] + " slotId " + i);
-    }
-
-    private void processSimRefresh(AsyncResult asyncResult) {
-        if (asyncResult.exception != null || asyncResult.result == null) {
-            loge("processSimRefresh received without input");
-            return;
-        }
-        Integer num = new Integer(0);
-        num = (Integer) asyncResult.userObj;
-        IccRefreshResponse iccRefreshResponse = (IccRefreshResponse) asyncResult.result;
-        logi(" Received SIM refresh, reset sub state " + num + " old sub state " + this.mSubStatus[num.intValue()] + " refreshResult = " + iccRefreshResponse.refreshResult);
-        if (iccRefreshResponse.refreshResult == 2) {
-            this.mSubStatus[num.intValue()] = -1;
-        }
-    }
-
-    private void updateNwModesInSubIdTable(boolean z) {
-        SubscriptionController instance = SubscriptionController.getInstance();
+    /* JADX INFO: Access modifiers changed from: private */
+    public void updateNwModesInSubIdTable(boolean override) {
+        int nwModeInDb;
+        SubscriptionController subCtrlr = SubscriptionController.getInstance();
         for (int i = 0; i < sNumPhones; i++) {
-            int[] subId = instance.getSubId(i);
-            if (subId != null && subId[0] > 0) {
-                int intAtIndex;
+            int[] subIdList = subCtrlr.getSubId(i);
+            if (subIdList != null && subIdList[0] > 0) {
                 try {
-                    intAtIndex = TelephonyManager.getIntAtIndex(this.mContext.getContentResolver(), "preferred_network_mode", i);
-                } catch (SettingNotFoundException e) {
+                    nwModeInDb = TelephonyManager.getIntAtIndex(this.mContext.getContentResolver(), "preferred_network_mode", i);
+                } catch (Settings.SettingNotFoundException e) {
                     loge("Settings Exception Reading Value At Index[" + i + "] Settings.Global.PREFERRED_NETWORK_MODE");
-                    intAtIndex = RILConstants.PREFERRED_NETWORK_MODE;
+                    nwModeInDb = RILConstants.PREFERRED_NETWORK_MODE;
                 }
-                int nwMode = instance.getNwMode(subId[0]);
-                logd("updateNwModesInSubIdTable: nwModeinSubIdTable: " + nwMode + ", nwModeInDb: " + intAtIndex);
-                if (z || nwMode == -1) {
-                    instance.setNwMode(subId[0], intAtIndex);
+                int nwModeinSubIdTable = subCtrlr.getNwMode(subIdList[0]);
+                logd("updateNwModesInSubIdTable: nwModeinSubIdTable: " + nwModeinSubIdTable + ", nwModeInDb: " + nwModeInDb);
+                if (override || nwModeinSubIdTable == -1) {
+                    subCtrlr.setNwMode(subIdList[0], nwModeInDb);
                 }
             }
         }
     }
 
-    public void handleMessage(Message message) {
-        switch (message.what) {
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
             case 1:
                 logd("EVENT_SET_UICC_SUBSCRIPTION_DONE");
-                processSetUiccSubscriptionDone(message);
+                processSetUiccSubscriptionDone(msg);
                 return;
             case 2:
                 logd("EVENT_REFRESH");
-                processSimRefresh((AsyncResult) message.obj);
+                processSimRefresh((AsyncResult) msg.obj);
                 return;
             default:
                 return;
         }
     }
 
-    public boolean isApmSIMNotPwdn() {
-        return sApmSIMNotPwdn;
+    public boolean needSubActivationAfterRefresh(int slotId) {
+        return sNumPhones > 1 && this.mSubStatus[slotId] == -1;
     }
 
-    public boolean isRadioAvailable(int i) {
-        return this.mCi[i].getRadioState().isAvailable();
-    }
-
-    public boolean isRadioOn(int i) {
-        return this.mCi[i].getRadioState().isOn();
-    }
-
-    public boolean needSubActivationAfterRefresh(int i) {
-        return sNumPhones > 1 && this.mSubStatus[i] == -1;
-    }
-
-    public boolean proceedToHandleIccEvent(int i) {
-        int i2 = Global.getInt(this.mContext.getContentResolver(), "airplane_mode_on", 0);
-        if (!sApmSIMNotPwdn && (!isRadioOn(i) || i2 == 1)) {
-            logi(" proceedToHandleIccEvent, radio off/unavailable, slotId = " + i);
-            this.mSubStatus[i] = -1;
+    public void updateSubActivation(int[] simStatus, boolean isStackReadyEvent) {
+        boolean isPrimarySubFeatureEnable = SystemProperties.getBoolean("persist.radio.primarycard", false);
+        SubscriptionController subCtrlr = SubscriptionController.getInstance();
+        boolean setUiccSent = false;
+        if (isStackReadyEvent && !isPrimarySubFeatureEnable) {
+            sTriggerDds = true;
         }
-        if (i2 == 1 && !sApmSIMNotPwdn) {
-            logd(" proceedToHandleIccEvent, sApmSIMNotPwdn = " + sApmSIMNotPwdn);
-            return false;
-        } else if (isRadioAvailable(i)) {
-            return true;
-        } else {
-            logi(" proceedToHandleIccEvent, radio not available, slotId = " + i);
-            return false;
-        }
-    }
-
-    public void setUiccSubscription(int i, int i2) {
-        UiccCard uiccCard = UiccController.getInstance().getUiccCard(i);
-        if (uiccCard == null) {
-            logd("setUiccSubscription: slotId:" + i + " card info not available");
-            return;
-        }
-        int i3 = 0;
-        int i4 = 0;
-        int i5 = 0;
-        while (i4 < uiccCard.getNumApplications()) {
-            int i6;
-            int ordinal = uiccCard.getApplicationIndex(i4).getType().ordinal();
-            if (i5 == 0 && (ordinal == 2 || ordinal == 1)) {
-                this.mSetUiccTransaction[i].incrementReqCount();
-                this.mCi[i].setUiccSubscription(i, i4, i, i2, Message.obtain(this, 1, i, i2, new Integer(ordinal)));
-                i6 = 1;
-                ordinal = i3;
-            } else if (i3 == 0 && (ordinal == 4 || ordinal == 3)) {
-                this.mSetUiccTransaction[i].incrementReqCount();
-                this.mCi[i].setUiccSubscription(i, i4, i, i2, Message.obtain(this, 1, i, i2, new Integer(ordinal)));
-                i6 = i5;
-                ordinal = 1;
+        for (int slotId = 0; slotId < sNumPhones; slotId++) {
+            if (simStatus[slotId] == -99) {
+                this.mSubStatus[slotId] = simStatus[slotId];
+                logd(" Sim not inserted in slot [" + slotId + "] simStatus= " + simStatus[slotId]);
             } else {
-                i6 = i5;
-                ordinal = i3;
+                int[] subId = subCtrlr.getSubId(slotId);
+                int subState = subCtrlr.getSubState(subId[0]);
+                logd("setUicc for [" + slotId + "] = " + subState + "subId = " + subId[0] + " prev subState = " + this.mSubStatus[slotId] + " stackReady " + isStackReadyEvent);
+                if (this.mSubStatus[slotId] != subState || isStackReadyEvent) {
+                    setUiccSubscription(slotId, subState);
+                    setUiccSent = true;
+                }
             }
-            if (i6 == 0 || ordinal == 0) {
-                i4++;
-                i3 = ordinal;
-                i5 = i6;
-            } else {
-                return;
-            }
+        }
+        if (isAllSubsAvailable() && !setUiccSent) {
+            logd("Received all sim info, update user pref subs, triggerDds= " + sTriggerDds);
+            subCtrlr.updateUserPrefs(sTriggerDds);
+            sTriggerDds = false;
         }
     }
 
     public void updateNwMode() {
     }
 
-    public void updateSubActivation(int[] iArr, boolean z) {
-        boolean z2 = SystemProperties.getBoolean("persist.radio.primarycard", false);
-        SubscriptionController instance = SubscriptionController.getInstance();
-        if (z && !z2) {
-            sTriggerDds = true;
+    public void setUiccSubscription(int slotId, int subStatus) {
+        boolean set3GPPDone = false;
+        boolean set3GPP2Done = false;
+        UiccCard uiccCard = UiccController.getInstance().getUiccCard(slotId);
+        if (uiccCard == null) {
+            logd("setUiccSubscription: slotId:" + slotId + " card info not available");
+            return;
         }
-        z2 = false;
-        for (int i = 0; i < sNumPhones; i++) {
-            if (iArr[i] == -99) {
-                this.mSubStatus[i] = iArr[i];
-                logd(" Sim not inserted in slot [" + i + "] simStatus= " + iArr[i]);
-            } else {
-                int[] subId = instance.getSubId(i);
-                int subState = instance.getSubState(subId[0]);
-                logd("setUicc for [" + i + "] = " + subState + "subId = " + subId[0] + " prev subState = " + this.mSubStatus[i] + " stackReady " + z);
-                if (this.mSubStatus[i] != subState || z) {
-                    setUiccSubscription(i, subState);
-                    z2 = true;
-                }
+        for (int i = 0; i < uiccCard.getNumApplications(); i++) {
+            int appType = uiccCard.getApplicationIndex(i).getType().ordinal();
+            if (!set3GPPDone && (appType == 2 || appType == 1)) {
+                this.mSetUiccTransaction[slotId].incrementReqCount();
+                this.mCi[slotId].setUiccSubscription(slotId, i, slotId, subStatus, Message.obtain(this, 1, slotId, subStatus, new Integer(appType)));
+                set3GPPDone = true;
+            } else if (!set3GPP2Done && (appType == 4 || appType == 3)) {
+                this.mSetUiccTransaction[slotId].incrementReqCount();
+                this.mCi[slotId].setUiccSubscription(slotId, i, slotId, subStatus, Message.obtain(this, 1, slotId, subStatus, new Integer(appType)));
+                set3GPP2Done = true;
+            }
+            if (set3GPPDone && set3GPP2Done) {
+                return;
             }
         }
-        if (isAllSubsAvailable() && !r0) {
-            logd("Received all sim info, update user pref subs, triggerDds= " + sTriggerDds);
-            instance.updateUserPrefs(sTriggerDds);
+    }
+
+    private void processSetUiccSubscriptionDone(Message msg) {
+        SubscriptionController subCtrlr = SubscriptionController.getInstance();
+        AsyncResult ar = (AsyncResult) msg.obj;
+        int slotId = msg.arg1;
+        int newSubState = msg.arg2;
+        int[] subId = subCtrlr.getSubIdUsingSlotId(slotId);
+        this.mSetUiccTransaction[slotId].updateAppResult(((Integer) ar.userObj).intValue(), ar.exception != null ? -100 : 1);
+        if (!this.mSetUiccTransaction[slotId].isResponseReceivedForAllApps()) {
+            logi("Waiting for more responses " + this.mSetUiccTransaction[slotId] + " slotId " + slotId);
+            return;
+        }
+        logd(" SubParams info " + this.mSetUiccTransaction[slotId] + " slotId " + slotId);
+        if (this.mSetUiccTransaction[slotId].getTransactionResult(newSubState) == 1) {
+            loge("Exception in SET_UICC_SUBSCRIPTION, slotId = " + slotId + " newSubState " + newSubState);
+            this.mSubStatus[slotId] = -100;
+            broadcastSetUiccResult(slotId, newSubState, 1);
+            this.mSetUiccTransaction[slotId].resetToDefault();
+            return;
+        }
+        this.mSetUiccTransaction[slotId].resetToDefault();
+        if (newSubState != subCtrlr.getSubState(subId[0])) {
+            subCtrlr.setSubState(subId[0], newSubState);
+        }
+        broadcastSetUiccResult(slotId, newSubState, 0);
+        this.mSubStatus[slotId] = newSubState;
+        if (isAllSubsAvailable()) {
+            logd("Received all subs, now update user preferred subs, slotid = " + slotId + " newSubState = " + newSubState + " sTriggerDds = " + sTriggerDds);
+            subCtrlr.updateUserPrefs(sTriggerDds);
             sTriggerDds = false;
         }
+    }
+
+    private void processSimRefresh(AsyncResult ar) {
+        if (ar.exception != null || ar.result == null) {
+            loge("processSimRefresh received without input");
+            return;
+        }
+        new Integer(0);
+        Integer index = (Integer) ar.userObj;
+        IccRefreshResponse state = (IccRefreshResponse) ar.result;
+        logi(" Received SIM refresh, reset sub state " + index + " old sub state " + this.mSubStatus[index.intValue()] + " refreshResult = " + state.refreshResult);
+        if (state.refreshResult == 2) {
+            this.mSubStatus[index.intValue()] = -1;
+        }
+    }
+
+    private void broadcastSetUiccResult(int slotId, int newSubState, int result) {
+        int[] subId = SubscriptionController.getInstance().getSubIdUsingSlotId(slotId);
+        Intent intent = new Intent("org.codeaurora.intent.action.ACTION_SUBSCRIPTION_SET_UICC_RESULT");
+        intent.addFlags(536870912);
+        SubscriptionManager.putPhoneIdAndSubIdExtra(intent, slotId, subId[0]);
+        intent.putExtra("operationResult", result);
+        intent.putExtra("newSubState", newSubState);
+        this.mContext.sendStickyBroadcastAsUser(intent, UserHandle.ALL);
+    }
+
+    private boolean isAllSubsAvailable() {
+        boolean allSubsAvailable = true;
+        for (int i = 0; i < sNumPhones; i++) {
+            if (this.mSubStatus[i] == -1) {
+                allSubsAvailable = false;
+            }
+        }
+        return allSubsAvailable;
+    }
+
+    public boolean isRadioOn(int phoneId) {
+        return this.mCi[phoneId].getRadioState().isOn();
+    }
+
+    public boolean isRadioAvailable(int phoneId) {
+        return this.mCi[phoneId].getRadioState().isAvailable();
+    }
+
+    public boolean isApmSIMNotPwdn() {
+        return sApmSIMNotPwdn;
+    }
+
+    public boolean proceedToHandleIccEvent(int slotId) {
+        int apmState = Settings.Global.getInt(this.mContext.getContentResolver(), "airplane_mode_on", 0);
+        if (!sApmSIMNotPwdn && (!isRadioOn(slotId) || apmState == 1)) {
+            logi(" proceedToHandleIccEvent, radio off/unavailable, slotId = " + slotId);
+            this.mSubStatus[slotId] = -1;
+        }
+        if (apmState == 1 && !sApmSIMNotPwdn) {
+            logd(" proceedToHandleIccEvent, sApmSIMNotPwdn = " + sApmSIMNotPwdn);
+            return false;
+        } else if (isRadioAvailable(slotId)) {
+            return true;
+        } else {
+            logi(" proceedToHandleIccEvent, radio not available, slotId = " + slotId);
+            return false;
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public static void logd(String message) {
+        Rlog.d(LOG_TAG, message);
+    }
+
+    private void logi(String msg) {
+        Rlog.i(LOG_TAG, msg);
+    }
+
+    private void loge(String msg) {
+        Rlog.e(LOG_TAG, msg);
     }
 }

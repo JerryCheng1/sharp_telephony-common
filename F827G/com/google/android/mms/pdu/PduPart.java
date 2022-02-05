@@ -4,11 +4,9 @@ import android.net.Uri;
 import java.util.HashMap;
 import java.util.Map;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class PduPart {
     public static final String CONTENT_TRANSFER_ENCODING = "Content-Transfer-Encoding";
-    static final byte[] DISPOSITION_ATTACHMENT = "attachment".getBytes();
-    static final byte[] DISPOSITION_FROM_DATA = "from-data".getBytes();
-    static final byte[] DISPOSITION_INLINE = "inline".getBytes();
     public static final String P_7BIT = "7bit";
     public static final String P_8BIT = "8bit";
     public static final String P_BASE64 = "base64";
@@ -53,193 +51,150 @@ public class PduPart {
     public static final int P_START_INFO = 154;
     public static final int P_TYPE = 131;
     private static final String TAG = "PduPart";
-    private byte[] mPartData;
     private Map<Integer, Object> mPartHeader;
-    private Uri mUri;
+    static final byte[] DISPOSITION_FROM_DATA = "from-data".getBytes();
+    static final byte[] DISPOSITION_ATTACHMENT = "attachment".getBytes();
+    static final byte[] DISPOSITION_INLINE = "inline".getBytes();
+    private Uri mUri = null;
+    private byte[] mPartData = null;
 
     public PduPart() {
         this.mPartHeader = null;
-        this.mUri = null;
-        this.mPartData = null;
         this.mPartHeader = new HashMap();
     }
 
-    /* JADX WARNING: Removed duplicated region for block: B:7:0x0060  */
-    /* JADX WARNING: Removed duplicated region for block: B:6:0x0037  */
-    public java.lang.String generateLocation() {
-        /*
-        r3 = this;
-        r0 = r3.mPartHeader;
-        r1 = 151; // 0x97 float:2.12E-43 double:7.46E-322;
-        r1 = java.lang.Integer.valueOf(r1);
-        r0 = r0.get(r1);
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        if (r0 != 0) goto L_0x0066;
-    L_0x0012:
-        r0 = r3.mPartHeader;
-        r1 = 152; // 0x98 float:2.13E-43 double:7.5E-322;
-        r1 = java.lang.Integer.valueOf(r1);
-        r0 = r0.get(r1);
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        if (r0 != 0) goto L_0x0066;
-    L_0x0024:
-        r0 = r3.mPartHeader;
-        r1 = 142; // 0x8e float:1.99E-43 double:7.0E-322;
-        r1 = java.lang.Integer.valueOf(r1);
-        r0 = r0.get(r1);
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        r1 = r0;
-    L_0x0035:
-        if (r1 != 0) goto L_0x0060;
-    L_0x0037:
-        r0 = r3.mPartHeader;
-        r1 = 192; // 0xc0 float:2.69E-43 double:9.5E-322;
-        r1 = java.lang.Integer.valueOf(r1);
-        r0 = r0.get(r1);
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "cid:";
-        r1 = r1.append(r2);
-        r2 = new java.lang.String;
-        r2.<init>(r0);
-        r0 = r1.append(r2);
-        r0 = r0.toString();
-    L_0x005f:
-        return r0;
-    L_0x0060:
-        r0 = new java.lang.String;
-        r0.<init>(r1);
-        goto L_0x005f;
-    L_0x0066:
-        r1 = r0;
-        goto L_0x0035;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.google.android.mms.pdu.PduPart.generateLocation():java.lang.String");
-    }
-
-    public int getCharset() {
-        Integer num = (Integer) this.mPartHeader.get(Integer.valueOf(129));
-        return num == null ? 0 : num.intValue();
-    }
-
-    public byte[] getContentDisposition() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(P_CONTENT_DISPOSITION));
-    }
-
-    public byte[] getContentId() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(192));
-    }
-
-    public byte[] getContentLocation() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(142));
-    }
-
-    public byte[] getContentTransferEncoding() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(P_CONTENT_TRANSFER_ENCODING));
-    }
-
-    public byte[] getContentType() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(145));
+    public void setData(byte[] data) {
+        if (data != null) {
+            this.mPartData = new byte[data.length];
+            System.arraycopy(data, 0, this.mPartData, 0, data.length);
+        }
     }
 
     public byte[] getData() {
         if (this.mPartData == null) {
             return null;
         }
-        byte[] bArr = new byte[this.mPartData.length];
-        System.arraycopy(this.mPartData, 0, bArr, 0, this.mPartData.length);
-        return bArr;
+        byte[] byteArray = new byte[this.mPartData.length];
+        System.arraycopy(this.mPartData, 0, byteArray, 0, this.mPartData.length);
+        return byteArray;
     }
 
     public int getDataLength() {
-        return this.mPartData != null ? this.mPartData.length : 0;
-    }
-
-    public Uri getDataUri() {
-        return this.mUri;
-    }
-
-    public byte[] getFilename() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(152));
-    }
-
-    public byte[] getName() {
-        return (byte[]) this.mPartHeader.get(Integer.valueOf(151));
-    }
-
-    public void setCharset(int i) {
-        this.mPartHeader.put(Integer.valueOf(129), Integer.valueOf(i));
-    }
-
-    public void setContentDisposition(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("null content-disposition");
+        if (this.mPartData != null) {
+            return this.mPartData.length;
         }
-        this.mPartHeader.put(Integer.valueOf(P_CONTENT_DISPOSITION), bArr);
-    }
-
-    public void setContentId(byte[] bArr) {
-        if (bArr == null || bArr.length == 0) {
-            throw new IllegalArgumentException("Content-Id may not be null or empty.");
-        } else if (bArr.length > 1 && ((char) bArr[0]) == '<' && ((char) bArr[bArr.length - 1]) == '>') {
-            this.mPartHeader.put(Integer.valueOf(192), bArr);
-        } else {
-            byte[] bArr2 = new byte[(bArr.length + 2)];
-            bArr2[0] = (byte) 60;
-            bArr2[bArr2.length - 1] = (byte) 62;
-            System.arraycopy(bArr, 0, bArr2, 1, bArr.length);
-            this.mPartHeader.put(Integer.valueOf(192), bArr2);
-        }
-    }
-
-    public void setContentLocation(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("null content-location");
-        }
-        this.mPartHeader.put(Integer.valueOf(142), bArr);
-    }
-
-    public void setContentTransferEncoding(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("null content-transfer-encoding");
-        }
-        this.mPartHeader.put(Integer.valueOf(P_CONTENT_TRANSFER_ENCODING), bArr);
-    }
-
-    public void setContentType(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("null content-type");
-        }
-        this.mPartHeader.put(Integer.valueOf(145), bArr);
-    }
-
-    public void setData(byte[] bArr) {
-        if (bArr != null) {
-            this.mPartData = new byte[bArr.length];
-            System.arraycopy(bArr, 0, this.mPartData, 0, bArr.length);
-        }
+        return 0;
     }
 
     public void setDataUri(Uri uri) {
         this.mUri = uri;
     }
 
-    public void setFilename(byte[] bArr) {
-        if (bArr == null) {
-            throw new NullPointerException("null content-id");
-        }
-        this.mPartHeader.put(Integer.valueOf(152), bArr);
+    public Uri getDataUri() {
+        return this.mUri;
     }
 
-    public void setName(byte[] bArr) {
-        if (bArr == null) {
+    public void setContentId(byte[] contentId) {
+        if (contentId == null || contentId.length == 0) {
+            throw new IllegalArgumentException("Content-Id may not be null or empty.");
+        } else if (contentId.length > 1 && ((char) contentId[0]) == '<' && ((char) contentId[contentId.length - 1]) == '>') {
+            this.mPartHeader.put(192, contentId);
+        } else {
+            byte[] buffer = new byte[contentId.length + 2];
+            buffer[0] = 60;
+            buffer[buffer.length - 1] = 62;
+            System.arraycopy(contentId, 0, buffer, 1, contentId.length);
+            this.mPartHeader.put(192, buffer);
+        }
+    }
+
+    public byte[] getContentId() {
+        return (byte[]) this.mPartHeader.get(192);
+    }
+
+    public void setCharset(int charset) {
+        this.mPartHeader.put(129, Integer.valueOf(charset));
+    }
+
+    public int getCharset() {
+        Integer charset = (Integer) this.mPartHeader.get(129);
+        if (charset == null) {
+            return 0;
+        }
+        return charset.intValue();
+    }
+
+    public void setContentLocation(byte[] contentLocation) {
+        if (contentLocation == null) {
+            throw new NullPointerException("null content-location");
+        }
+        this.mPartHeader.put(142, contentLocation);
+    }
+
+    public byte[] getContentLocation() {
+        return (byte[]) this.mPartHeader.get(142);
+    }
+
+    public void setContentDisposition(byte[] contentDisposition) {
+        if (contentDisposition == null) {
+            throw new NullPointerException("null content-disposition");
+        }
+        this.mPartHeader.put(Integer.valueOf((int) P_CONTENT_DISPOSITION), contentDisposition);
+    }
+
+    public byte[] getContentDisposition() {
+        return (byte[]) this.mPartHeader.get(Integer.valueOf((int) P_CONTENT_DISPOSITION));
+    }
+
+    public void setContentType(byte[] contentType) {
+        if (contentType == null) {
+            throw new NullPointerException("null content-type");
+        }
+        this.mPartHeader.put(145, contentType);
+    }
+
+    public byte[] getContentType() {
+        return (byte[]) this.mPartHeader.get(145);
+    }
+
+    public void setContentTransferEncoding(byte[] contentTransferEncoding) {
+        if (contentTransferEncoding == null) {
+            throw new NullPointerException("null content-transfer-encoding");
+        }
+        this.mPartHeader.put(Integer.valueOf((int) P_CONTENT_TRANSFER_ENCODING), contentTransferEncoding);
+    }
+
+    public byte[] getContentTransferEncoding() {
+        return (byte[]) this.mPartHeader.get(Integer.valueOf((int) P_CONTENT_TRANSFER_ENCODING));
+    }
+
+    public void setName(byte[] name) {
+        if (name == null) {
             throw new NullPointerException("null content-id");
         }
-        this.mPartHeader.put(Integer.valueOf(151), bArr);
+        this.mPartHeader.put(151, name);
+    }
+
+    public byte[] getName() {
+        return (byte[]) this.mPartHeader.get(151);
+    }
+
+    public void setFilename(byte[] fileName) {
+        if (fileName == null) {
+            throw new NullPointerException("null content-id");
+        }
+        this.mPartHeader.put(152, fileName);
+    }
+
+    public byte[] getFilename() {
+        return (byte[]) this.mPartHeader.get(152);
+    }
+
+    public String generateLocation() {
+        byte[] location = (byte[]) this.mPartHeader.get(151);
+        if (location == null && (location = (byte[]) this.mPartHeader.get(152)) == null) {
+            location = (byte[]) this.mPartHeader.get(142);
+        }
+        return location == null ? "cid:" + new String((byte[]) this.mPartHeader.get(192)) : new String(location);
     }
 }

@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
 import android.net.LinkProperties;
 import android.net.NetworkCapabilities;
 import android.net.wifi.WifiManager;
@@ -19,10 +18,8 @@ import android.os.Registrant;
 import android.os.RegistrantList;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
-import android.provider.Settings.Global;
-import android.provider.Settings.Secure;
-import android.provider.Settings.SettingNotFoundException;
-import android.telecom.VideoProfile.VideoState;
+import android.provider.Settings;
+import android.telecom.VideoProfile;
 import android.telephony.CellIdentityCdma;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoCdma;
@@ -34,14 +31,13 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.VoLteServiceState;
 import android.text.TextUtils;
-import com.android.internal.telephony.Call.SrvccState;
-import com.android.internal.telephony.PhoneConstants.DataState;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.Call;
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.dataconnection.DcTrackerBase;
 import com.android.internal.telephony.imsphone.ImsPhone;
 import com.android.internal.telephony.imsphone.ImsPhoneConnection;
 import com.android.internal.telephony.test.SimulatedRadioControl;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppType;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
 import com.android.internal.telephony.uicc.IccFileHandler;
 import com.android.internal.telephony.uicc.IccRecords;
 import com.android.internal.telephony.uicc.IsimRecords;
@@ -58,6 +54,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class PhoneBase extends Handler implements Phone {
     private static final String CDMA_NON_ROAMING_LIST_OVERRIDE_PREFIX = "cdma_non_roaming_list_";
     private static final String CDMA_ROAMING_LIST_OVERRIDE_PREFIX = "cdma_roaming_list_";
@@ -161,7 +158,16 @@ public abstract class PhoneBase extends Handler implements Phone {
     protected final RegistrantList mVideoCapabilityChangedRegistrants;
     private int mVmCount;
 
-    protected static class NetworkSelectMessage {
+    @Override // com.android.internal.telephony.Phone
+    public abstract int getPhoneType();
+
+    @Override // com.android.internal.telephony.Phone
+    public abstract PhoneConstants.State getState();
+
+    protected abstract void onUpdateIccAvailability();
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class NetworkSelectMessage {
         public Message message;
         public String operatorAlphaLong;
         public String operatorNumeric;
@@ -170,22 +176,54 @@ public abstract class PhoneBase extends Handler implements Phone {
         }
     }
 
-    protected PhoneBase(String str, PhoneNotifier phoneNotifier, Context context, CommandsInterface commandsInterface) {
-        this(str, phoneNotifier, context, commandsInterface, false);
+    @Override // com.android.internal.telephony.Phone
+    public String getPhoneName() {
+        return this.mName;
     }
 
-    protected PhoneBase(String str, PhoneNotifier phoneNotifier, Context context, CommandsInterface commandsInterface, boolean z) {
-        this(str, phoneNotifier, context, commandsInterface, z, Integer.MAX_VALUE);
+    @Override // com.android.internal.telephony.Phone
+    public String getNai() {
+        return null;
     }
 
-    protected PhoneBase(String str, PhoneNotifier phoneNotifier, Context context, CommandsInterface commandsInterface, boolean z, int i) {
-        this.mImsIntentReceiver = new BroadcastReceiver() {
-            public void onReceive(Context context, Intent intent) {
+    public String getActionDetached() {
+        return this.mActionDetached;
+    }
+
+    public String getActionAttached() {
+        return this.mActionAttached;
+    }
+
+    public void setSystemProperty(String property, String value) {
+        if (!getUnitTestMode()) {
+            SystemProperties.set(property, value);
+        }
+    }
+
+    public String getSystemProperty(String property, String defValue) {
+        if (getUnitTestMode()) {
+            return null;
+        }
+        return SystemProperties.get(property, defValue);
+    }
+
+    protected PhoneBase(String name, PhoneNotifier notifier, Context context, CommandsInterface ci) {
+        this(name, notifier, context, ci, false);
+    }
+
+    public PhoneBase(String name, PhoneNotifier notifier, Context context, CommandsInterface ci, boolean unitTestMode) {
+        this(name, notifier, context, ci, unitTestMode, Integer.MAX_VALUE);
+    }
+
+    public PhoneBase(String name, PhoneNotifier notifier, Context context, CommandsInterface ci, boolean unitTestMode, int phoneId) {
+        this.mImsIntentReceiver = new BroadcastReceiver() { // from class: com.android.internal.telephony.PhoneBase.1
+            @Override // android.content.BroadcastReceiver
+            public void onReceive(Context context2, Intent intent) {
                 Rlog.d(PhoneBase.LOG_TAG, "mImsIntentReceiver: action " + intent.getAction());
                 if (intent.hasExtra("android:phone_id")) {
-                    int intExtra = intent.getIntExtra("android:phone_id", -1);
-                    Rlog.d(PhoneBase.LOG_TAG, "mImsIntentReceiver: extraPhoneId = " + intExtra);
-                    if (intExtra == -1 || intExtra != PhoneBase.this.getPhoneId()) {
+                    int extraPhoneId = intent.getIntExtra("android:phone_id", -1);
+                    Rlog.d(PhoneBase.LOG_TAG, "mImsIntentReceiver: extraPhoneId = " + extraPhoneId);
+                    if (extraPhoneId == -1 || extraPhoneId != PhoneBase.this.getPhoneId()) {
                         return;
                     }
                 }
@@ -203,8 +241,8 @@ public abstract class PhoneBase extends Handler implements Phone {
         this.mIsVoiceCapable = true;
         this.mIsVideoCapable = false;
         this.mUiccController = null;
-        this.mIccRecords = new AtomicReference();
-        this.mUiccApplication = new AtomicReference();
+        this.mIccRecords = new AtomicReference<>();
+        this.mUiccApplication = new AtomicReference<>();
         this.mImsLock = new Object();
         this.mImsServiceReady = false;
         this.mImsPhone = null;
@@ -222,18 +260,18 @@ public abstract class PhoneBase extends Handler implements Phone {
         this.mRadioOffOrNotAvailableRegistrants = new RegistrantList();
         this.mSimRecordsLoadedRegistrants = new RegistrantList();
         this.mVideoCapabilityChangedRegistrants = new RegistrantList();
-        this.mPhoneId = i;
-        this.mName = str;
-        this.mNotifier = phoneNotifier;
+        this.mPhoneId = phoneId;
+        this.mName = name;
+        this.mNotifier = notifier;
         this.mContext = context;
         this.mLooper = Looper.myLooper();
-        this.mCi = commandsInterface;
+        this.mCi = ci;
         this.mActionDetached = getClass().getPackage().getName() + ".action_detached";
         this.mActionAttached = getClass().getPackage().getName() + ".action_attached";
         if (Build.IS_DEBUGGABLE) {
             this.mTelephonyTester = new TelephonyTester(this);
         }
-        setUnitTestMode(z);
+        setUnitTestMode(unitTestMode);
         this.mDnsCheckDisabled = PreferenceManager.getDefaultSharedPreferences(context).getBoolean(DNS_SERVER_CHECK_DISABLED_KEY, false);
         this.mCi.setOnCallRing(this, 14, null);
         this.mIsVoiceCapable = this.mContext.getResources().getBoolean(17956947);
@@ -248,10 +286,10 @@ public abstract class PhoneBase extends Handler implements Phone {
             this.mUiccController = UiccController.getInstance();
             this.mUiccController.registerForIccChanged(this, 30, null);
             if (getPhoneType() != 3) {
-                IntentFilter intentFilter = new IntentFilter();
-                intentFilter.addAction("com.android.ims.IMS_SERVICE_UP");
-                intentFilter.addAction("com.android.ims.IMS_SERVICE_DOWN");
-                this.mContext.registerReceiver(this.mImsIntentReceiver, intentFilter);
+                IntentFilter filter = new IntentFilter();
+                filter.addAction("com.android.ims.IMS_SERVICE_UP");
+                filter.addAction("com.android.ims.IMS_SERVICE_DOWN");
+                this.mContext.registerReceiver(this.mImsIntentReceiver, filter);
                 this.mCi.registerForSrvccStateChanged(this, 31, null);
             }
             this.mCi.setOnUnsolOemHookRaw(this, 34, null);
@@ -259,246 +297,7 @@ public abstract class PhoneBase extends Handler implements Phone {
         }
     }
 
-    private void checkCorrectThread(Handler handler) {
-        if (handler.getLooper() != this.mLooper) {
-            throw new RuntimeException("com.android.internal.telephony.Phone must be used from within one thread");
-        }
-    }
-
-    private boolean getRoamingOverrideHelper(String str, String str2) {
-        String iccSerialNumber = getIccSerialNumber();
-        if (!(TextUtils.isEmpty(iccSerialNumber) || TextUtils.isEmpty(str2))) {
-            Set stringSet = PreferenceManager.getDefaultSharedPreferences(this.mContext).getStringSet(str + iccSerialNumber, null);
-            if (stringSet != null) {
-                return stringSet.contains(str2);
-            }
-        }
-        return false;
-    }
-
-    private String getSavedNetworkSelection() {
-        return PreferenceManager.getDefaultSharedPreferences(getContext()).getString(NETWORK_SELECTION_KEY + getSubId(), "");
-    }
-
-    public static int getVideoState(Call call) {
-        ImsPhoneConnection imsPhoneConnection = (ImsPhoneConnection) call.getEarliestConnection();
-        return imsPhoneConnection != null ? imsPhoneConnection.getVideoState() : 0;
-    }
-
-    private void handleSetSelectNetwork(AsyncResult asyncResult) {
-        if (asyncResult.userObj instanceof NetworkSelectMessage) {
-            NetworkSelectMessage networkSelectMessage = (NetworkSelectMessage) asyncResult.userObj;
-            if (networkSelectMessage.message != null) {
-                AsyncResult.forMessage(networkSelectMessage.message, asyncResult.result, asyncResult.exception);
-                networkSelectMessage.message.sendToTarget();
-                return;
-            }
-            return;
-        }
-        Rlog.e(LOG_TAG, "unexpected result from user object.");
-    }
-
-    private void handleSrvccStateChanged(int[] iArr) {
-        Rlog.d(LOG_TAG, "handleSrvccStateChanged");
-        ArrayList arrayList = null;
-        ImsPhone imsPhone = this.mImsPhone;
-        SrvccState srvccState = SrvccState.NONE;
-        if (iArr != null && iArr.length != 0) {
-            int i = iArr[0];
-            switch (i) {
-                case 0:
-                    srvccState = SrvccState.STARTED;
-                    if (imsPhone == null) {
-                        Rlog.d(LOG_TAG, "HANDOVER_STARTED: mImsPhone null");
-                        break;
-                    }
-                    arrayList = imsPhone.getHandoverConnection();
-                    migrateFrom(imsPhone);
-                    break;
-                case 1:
-                    srvccState = SrvccState.COMPLETED;
-                    if (imsPhone == null) {
-                        Rlog.d(LOG_TAG, "HANDOVER_COMPLETED: mImsPhone null");
-                        break;
-                    } else {
-                        imsPhone.notifySrvccState(srvccState);
-                        break;
-                    }
-                case 2:
-                case 3:
-                    srvccState = SrvccState.FAILED;
-                    break;
-                default:
-                    return;
-            }
-            getCallTracker().notifySrvccState(srvccState, arrayList);
-            notifyVoLteServiceStateChanged(new VoLteServiceState(i));
-        }
-    }
-
-    private boolean isImsVideoCall(Call call) {
-        return VideoState.isVideo(getVideoState(call));
-    }
-
-    private static void logUnexpectedCdmaMethodCall(String str) {
-        Rlog.e(LOG_TAG, "Error! " + str + "() in PhoneBase should not be " + "called, CDMAPhone inactive.");
-    }
-
-    private static void logUnexpectedGsmMethodCall(String str) {
-        Rlog.e(LOG_TAG, "Error! " + str + "() in PhoneBase should not be " + "called, GSMPhone inactive.");
-    }
-
-    private void notifyIncomingRing() {
-        if (this.mIsVoiceCapable) {
-            this.mIncomingRingRegistrants.notifyRegistrants(new AsyncResult(null, this, null));
-        }
-    }
-
-    private List<CellInfo> privatizeCellInfoList(List<CellInfo> list) {
-        if (Secure.getInt(getContext().getContentResolver(), "location_mode", 0) != 0) {
-            return list;
-        }
-        ArrayList arrayList = new ArrayList(list.size());
-        for (CellInfo cellInfo : list) {
-            if (cellInfo instanceof CellInfoCdma) {
-                CellInfoCdma cellInfoCdma = (CellInfoCdma) cellInfo;
-                CellIdentityCdma cellIdentity = cellInfoCdma.getCellIdentity();
-                CellIdentityCdma cellIdentityCdma = new CellIdentityCdma(cellIdentity.getNetworkId(), cellIdentity.getSystemId(), cellIdentity.getBasestationId(), Integer.MAX_VALUE, Integer.MAX_VALUE);
-                CellInfoCdma cellInfoCdma2 = new CellInfoCdma(cellInfoCdma);
-                cellInfoCdma2.setCellIdentity(cellIdentityCdma);
-                arrayList.add(cellInfoCdma2);
-            } else {
-                arrayList.add(cellInfo);
-            }
-        }
-        return arrayList;
-    }
-
-    private void sendIncomingCallRingNotification(int i) {
-        if (this.mIsVoiceCapable && !this.mDoesRilSendMultipleCallRing && i == this.mCallRingContinueToken) {
-            Rlog.d(LOG_TAG, "Sending notifyIncomingRing");
-            notifyIncomingRing();
-            sendMessageDelayed(obtainMessage(15, i, 0), (long) this.mCallRingDelay);
-            return;
-        }
-        Rlog.d(LOG_TAG, "Ignoring ring notification request, mDoesRilSendMultipleCallRing=" + this.mDoesRilSendMultipleCallRing + " token=" + i + " mCallRingContinueToken=" + this.mCallRingContinueToken + " mIsVoiceCapable=" + this.mIsVoiceCapable);
-    }
-
-    private void setPropertiesByCarrier() {
-        String str = SystemProperties.get("ro.carrier");
-        if (str != null && str.length() != 0 && !"unknown".equals(str)) {
-            CharSequence[] textArray = this.mContext.getResources().getTextArray(17236042);
-            for (int i = 0; i < textArray.length; i += 3) {
-                if (str.equals(textArray[i].toString())) {
-                    Locale forLanguageTag = Locale.forLanguageTag(textArray[i + 1].toString().replace('_', '-'));
-                    str = forLanguageTag.getCountry();
-                    MccTable.setSystemLocale(this.mContext, forLanguageTag.getLanguage(), str);
-                    if (!str.isEmpty()) {
-                        try {
-                            Global.getInt(this.mContext.getContentResolver(), "wifi_country_code");
-                            return;
-                        } catch (SettingNotFoundException e) {
-                            ((WifiManager) this.mContext.getSystemService("wifi")).setCountryCode(str, false);
-                            return;
-                        }
-                    }
-                    return;
-                }
-            }
-        }
-    }
-
-    private void setRoamingOverrideHelper(List<String> list, String str, String str2) {
-        Editor edit = PreferenceManager.getDefaultSharedPreferences(this.mContext).edit();
-        String str3 = str + str2;
-        if (list == null || list.isEmpty()) {
-            edit.remove(str3).commit();
-        } else {
-            edit.putStringSet(str3, new HashSet(list)).commit();
-        }
-    }
-
-    private void updateSavedNetworkOperator(NetworkSelectMessage networkSelectMessage) {
-        int subId = getSubId();
-        if (SubscriptionManager.isValidSubscriptionId(subId)) {
-            Editor edit = PreferenceManager.getDefaultSharedPreferences(getContext()).edit();
-            edit.putString(NETWORK_SELECTION_KEY + subId, networkSelectMessage.operatorNumeric);
-            edit.putString(NETWORK_SELECTION_NAME_KEY + subId, networkSelectMessage.operatorAlphaLong);
-            if (!edit.commit()) {
-                Rlog.e(LOG_TAG, "failed to commit network selection preference");
-                return;
-            }
-            return;
-        }
-        Rlog.e(LOG_TAG, "Cannot update network selection preference due to invalid subId " + subId);
-    }
-
-    public void acquireOwnershipOfImsPhone(ImsPhone imsPhone) {
-        synchronized (this.mImsLock) {
-            if (imsPhone == null) {
-                return;
-            }
-            if (this.mImsPhone != null) {
-                Rlog.e(LOG_TAG, "acquireOwnershipOfImsPhone: non-null mImsPhone. Shouldn't happen - but disposing");
-                this.mImsPhone.dispose();
-            }
-            this.mImsPhone = imsPhone;
-            this.mImsServiceReady = true;
-            this.mImsPhone.updateParentPhone(this);
-            CallManager.getInstance().registerPhone(this.mImsPhone);
-            this.mImsPhone.registerForSilentRedial(this, 32, null);
-        }
-    }
-
-    public void addParticipant(String str) throws CallStateException {
-        throw new CallStateException("addParticipant is not supported in this phone " + this);
-    }
-
-    public int changeMode(boolean z, String str, String str2, String str3, int i, String str4, String str5, String str6, String str7) {
-        return this.mDcTracker.changeOemKddiCpaMode(z, str, str2, str3, i, str4, str5, str6, str7);
-    }
-
-    public void declineCall() throws CallStateException {
-        throw new CallStateException("declineCall is not supported in this phone " + this);
-    }
-
-    public void deflectCall(String str) throws CallStateException {
-        throw new CallStateException("Unexpected deflectCall method call");
-    }
-
-    public Connection dial(String str, int i, int i2) throws CallStateException {
-        if (!TelBrand.IS_DCM) {
-            return null;
-        }
-        throw new CallStateException("Dial with CallDetails is not supported in this phone " + this);
-    }
-
-    public Connection dial(String str, int i, Bundle bundle, int i2) throws CallStateException {
-        if (!TelBrand.IS_DCM) {
-            return null;
-        }
-        throw new CallStateException("Dial with CallDetails is not supported in this phone " + this);
-    }
-
-    public Connection dial(String str, UUSInfo uUSInfo, int i, int i2) throws CallStateException {
-        if (!TelBrand.IS_DCM) {
-            return null;
-        }
-        throw new CallStateException("Dial with CallDetails is not supported in this phone " + this);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public Connection dialInternal(String str, UUSInfo uUSInfo, int i) throws CallStateException {
-        return null;
-    }
-
-    public void disableDnsCheck(boolean z) {
-        this.mDnsCheckDisabled = z;
-        Editor edit = PreferenceManager.getDefaultSharedPreferences(getContext()).edit();
-        edit.putBoolean(DNS_SERVER_CHECK_DISABLED_KEY, z);
-        edit.apply();
-    }
-
+    @Override // com.android.internal.telephony.Phone
     public void dispose() {
         synchronized (PhoneProxy.lockForRadioTechnologyChange) {
             this.mContext.unregisterReceiver(this.mImsIntentReceiver);
@@ -521,887 +320,7 @@ public abstract class PhoneBase extends Handler implements Phone {
         }
     }
 
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        printWriter.println("PhoneBase: subId=" + getSubId());
-        printWriter.println(" mPhoneId=" + this.mPhoneId);
-        printWriter.println(" mCi=" + this.mCi);
-        printWriter.println(" mDnsCheckDisabled=" + this.mDnsCheckDisabled);
-        printWriter.println(" mDcTracker=" + this.mDcTracker);
-        printWriter.println(" mDoesRilSendMultipleCallRing=" + this.mDoesRilSendMultipleCallRing);
-        printWriter.println(" mCallRingContinueToken=" + this.mCallRingContinueToken);
-        printWriter.println(" mCallRingDelay=" + this.mCallRingDelay);
-        printWriter.println(" mIsTheCurrentActivePhone=" + this.mIsTheCurrentActivePhone);
-        printWriter.println(" mIsVoiceCapable=" + this.mIsVoiceCapable);
-        printWriter.println(" mIccRecords=" + this.mIccRecords.get());
-        printWriter.println(" mUiccApplication=" + this.mUiccApplication.get());
-        printWriter.println(" mSmsStorageMonitor=" + this.mSmsStorageMonitor);
-        printWriter.println(" mSmsUsageMonitor=" + this.mSmsUsageMonitor);
-        printWriter.flush();
-        printWriter.println(" mLooper=" + this.mLooper);
-        printWriter.println(" mContext=" + this.mContext);
-        printWriter.println(" mNotifier=" + this.mNotifier);
-        printWriter.println(" mSimulatedRadioControl=" + this.mSimulatedRadioControl);
-        printWriter.println(" mUnitTestMode=" + this.mUnitTestMode);
-        printWriter.println(" isDnsCheckDisabled()=" + isDnsCheckDisabled());
-        printWriter.println(" getUnitTestMode()=" + getUnitTestMode());
-        printWriter.println(" getState()=" + getState());
-        printWriter.println(" getIccSerialNumber()=" + getIccSerialNumber());
-        printWriter.println(" getIccRecordsLoaded()=" + getIccRecordsLoaded());
-        printWriter.println(" getMessageWaitingIndicator()=" + getMessageWaitingIndicator());
-        printWriter.println(" getCallForwardingIndicator()=" + getCallForwardingIndicator());
-        printWriter.println(" isInEmergencyCall()=" + isInEmergencyCall());
-        printWriter.flush();
-        printWriter.println(" isInEcm()=" + isInEcm());
-        printWriter.println(" getPhoneName()=" + getPhoneName());
-        printWriter.println(" getPhoneType()=" + getPhoneType());
-        printWriter.println(" getVoiceMessageCount()=" + getVoiceMessageCount());
-        printWriter.println(" getActiveApnTypes()=" + getActiveApnTypes());
-        printWriter.println(" isDataConnectivityPossible()=" + isDataConnectivityPossible());
-        printWriter.println(" needsOtaServiceProvisioning=" + needsOtaServiceProvisioning());
-        printWriter.flush();
-        printWriter.println("++++++++++++++++++++++++++++++++");
-        try {
-            this.mDcTracker.dump(fileDescriptor, printWriter, strArr);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        printWriter.flush();
-        printWriter.println("++++++++++++++++++++++++++++++++");
-        try {
-            getServiceStateTracker().dump(fileDescriptor, printWriter, strArr);
-        } catch (Exception e2) {
-            e2.printStackTrace();
-        }
-        printWriter.flush();
-        printWriter.println("++++++++++++++++++++++++++++++++");
-        try {
-            getCallTracker().dump(fileDescriptor, printWriter, strArr);
-        } catch (Exception e22) {
-            e22.printStackTrace();
-        }
-        printWriter.flush();
-        printWriter.println("++++++++++++++++++++++++++++++++");
-        try {
-            ((RIL) this.mCi).dump(fileDescriptor, printWriter, strArr);
-        } catch (Exception e222) {
-            e222.printStackTrace();
-        }
-        printWriter.flush();
-        printWriter.println("++++++++++++++++++++++++++++++++");
-    }
-
-    public void enableEnhancedVoicePrivacy(boolean z, Message message) {
-        logUnexpectedCdmaMethodCall("enableEnhancedVoicePrivacy");
-    }
-
-    public void exitEmergencyCallbackMode() {
-        logUnexpectedCdmaMethodCall("exitEmergencyCallbackMode");
-    }
-
-    public String getActionAttached() {
-        return this.mActionAttached;
-    }
-
-    public String getActionDetached() {
-        return this.mActionDetached;
-    }
-
-    public String getActiveApnHost(String str) {
-        return this.mDcTracker.getActiveApnString(str);
-    }
-
-    public String[] getActiveApnTypes() {
-        return this.mDcTracker.getActiveApnTypes();
-    }
-
-    public List<CellInfo> getAllCellInfo() {
-        return privatizeCellInfoList(getServiceStateTracker().getAllCellInfo());
-    }
-
-    public void getBandPref(Message message) {
-        this.mCi.getBandPref(message);
-    }
-
-    public ServiceState getBaseServiceState() {
-        return getServiceState();
-    }
-
-    public int getBrand() {
-        return 0;
-    }
-
-    public void getCallBarring(String str, Message message) {
-    }
-
-    public void getCallBarring(String str, String str2, int i, Message message) {
-    }
-
-    public void getCallBarring(String str, String str2, Message message) {
-    }
-
-    public void getCallBarringOption(String str, String str2, Message message) {
-        logUnexpectedCdmaMethodCall("getCallBarringOption");
-    }
-
-    public boolean getCallForwardingIndicator() {
-        IccRecords iccRecords = (IccRecords) this.mIccRecords.get();
-        return iccRecords != null ? iccRecords.getVoiceCallForwardingFlag() : false;
-    }
-
-    public void getCallForwardingOption(int i, int i2, Message message) {
-    }
-
-    public boolean getCallForwardingPreference() {
-        Rlog.d(LOG_TAG, "Get callforwarding info from perferences");
-        SharedPreferences defaultSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this.mContext);
-        Editor edit;
-        if (TelephonyManager.getDefault().isMultiSimEnabled()) {
-            if (!defaultSharedPreferences.contains(CF_ENABLED + getSubId()) && defaultSharedPreferences.contains(CF_ENABLED + this.mPhoneId)) {
-                setCallForwardingPreference(defaultSharedPreferences.getBoolean(CF_ENABLED + this.mPhoneId, false));
-                edit = defaultSharedPreferences.edit();
-                edit.remove(CF_ENABLED + this.mPhoneId);
-                edit.commit();
-            }
-        } else if (!defaultSharedPreferences.contains(CF_ENABLED + getSubId()) && defaultSharedPreferences.contains(CF_ENABLED)) {
-            setCallForwardingPreference(defaultSharedPreferences.getBoolean(CF_ENABLED, false));
-            edit = defaultSharedPreferences.edit();
-            edit.remove(CF_ENABLED);
-            edit.commit();
-        }
-        return defaultSharedPreferences.getBoolean(CF_ENABLED + getSubId(), false);
-    }
-
-    public void getCallForwardingUncondTimerOption(int i, Message message) {
-        Rlog.e(LOG_TAG, "getCallForwardingUncondTimerOption error ");
-    }
-
-    public CallTracker getCallTracker() {
-        return null;
-    }
-
-    public void getCallWaiting(int i, Message message) {
-    }
-
-    public void getCallWaiting(Message message) {
-    }
-
-    public int getCdmaEriIconIndex() {
-        logUnexpectedCdmaMethodCall("getCdmaEriIconIndex");
-        return -1;
-    }
-
-    public int getCdmaEriIconMode() {
-        logUnexpectedCdmaMethodCall("getCdmaEriIconMode");
-        return -1;
-    }
-
-    public String getCdmaEriText() {
-        logUnexpectedCdmaMethodCall("getCdmaEriText");
-        return "GSM nw, no ERI";
-    }
-
-    public String getCdmaMin() {
-        logUnexpectedCdmaMethodCall("getCdmaMin");
-        return null;
-    }
-
-    public String getCdmaPrlVersion() {
-        logUnexpectedCdmaMethodCall("getCdmaPrlVersion");
-        return null;
-    }
-
-    public String[] getConnInfo() {
-        return this.mDcTracker.getOemKddiCpaConnInfo();
-    }
-
-    public int getConnStatus() {
-        return this.mDcTracker.getOemKddiCpaConnStatus();
-    }
-
-    public Context getContext() {
-        return this.mContext;
-    }
-
-    public AppType getCurrentUiccAppType() {
-        UiccCardApplication uiccCardApplication = (UiccCardApplication) this.mUiccApplication.get();
-        return uiccCardApplication != null ? uiccCardApplication.getType() : AppType.APPTYPE_UNKNOWN;
-    }
-
-    public DataState getDataConnectionState() {
-        return getDataConnectionState("default");
-    }
-
-    public void getEnhancedVoicePrivacy(Message message) {
-        logUnexpectedCdmaMethodCall("getEnhancedVoicePrivacy");
-    }
-
-    public Handler getHandler() {
-        return this;
-    }
-
-    public IccCard getIccCard() {
-        return null;
-    }
-
-    public IccFileHandler getIccFileHandler() {
-        Object obj;
-        UiccCardApplication uiccCardApplication = (UiccCardApplication) this.mUiccApplication.get();
-        if (uiccCardApplication == null) {
-            Rlog.d(LOG_TAG, "getIccFileHandler: uiccApplication == null, return null");
-            obj = null;
-        } else {
-            obj = uiccCardApplication.getIccFileHandler();
-        }
-        Rlog.d(LOG_TAG, "getIccFileHandler: fh=" + obj);
-        return obj;
-    }
-
-    public IccRecords getIccRecords() {
-        UiccCardApplication uiccCardApplication = (UiccCardApplication) this.mUiccApplication.get();
-        return uiccCardApplication == null ? null : uiccCardApplication.getIccRecords();
-    }
-
-    public boolean getIccRecordsLoaded() {
-        IccRecords iccRecords = (IccRecords) this.mIccRecords.get();
-        return iccRecords != null ? iccRecords.getRecordsLoaded() : false;
-    }
-
-    public String getIccSerialNumber() {
-        IccRecords iccRecords = (IccRecords) this.mIccRecords.get();
-        return iccRecords != null ? iccRecords.getIccId() : null;
-    }
-
-    public Phone getImsPhone() {
-        return this.mImsPhone;
-    }
-
-    public String getImsiOnSimLock() {
-        return null;
-    }
-
-    public void getIncomingAnonymousCallBarring(Message message) {
-    }
-
-    public void getIncomingSpecificDnCallBarring(Message message) {
-    }
-
-    public IsimRecords getIsimRecords() {
-        Rlog.e(LOG_TAG, "getIsimRecords() is only supported on LTE devices");
-        return null;
-    }
-
-    public LinkProperties getLinkProperties(String str) {
-        return this.mDcTracker.getLinkProperties(str);
-    }
-
-    public int getLteOnCdmaMode() {
-        return this.mCi.getLteOnCdmaMode();
-    }
-
-    public String getMccMncOnSimLock() {
-        return null;
-    }
-
-    public boolean getMessageWaitingIndicator() {
-        return this.mVmCount != 0;
-    }
-
-    public String getMsisdn() {
-        logUnexpectedGsmMethodCall("getMsisdn");
-        return null;
-    }
-
-    public String getNai() {
-        return null;
-    }
-
-    public NetworkCapabilities getNetworkCapabilities(String str) {
-        return this.mDcTracker.getNetworkCapabilities(str);
-    }
-
-    public void getNetworkSelectionMode(Message message) {
-        this.mCi.getNetworkSelectionMode(message);
-    }
-
-    public String[] getPcscfAddress(String str) {
-        return this.mDcTracker.getPcscfAddress(str);
-    }
-
-    public int getPhoneId() {
-        return this.mPhoneId;
-    }
-
-    public String getPhoneName() {
-        return this.mName;
-    }
-
-    public abstract int getPhoneType();
-
-    public void getPreferredNetworkType(Message message) {
-        this.mCi.getPreferredNetworkType(message);
-    }
-
-    public void getPreferredNetworkTypeWithOptimizeSetting(Message message) {
-        this.mCi.getPreferredNetworkTypeWithOptimizeSetting(message);
-    }
-
-    public ServiceStateTracker getServiceStateTracker() {
-        return null;
-    }
-
-    public SignalStrength getSignalStrength() {
-        ServiceStateTracker serviceStateTracker = getServiceStateTracker();
-        return serviceStateTracker == null ? new SignalStrength() : serviceStateTracker.getSignalStrength();
-    }
-
-    public String getSimImsi() {
-        SharedPreferences defaultSharedPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
-        Editor edit;
-        if (TelephonyManager.getDefault().isMultiSimEnabled()) {
-            if (!defaultSharedPreferences.contains(SIM_IMSI + getSubId()) && defaultSharedPreferences.contains(VM_SIM_IMSI + this.mPhoneId)) {
-                setSimImsi(defaultSharedPreferences.getString(VM_SIM_IMSI + this.mPhoneId, null));
-                edit = defaultSharedPreferences.edit();
-                edit.remove(VM_SIM_IMSI + this.mPhoneId);
-                edit.commit();
-            }
-        } else if (!defaultSharedPreferences.contains(SIM_IMSI + getSubId()) && defaultSharedPreferences.contains(VM_SIM_IMSI)) {
-            setSimImsi(defaultSharedPreferences.getString(VM_SIM_IMSI, null));
-            edit = defaultSharedPreferences.edit();
-            edit.remove(VM_SIM_IMSI);
-            edit.commit();
-        }
-        return defaultSharedPreferences.getString(SIM_IMSI + getSubId(), null);
-    }
-
-    public SimulatedRadioControl getSimulatedRadioControl() {
-        return this.mSimulatedRadioControl;
-    }
-
-    public void getSmscAddress(Message message) {
-        this.mCi.getSmscAddress(message);
-    }
-
-    public abstract State getState();
-
-    public int getSubId() {
-        return SubscriptionController.getInstance().getSubIdUsingPhoneId(this.mPhoneId);
-    }
-
-    public String getSystemProperty(String str, String str2) {
-        return getUnitTestMode() ? null : SystemProperties.get(str, str2);
-    }
-
-    public UiccCard getUiccCard() {
-        return this.mUiccController.getUiccCard(this.mPhoneId);
-    }
-
-    public boolean getUnitTestMode() {
-        return this.mUnitTestMode;
-    }
-
-    public UsimServiceTable getUsimServiceTable() {
-        IccRecords iccRecords = (IccRecords) this.mIccRecords.get();
-        return iccRecords != null ? iccRecords.getUsimServiceTable() : null;
-    }
-
-    public int getVoiceMessageCount() {
-        return this.mVmCount;
-    }
-
-    public int getVoicePhoneServiceState() {
-        ImsPhone imsPhone = this.mImsPhone;
-        return (imsPhone == null || imsPhone.getServiceState().getState() != 0) ? getServiceState().getState() : 0;
-    }
-
-    public void handleMessage(Message message) {
-        switch (message.what) {
-            case 16:
-            case 17:
-                handleSetSelectNetwork((AsyncResult) message.obj);
-                return;
-            default:
-                if (this.mIsTheCurrentActivePhone) {
-                    AsyncResult asyncResult;
-                    switch (message.what) {
-                        case 14:
-                            Rlog.d(LOG_TAG, "Event EVENT_CALL_RING Received state=" + getState());
-                            if (((AsyncResult) message.obj).exception == null) {
-                                State state = getState();
-                                if (this.mDoesRilSendMultipleCallRing || !(state == State.RINGING || state == State.IDLE)) {
-                                    notifyIncomingRing();
-                                    return;
-                                }
-                                this.mCallRingContinueToken++;
-                                sendIncomingCallRingNotification(this.mCallRingContinueToken);
-                                return;
-                            }
-                            return;
-                        case 15:
-                            Rlog.d(LOG_TAG, "Event EVENT_CALL_RING_CONTINUE Received stat=" + getState());
-                            if (getState() == State.RINGING) {
-                                sendIncomingCallRingNotification(message.arg1);
-                                return;
-                            }
-                            return;
-                        case 30:
-                            onUpdateIccAvailability();
-                            return;
-                        case 31:
-                            asyncResult = (AsyncResult) message.obj;
-                            if (asyncResult.exception == null) {
-                                handleSrvccStateChanged((int[]) asyncResult.result);
-                                return;
-                            } else {
-                                Rlog.e(LOG_TAG, "Srvcc exception: " + asyncResult.exception);
-                                return;
-                            }
-                        case 32:
-                            Rlog.d(LOG_TAG, "Event EVENT_INITIATE_SILENT_REDIAL Received");
-                            asyncResult = (AsyncResult) message.obj;
-                            if (asyncResult.exception == null && asyncResult.result != null) {
-                                String str = (String) asyncResult.result;
-                                if (!TextUtils.isEmpty(str)) {
-                                    try {
-                                        dialInternal(str, null, 0);
-                                        return;
-                                    } catch (CallStateException e) {
-                                        Rlog.e(LOG_TAG, "silent redial failed: " + e);
-                                        return;
-                                    }
-                                }
-                                return;
-                            }
-                            return;
-                        case 34:
-                            asyncResult = (AsyncResult) message.obj;
-                            if (asyncResult.exception == null) {
-                                byte[] bArr = (byte[]) asyncResult.result;
-                                Rlog.d(LOG_TAG, "EVENT_UNSOL_OEM_HOOK_RAW data=" + IccUtils.bytesToHexString(bArr));
-                                this.mNotifier.notifyOemHookRawEventForSubscriber(getSubId(), bArr);
-                                return;
-                            }
-                            Rlog.e(LOG_TAG, "OEM hook raw exception: " + asyncResult.exception);
-                            return;
-                        case EVENT_SET_RAT_MODE_OPTIMIZE_SETTING_COMPLETE /*10000*/:
-                            this.mCi.setPreferredNetworkType(message.arg1, (Message) ((AsyncResult) message.obj).userObj);
-                            return;
-                        default:
-                            throw new RuntimeException("unexpected event not handled");
-                    }
-                }
-                Rlog.e(LOG_TAG, "Received message " + message + "[" + message.what + "] while being destroyed. Ignoring.");
-                return;
-        }
-    }
-
-    public boolean hasMatchedTetherApnSetting() {
-        return this.mDcTracker.hasMatchedTetherApnSetting();
-    }
-
-    public void invokeOemRilRequestRaw(byte[] bArr, Message message) {
-        this.mCi.invokeOemRilRequestRaw(bArr, message);
-    }
-
-    public void invokeOemRilRequestStrings(String[] strArr, Message message) {
-        this.mCi.invokeOemRilRequestStrings(strArr, message);
-    }
-
-    public boolean isCspPlmnEnabled() {
-        logUnexpectedGsmMethodCall("isCspPlmnEnabled");
-        return false;
-    }
-
-    public boolean isDataConnectivityPossible() {
-        return isDataConnectivityPossible("default");
-    }
-
-    public boolean isDataConnectivityPossible(String str) {
-        return this.mDcTracker != null && this.mDcTracker.isDataPossible(str);
-    }
-
-    public boolean isDnsCheckDisabled() {
-        return this.mDnsCheckDisabled;
-    }
-
-    public boolean isDunConnectionPossible() {
-        return false;
-    }
-
-    public boolean isImsRegistered() {
-        ImsPhone imsPhone = this.mImsPhone;
-        boolean z = false;
-        if (imsPhone != null) {
-            z = imsPhone.isImsRegistered();
-        } else {
-            ServiceStateTracker serviceStateTracker = getServiceStateTracker();
-            if (serviceStateTracker != null) {
-                z = serviceStateTracker.isImsRegistered();
-            }
-        }
-        Rlog.d(LOG_TAG, "isImsRegistered =" + z);
-        return z;
-    }
-
-    public boolean isImsVtCallPresent() {
-        boolean z = false;
-        if (this.mImsPhone != null && (isImsVideoCall(this.mImsPhone.getForegroundCall()) || isImsVideoCall(this.mImsPhone.getBackgroundCall()) || isImsVideoCall(this.mImsPhone.getRingingCall()))) {
-            z = true;
-        }
-        Rlog.d(LOG_TAG, "isVideoCallActive: " + z);
-        return z;
-    }
-
-    public boolean isInEcm() {
-        return false;
-    }
-
-    public boolean isInEmergencyCall() {
-        return false;
-    }
-
-    public boolean isManualNetSelAllowed() {
-        return false;
-    }
-
-    public boolean isMccMncMarkedAsNonRoaming(String str) {
-        return getRoamingOverrideHelper(GSM_NON_ROAMING_LIST_OVERRIDE_PREFIX, str);
-    }
-
-    public boolean isMccMncMarkedAsRoaming(String str) {
-        return getRoamingOverrideHelper(GSM_ROAMING_LIST_OVERRIDE_PREFIX, str);
-    }
-
-    public boolean isMinInfoReady() {
-        logUnexpectedCdmaMethodCall("isMinInfoReady");
-        return false;
-    }
-
-    public boolean isOnDemandDataPossible(String str) {
-        return this.mDcTracker != null && this.mDcTracker.isOnDemandDataPossible(str);
-    }
-
-    public boolean isOtaSpNumber(String str) {
-        return false;
-    }
-
-    public boolean isRadioAvailable() {
-        return this.mCi.getRadioState().isAvailable();
-    }
-
-    public boolean isSidMarkedAsNonRoaming(int i) {
-        return getRoamingOverrideHelper(CDMA_NON_ROAMING_LIST_OVERRIDE_PREFIX, Integer.toString(i));
-    }
-
-    public boolean isSidMarkedAsRoaming(int i) {
-        return getRoamingOverrideHelper(CDMA_ROAMING_LIST_OVERRIDE_PREFIX, Integer.toString(i));
-    }
-
-    public boolean isUtEnabled() {
-        return false;
-    }
-
-    public void migrate(RegistrantList registrantList, RegistrantList registrantList2) {
-        registrantList2.removeCleared();
-        int size = registrantList2.size();
-        for (int i = 0; i < size; i++) {
-            Message messageForRegistrant = ((Registrant) registrantList2.get(i)).messageForRegistrant();
-            if (messageForRegistrant == null) {
-                Rlog.d(LOG_TAG, "msg is null");
-            } else if (messageForRegistrant.obj != CallManager.getInstance().getRegistrantIdentifier()) {
-                registrantList.add((Registrant) registrantList2.get(i));
-            }
-        }
-    }
-
-    public void migrateFrom(PhoneBase phoneBase) {
-        migrate(this.mHandoverRegistrants, phoneBase.mHandoverRegistrants);
-        migrate(this.mPreciseCallStateRegistrants, phoneBase.mPreciseCallStateRegistrants);
-        migrate(this.mNewRingingConnectionRegistrants, phoneBase.mNewRingingConnectionRegistrants);
-        migrate(this.mIncomingRingRegistrants, phoneBase.mIncomingRingRegistrants);
-        migrate(this.mDisconnectRegistrants, phoneBase.mDisconnectRegistrants);
-        migrate(this.mServiceStateRegistrants, phoneBase.mServiceStateRegistrants);
-        migrate(this.mMmiCompleteRegistrants, phoneBase.mMmiCompleteRegistrants);
-        migrate(this.mMmiRegistrants, phoneBase.mMmiRegistrants);
-        migrate(this.mUnknownConnectionRegistrants, phoneBase.mUnknownConnectionRegistrants);
-        migrate(this.mSuppServiceFailedRegistrants, phoneBase.mSuppServiceFailedRegistrants);
-    }
-
-    public boolean needsOtaServiceProvisioning() {
-        return false;
-    }
-
-    public void notifyCallForwardingIndicator() {
-        Rlog.e(LOG_TAG, "Error! This function should never be executed, inactive CDMAPhone.");
-    }
-
-    public void notifyCellInfo(List<CellInfo> list) {
-        this.mNotifier.notifyCellInfo(this, privatizeCellInfoList(list));
-    }
-
-    public void notifyDataActivity() {
-        this.mNotifier.notifyDataActivity(this);
-    }
-
-    public void notifyDataConnection(String str) {
-        for (String str2 : getActiveApnTypes()) {
-            this.mNotifier.notifyDataConnection(this, str, str2, getDataConnectionState(str2));
-        }
-    }
-
-    public void notifyDataConnection(String str, String str2) {
-        this.mNotifier.notifyDataConnection(this, str, str2, getDataConnectionState(str2));
-    }
-
-    public void notifyDataConnection(String str, String str2, DataState dataState) {
-        this.mNotifier.notifyDataConnection(this, str, str2, dataState);
-    }
-
-    public void notifyDataConnectionFailed(String str, String str2) {
-        this.mNotifier.notifyDataConnectionFailed(this, str, str2);
-    }
-
-    public void notifyDataConnectionRealTimeInfo(DataConnectionRealTimeInfo dataConnectionRealTimeInfo) {
-        this.mNotifier.notifyDataConnectionRealTimeInfo(this, dataConnectionRealTimeInfo);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void notifyDisconnectP(Connection connection) {
-        this.mDisconnectRegistrants.notifyRegistrants(new AsyncResult(null, connection, null));
-    }
-
-    public void notifyForVideoCapabilityChanged(boolean z) {
-        this.mIsVideoCapable = z;
-        this.mVideoCapabilityChangedRegistrants.notifyRegistrants(new AsyncResult(null, Boolean.valueOf(z), null));
-    }
-
-    public void notifyHandoverStateChanged(Connection connection) {
-        this.mHandoverRegistrants.notifyRegistrants(new AsyncResult(null, connection, null));
-    }
-
-    public void notifyMessageWaitingIndicator() {
-        if (this.mIsVoiceCapable) {
-            this.mNotifier.notifyMessageWaitingChanged(this);
-        }
-    }
-
-    public void notifyNewRingingConnectionP(Connection connection) {
-        if (this.mIsVoiceCapable) {
-            this.mNewRingingConnectionRegistrants.notifyRegistrants(new AsyncResult(null, connection, null));
-            if (!hasMessages(15)) {
-                if ((getForegroundCall().isIdle() || getForegroundCall().isDialingOrAlerting()) && getBackgroundCall().isIdle()) {
-                    Rlog.d(LOG_TAG, "notifyNewRingingConnectionP(): send EVENT_CALL_RING_CONTINUE");
-                    sendMessageDelayed(obtainMessage(15, this.mCallRingContinueToken, 0), (long) this.mCallRingDelay);
-                }
-            }
-        }
-    }
-
-    public void notifyOtaspChanged(int i) {
-        this.mNotifier.notifyOtaspChanged(this, i);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void notifyPreciseCallStateChangedP() {
-        this.mPreciseCallStateRegistrants.notifyRegistrants(new AsyncResult(null, this, null));
-        this.mNotifier.notifyPreciseCallState(this);
-    }
-
-    public void notifyPreciseDataConnectionFailed(String str, String str2, String str3, String str4) {
-        this.mNotifier.notifyPreciseDataConnectionFailed(this, str, str2, str3, str4);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void notifyServiceStateChangedP(ServiceState serviceState) {
-        this.mServiceStateRegistrants.notifyRegistrants(new AsyncResult(null, serviceState, null));
-        this.mNotifier.notifyServiceState(this);
-    }
-
-    public void notifySignalStrength() {
-        this.mNotifier.notifySignalStrength(this);
-    }
-
-    public void notifyUnknownConnectionP(Connection connection) {
-        this.mUnknownConnectionRegistrants.notifyResult(connection);
-    }
-
-    public void notifyVoLteServiceStateChanged(VoLteServiceState voLteServiceState) {
-        this.mNotifier.notifyVoLteServiceStateChanged(this, voLteServiceState);
-    }
-
-    public void nvReadItem(int i, Message message) {
-        this.mCi.nvReadItem(i, message);
-    }
-
-    public void nvResetConfig(int i, Message message) {
-        this.mCi.nvResetConfig(i, message);
-    }
-
-    public void nvWriteCdmaPrl(byte[] bArr, Message message) {
-        this.mCi.nvWriteCdmaPrl(bArr, message);
-    }
-
-    public void nvWriteItem(int i, String str, Message message) {
-        this.mCi.nvWriteItem(i, str, message);
-    }
-
-    public abstract void onUpdateIccAvailability();
-
-    public void queryAvailableBandMode(Message message) {
-        this.mCi.queryAvailableBandMode(message);
-    }
-
-    public void queryCdmaRoamingPreference(Message message) {
-        this.mCi.queryCdmaRoamingPreference(message);
-    }
-
-    public void queryTTYMode(Message message) {
-        this.mCi.queryTTYMode(message);
-    }
-
-    public void registerFoT53ClirlInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerFoT53ClirlInfo(handler, i, obj);
-    }
-
-    public void registerForCallWaiting(Handler handler, int i, Object obj) {
-        logUnexpectedCdmaMethodCall("registerForCallWaiting");
-    }
-
-    public void registerForCdmaOtaStatusChange(Handler handler, int i, Object obj) {
-        logUnexpectedCdmaMethodCall("registerForCdmaOtaStatusChange");
-    }
-
-    public void registerForDisconnect(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mDisconnectRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForDisplayInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerForDisplayInfo(handler, i, obj);
-    }
-
-    public void registerForEcmTimerReset(Handler handler, int i, Object obj) {
-        logUnexpectedCdmaMethodCall("registerForEcmTimerReset");
-    }
-
-    public void registerForHandoverStateChanged(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mHandoverRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForInCallVoicePrivacyOff(Handler handler, int i, Object obj) {
-        this.mCi.registerForInCallVoicePrivacyOff(handler, i, obj);
-    }
-
-    public void registerForInCallVoicePrivacyOn(Handler handler, int i, Object obj) {
-        this.mCi.registerForInCallVoicePrivacyOn(handler, i, obj);
-    }
-
-    public void registerForIncomingRing(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mIncomingRingRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForLineControlInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerForLineControlInfo(handler, i, obj);
-    }
-
-    public void registerForMmiComplete(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mMmiCompleteRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForMmiInitiate(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mMmiRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForNewRingingConnection(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mNewRingingConnectionRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForNumberInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerForNumberInfo(handler, i, obj);
-    }
-
-    public void registerForOnHoldTone(Handler handler, int i, Object obj) {
-    }
-
-    public void registerForPreciseCallStateChanged(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mPreciseCallStateRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForRadioOffOrNotAvailable(Handler handler, int i, Object obj) {
-        this.mRadioOffOrNotAvailableRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForRedirectedNumberInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerForRedirectedNumberInfo(handler, i, obj);
-    }
-
-    public void registerForResendIncallMute(Handler handler, int i, Object obj) {
-        this.mCi.registerForResendIncallMute(handler, i, obj);
-    }
-
-    public void registerForRingbackTone(Handler handler, int i, Object obj) {
-        this.mCi.registerForRingbackTone(handler, i, obj);
-    }
-
-    public void registerForServiceStateChanged(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mServiceStateRegistrants.add(handler, i, obj);
-    }
-
-    public void registerForSignalInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerForSignalInfo(handler, i, obj);
-    }
-
-    public void registerForSimRecordsLoaded(Handler handler, int i, Object obj) {
-        logUnexpectedCdmaMethodCall("registerForSimRecordsLoaded");
-    }
-
-    public void registerForSubscriptionInfoReady(Handler handler, int i, Object obj) {
-        logUnexpectedCdmaMethodCall("registerForSubscriptionInfoReady");
-    }
-
-    public void registerForSuppServiceFailed(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mSuppServiceFailedRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForT53AudioControlInfo(Handler handler, int i, Object obj) {
-        this.mCi.registerForT53AudioControlInfo(handler, i, obj);
-    }
-
-    public void registerForTtyModeReceived(Handler handler, int i, Object obj) {
-    }
-
-    public void registerForUnknownConnection(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mUnknownConnectionRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForVideoCapabilityChanged(Handler handler, int i, Object obj) {
-        checkCorrectThread(handler);
-        this.mVideoCapabilityChangedRegistrants.addUnique(handler, i, obj);
-        notifyForVideoCapabilityChanged(this.mIsVideoCapable);
-    }
-
-    public ImsPhone relinquishOwnershipOfImsPhone() {
-        ImsPhone imsPhone = null;
-        synchronized (this.mImsLock) {
-            if (this.mImsPhone == null) {
-            } else {
-                imsPhone = this.mImsPhone;
-                this.mImsPhone = null;
-                CallManager.getInstance().unregisterPhone(imsPhone);
-                imsPhone.unregisterForSilentRedial(this);
-            }
-        }
-        return imsPhone;
-    }
-
+    @Override // com.android.internal.telephony.Phone
     public void removeReferences() {
         this.mSmsStorageMonitor = null;
         this.mSmsUsageMonitor = null;
@@ -1416,435 +335,1661 @@ public abstract class PhoneBase extends Handler implements Phone {
         }
     }
 
-    public void requestChangeCbPsw(String str, String str2, String str3, Message message) {
-        logUnexpectedCdmaMethodCall("requestChangeCbPsw");
-    }
-
-    public void resetDunProfiles() {
-    }
-
-    public void restoreSavedNetworkSelection(Message message) {
-        String savedNetworkSelection = getSavedNetworkSelection();
-        if (TextUtils.isEmpty(savedNetworkSelection)) {
-            this.mCi.setNetworkSelectionModeAutomatic(message);
-        } else {
-            this.mCi.setNetworkSelectionModeManual(savedNetworkSelection, message);
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case 16:
+            case 17:
+                handleSetSelectNetwork((AsyncResult) msg.obj);
+                return;
+            default:
+                if (!this.mIsTheCurrentActivePhone) {
+                    Rlog.e(LOG_TAG, "Received message " + msg + "[" + msg.what + "] while being destroyed. Ignoring.");
+                    return;
+                }
+                switch (msg.what) {
+                    case 14:
+                        Rlog.d(LOG_TAG, "Event EVENT_CALL_RING Received state=" + getState());
+                        if (((AsyncResult) msg.obj).exception == null) {
+                            PhoneConstants.State state = getState();
+                            if (this.mDoesRilSendMultipleCallRing || !(state == PhoneConstants.State.RINGING || state == PhoneConstants.State.IDLE)) {
+                                notifyIncomingRing();
+                                return;
+                            }
+                            this.mCallRingContinueToken++;
+                            sendIncomingCallRingNotification(this.mCallRingContinueToken);
+                            return;
+                        }
+                        return;
+                    case 15:
+                        Rlog.d(LOG_TAG, "Event EVENT_CALL_RING_CONTINUE Received stat=" + getState());
+                        if (getState() == PhoneConstants.State.RINGING) {
+                            sendIncomingCallRingNotification(msg.arg1);
+                            return;
+                        }
+                        return;
+                    case 30:
+                        onUpdateIccAvailability();
+                        return;
+                    case 31:
+                        AsyncResult ar = (AsyncResult) msg.obj;
+                        if (ar.exception == null) {
+                            handleSrvccStateChanged((int[]) ar.result);
+                            return;
+                        } else {
+                            Rlog.e(LOG_TAG, "Srvcc exception: " + ar.exception);
+                            return;
+                        }
+                    case 32:
+                        Rlog.d(LOG_TAG, "Event EVENT_INITIATE_SILENT_REDIAL Received");
+                        AsyncResult ar2 = (AsyncResult) msg.obj;
+                        if (ar2.exception == null && ar2.result != null) {
+                            String dialString = (String) ar2.result;
+                            if (!TextUtils.isEmpty(dialString)) {
+                                try {
+                                    dialInternal(dialString, null, 0);
+                                    return;
+                                } catch (CallStateException e) {
+                                    Rlog.e(LOG_TAG, "silent redial failed: " + e);
+                                    return;
+                                }
+                            } else {
+                                return;
+                            }
+                        } else {
+                            return;
+                        }
+                    case 34:
+                        AsyncResult ar3 = (AsyncResult) msg.obj;
+                        if (ar3.exception == null) {
+                            byte[] data = (byte[]) ar3.result;
+                            Rlog.d(LOG_TAG, "EVENT_UNSOL_OEM_HOOK_RAW data=" + IccUtils.bytesToHexString(data));
+                            this.mNotifier.notifyOemHookRawEventForSubscriber(getSubId(), data);
+                            return;
+                        }
+                        Rlog.e(LOG_TAG, "OEM hook raw exception: " + ar3.exception);
+                        return;
+                    case EVENT_SET_RAT_MODE_OPTIMIZE_SETTING_COMPLETE /* 10000 */:
+                        this.mCi.setPreferredNetworkType(msg.arg1, (Message) ((AsyncResult) msg.obj).userObj);
+                        return;
+                    default:
+                        throw new RuntimeException("unexpected event not handled");
+                }
         }
     }
 
-    public void selectNetworkManually(OperatorInfo operatorInfo, Message message) {
-        NetworkSelectMessage networkSelectMessage = new NetworkSelectMessage();
-        networkSelectMessage.message = message;
-        networkSelectMessage.operatorNumeric = operatorInfo.getOperatorNumeric();
-        networkSelectMessage.operatorAlphaLong = operatorInfo.getOperatorAlphaLong();
-        Message obtainMessage = obtainMessage(16, networkSelectMessage);
-        if (operatorInfo.getRadioTech().equals("")) {
-            this.mCi.setNetworkSelectionModeManual(operatorInfo.getOperatorNumeric(), obtainMessage);
-        } else {
-            this.mCi.setNetworkSelectionModeManual(operatorInfo.getOperatorNumeric() + "+" + operatorInfo.getRadioTech(), obtainMessage);
+    private void handleSrvccStateChanged(int[] ret) {
+        Call.SrvccState srvccState;
+        Rlog.d(LOG_TAG, "handleSrvccStateChanged");
+        ArrayList<Connection> conn = null;
+        ImsPhone imsPhone = this.mImsPhone;
+        Call.SrvccState srvccState2 = Call.SrvccState.NONE;
+        if (ret != null && ret.length != 0) {
+            int state = ret[0];
+            switch (state) {
+                case 0:
+                    srvccState = Call.SrvccState.STARTED;
+                    if (imsPhone == null) {
+                        Rlog.d(LOG_TAG, "HANDOVER_STARTED: mImsPhone null");
+                        break;
+                    } else {
+                        conn = imsPhone.getHandoverConnection();
+                        migrateFrom(imsPhone);
+                        break;
+                    }
+                case 1:
+                    srvccState = Call.SrvccState.COMPLETED;
+                    if (imsPhone == null) {
+                        Rlog.d(LOG_TAG, "HANDOVER_COMPLETED: mImsPhone null");
+                        break;
+                    } else {
+                        imsPhone.notifySrvccState(srvccState);
+                        break;
+                    }
+                case 2:
+                case 3:
+                    srvccState = Call.SrvccState.FAILED;
+                    break;
+                default:
+                    return;
+            }
+            getCallTracker().notifySrvccState(srvccState, conn);
+            notifyVoLteServiceStateChanged(new VoLteServiceState(state));
         }
-        updateSavedNetworkOperator(networkSelectMessage);
     }
 
-    public void sendBurstDtmf(String str, int i, int i2, Message message) {
-        logUnexpectedCdmaMethodCall("sendBurstDtmf");
+    @Override // com.android.internal.telephony.Phone
+    public Context getContext() {
+        return this.mContext;
     }
 
-    public void setBandMode(int i, Message message) {
-        this.mCi.setBandMode(i, message);
+    protected void setCardInPhoneBook() {
     }
 
-    public void setBandPref(long j, int i, Message message) {
-        this.mCi.setBandPref(j, i, message);
+    @Override // com.android.internal.telephony.Phone
+    public void disableDnsCheck(boolean b) {
+        this.mDnsCheckDisabled = b;
+        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(getContext()).edit();
+        editor.putBoolean(DNS_SERVER_CHECK_DISABLED_KEY, b);
+        editor.apply();
     }
 
-    public void setCallBarring(String str, boolean z, String str2, int i, Message message) {
+    @Override // com.android.internal.telephony.Phone
+    public boolean isDnsCheckDisabled() {
+        return this.mDnsCheckDisabled;
     }
 
-    public void setCallBarring(String str, boolean z, String str2, Message message) {
+    @Override // com.android.internal.telephony.Phone
+    public void registerForPreciseCallStateChanged(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mPreciseCallStateRegistrants.addUnique(h, what, obj);
     }
 
-    public void setCallBarringOption(String str, boolean z, String str2, Message message) {
-        logUnexpectedCdmaMethodCall("setCallBarringOption");
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForPreciseCallStateChanged(Handler h) {
+        this.mPreciseCallStateRegistrants.remove(h);
     }
 
-    public void setCallForwardingOption(int i, int i2, int i3, String str, int i4, Message message) {
+    public void notifyPreciseCallStateChangedP() {
+        this.mPreciseCallStateRegistrants.notifyRegistrants(new AsyncResult((Object) null, this, (Throwable) null));
+        this.mNotifier.notifyPreciseCallState(this);
     }
 
-    public void setCallForwardingOption(int i, int i2, String str, int i3, Message message) {
+    @Override // com.android.internal.telephony.Phone
+    public void registerForHandoverStateChanged(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mHandoverRegistrants.addUnique(h, what, obj);
     }
 
-    public void setCallForwardingPreference(boolean z) {
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForHandoverStateChanged(Handler h) {
+        this.mHandoverRegistrants.remove(h);
+    }
+
+    public void notifyHandoverStateChanged(Connection cn) {
+        this.mHandoverRegistrants.notifyRegistrants(new AsyncResult((Object) null, cn, (Throwable) null));
+    }
+
+    public void migrateFrom(PhoneBase from) {
+        migrate(this.mHandoverRegistrants, from.mHandoverRegistrants);
+        migrate(this.mPreciseCallStateRegistrants, from.mPreciseCallStateRegistrants);
+        migrate(this.mNewRingingConnectionRegistrants, from.mNewRingingConnectionRegistrants);
+        migrate(this.mIncomingRingRegistrants, from.mIncomingRingRegistrants);
+        migrate(this.mDisconnectRegistrants, from.mDisconnectRegistrants);
+        migrate(this.mServiceStateRegistrants, from.mServiceStateRegistrants);
+        migrate(this.mMmiCompleteRegistrants, from.mMmiCompleteRegistrants);
+        migrate(this.mMmiRegistrants, from.mMmiRegistrants);
+        migrate(this.mUnknownConnectionRegistrants, from.mUnknownConnectionRegistrants);
+        migrate(this.mSuppServiceFailedRegistrants, from.mSuppServiceFailedRegistrants);
+    }
+
+    public void migrate(RegistrantList to, RegistrantList from) {
+        from.removeCleared();
+        int n = from.size();
+        for (int i = 0; i < n; i++) {
+            Message msg = ((Registrant) from.get(i)).messageForRegistrant();
+            if (msg == null) {
+                Rlog.d(LOG_TAG, "msg is null");
+            } else if (msg.obj != CallManager.getInstance().getRegistrantIdentifier()) {
+                to.add((Registrant) from.get(i));
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForUnknownConnection(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mUnknownConnectionRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForUnknownConnection(Handler h) {
+        this.mUnknownConnectionRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForNewRingingConnection(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mNewRingingConnectionRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForNewRingingConnection(Handler h) {
+        this.mNewRingingConnectionRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForVideoCapabilityChanged(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mVideoCapabilityChangedRegistrants.addUnique(h, what, obj);
+        notifyForVideoCapabilityChanged(this.mIsVideoCapable);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForVideoCapabilityChanged(Handler h) {
+        this.mVideoCapabilityChangedRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForInCallVoicePrivacyOn(Handler h, int what, Object obj) {
+        this.mCi.registerForInCallVoicePrivacyOn(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForInCallVoicePrivacyOn(Handler h) {
+        this.mCi.unregisterForInCallVoicePrivacyOn(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForInCallVoicePrivacyOff(Handler h, int what, Object obj) {
+        this.mCi.registerForInCallVoicePrivacyOff(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForInCallVoicePrivacyOff(Handler h) {
+        this.mCi.unregisterForInCallVoicePrivacyOff(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForIncomingRing(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mIncomingRingRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForIncomingRing(Handler h) {
+        this.mIncomingRingRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForDisconnect(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mDisconnectRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForDisconnect(Handler h) {
+        this.mDisconnectRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForSuppServiceFailed(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mSuppServiceFailedRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForSuppServiceFailed(Handler h) {
+        this.mSuppServiceFailedRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForMmiInitiate(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mMmiRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForMmiInitiate(Handler h) {
+        this.mMmiRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForMmiComplete(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mMmiCompleteRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForMmiComplete(Handler h) {
+        checkCorrectThread(h);
+        this.mMmiCompleteRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForSimRecordsLoaded(Handler h, int what, Object obj) {
+        logUnexpectedCdmaMethodCall("registerForSimRecordsLoaded");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForSimRecordsLoaded(Handler h) {
+        logUnexpectedCdmaMethodCall("unregisterForSimRecordsLoaded");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForTtyModeReceived(Handler h, int what, Object obj) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForTtyModeReceived(Handler h) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setNetworkSelectionModeAutomatic(Message response) {
+        NetworkSelectMessage nsm = new NetworkSelectMessage();
+        nsm.message = response;
+        nsm.operatorNumeric = "";
+        nsm.operatorAlphaLong = "";
+        this.mCi.setNetworkSelectionModeAutomatic(obtainMessage(17, nsm));
+        updateSavedNetworkOperator(nsm);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getNetworkSelectionMode(Message message) {
+        this.mCi.getNetworkSelectionMode(message);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void selectNetworkManually(OperatorInfo network, Message response) {
+        NetworkSelectMessage nsm = new NetworkSelectMessage();
+        nsm.message = response;
+        nsm.operatorNumeric = network.getOperatorNumeric();
+        nsm.operatorAlphaLong = network.getOperatorAlphaLong();
+        Message msg = obtainMessage(16, nsm);
+        if (network.getRadioTech().equals("")) {
+            this.mCi.setNetworkSelectionModeManual(network.getOperatorNumeric(), msg);
+        } else {
+            this.mCi.setNetworkSelectionModeManual(network.getOperatorNumeric() + "+" + network.getRadioTech(), msg);
+        }
+        updateSavedNetworkOperator(nsm);
+    }
+
+    private void updateSavedNetworkOperator(NetworkSelectMessage nsm) {
+        int subId = getSubId();
+        if (SubscriptionManager.isValidSubscriptionId(subId)) {
+            SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(getContext()).edit();
+            editor.putString(NETWORK_SELECTION_KEY + subId, nsm.operatorNumeric);
+            editor.putString(NETWORK_SELECTION_NAME_KEY + subId, nsm.operatorAlphaLong);
+            if (!editor.commit()) {
+                Rlog.e(LOG_TAG, "failed to commit network selection preference");
+                return;
+            }
+            return;
+        }
+        Rlog.e(LOG_TAG, "Cannot update network selection preference due to invalid subId " + subId);
+    }
+
+    private void handleSetSelectNetwork(AsyncResult ar) {
+        if (!(ar.userObj instanceof NetworkSelectMessage)) {
+            Rlog.e(LOG_TAG, "unexpected result from user object.");
+            return;
+        }
+        NetworkSelectMessage nsm = (NetworkSelectMessage) ar.userObj;
+        if (nsm.message != null) {
+            AsyncResult.forMessage(nsm.message, ar.result, ar.exception);
+            nsm.message.sendToTarget();
+        }
+    }
+
+    private String getSavedNetworkSelection() {
+        return PreferenceManager.getDefaultSharedPreferences(getContext()).getString(NETWORK_SELECTION_KEY + getSubId(), "");
+    }
+
+    public void restoreSavedNetworkSelection(Message response) {
+        String networkSelection = getSavedNetworkSelection();
+        if (TextUtils.isEmpty(networkSelection)) {
+            this.mCi.setNetworkSelectionModeAutomatic(response);
+        } else {
+            this.mCi.setNetworkSelectionModeManual(networkSelection, response);
+        }
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setUnitTestMode(boolean f) {
+        this.mUnitTestMode = f;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean getUnitTestMode() {
+        return this.mUnitTestMode;
+    }
+
+    public void notifyDisconnectP(Connection cn) {
+        this.mDisconnectRegistrants.notifyRegistrants(new AsyncResult((Object) null, cn, (Throwable) null));
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForServiceStateChanged(Handler h, int what, Object obj) {
+        checkCorrectThread(h);
+        this.mServiceStateRegistrants.add(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForServiceStateChanged(Handler h) {
+        this.mServiceStateRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForRingbackTone(Handler h, int what, Object obj) {
+        this.mCi.registerForRingbackTone(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForRingbackTone(Handler h) {
+        this.mCi.unregisterForRingbackTone(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForOnHoldTone(Handler h, int what, Object obj) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForOnHoldTone(Handler h) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForResendIncallMute(Handler h, int what, Object obj) {
+        this.mCi.registerForResendIncallMute(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForResendIncallMute(Handler h) {
+        this.mCi.unregisterForResendIncallMute(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setEchoSuppressionEnabled() {
+    }
+
+    public void notifyServiceStateChangedP(ServiceState ss) {
+        this.mServiceStateRegistrants.notifyRegistrants(new AsyncResult((Object) null, ss, (Throwable) null));
+        this.mNotifier.notifyServiceState(this);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public SimulatedRadioControl getSimulatedRadioControl() {
+        return this.mSimulatedRadioControl;
+    }
+
+    private void checkCorrectThread(Handler h) {
+        if (h.getLooper() != this.mLooper) {
+            throw new RuntimeException("com.android.internal.telephony.Phone must be used from within one thread");
+        }
+    }
+
+    private void setPropertiesByCarrier() {
+        String carrier = SystemProperties.get("ro.carrier");
+        if (!(carrier == null || carrier.length() == 0 || "unknown".equals(carrier))) {
+            CharSequence[] carrierLocales = this.mContext.getResources().getTextArray(17236042);
+            for (int i = 0; i < carrierLocales.length; i += 3) {
+                if (carrier.equals(carrierLocales[i].toString())) {
+                    Locale l = Locale.forLanguageTag(carrierLocales[i + 1].toString().replace('_', '-'));
+                    String country = l.getCountry();
+                    MccTable.setSystemLocale(this.mContext, l.getLanguage(), country);
+                    if (!country.isEmpty()) {
+                        try {
+                            Settings.Global.getInt(this.mContext.getContentResolver(), "wifi_country_code");
+                            return;
+                        } catch (Settings.SettingNotFoundException e) {
+                            ((WifiManager) this.mContext.getSystemService("wifi")).setCountryCode(country, false);
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    public IccFileHandler getIccFileHandler() {
+        IccFileHandler fh;
+        UiccCardApplication uiccApplication = this.mUiccApplication.get();
+        if (uiccApplication == null) {
+            Rlog.d(LOG_TAG, "getIccFileHandler: uiccApplication == null, return null");
+            fh = null;
+        } else {
+            fh = uiccApplication.getIccFileHandler();
+        }
+        Rlog.d(LOG_TAG, "getIccFileHandler: fh=" + fh);
+        return fh;
+    }
+
+    public IccRecords getIccRecords() {
+        UiccCardApplication uiccApplication = this.mUiccApplication.get();
+        if (uiccApplication == null) {
+            return null;
+        }
+        return uiccApplication.getIccRecords();
+    }
+
+    public Handler getHandler() {
+        return this;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void updatePhoneObject(int voiceRadioTech) {
+        Rlog.d(LOG_TAG, "updatePhoneObject: phoneid = " + this.mPhoneId + " rat = " + voiceRadioTech);
+        Phone phoneProxy = PhoneFactory.getPhone(this.mPhoneId);
+        if (phoneProxy != null) {
+            phoneProxy.updatePhoneObject(voiceRadioTech);
+        }
+    }
+
+    public ServiceStateTracker getServiceStateTracker() {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public ServiceState getBaseServiceState() {
+        return getServiceState();
+    }
+
+    public CallTracker getCallTracker() {
+        return null;
+    }
+
+    public IccCardApplicationStatus.AppType getCurrentUiccAppType() {
+        UiccCardApplication currentApp = this.mUiccApplication.get();
+        return currentApp != null ? currentApp.getType() : IccCardApplicationStatus.AppType.APPTYPE_UNKNOWN;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public IccCard getIccCard() {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getIccSerialNumber() {
+        IccRecords r = this.mIccRecords.get();
+        if (r != null) {
+            return r.getIccId();
+        }
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean getIccRecordsLoaded() {
+        IccRecords r = this.mIccRecords.get();
+        if (r != null) {
+            return r.getRecordsLoaded();
+        }
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public List<CellInfo> getAllCellInfo() {
+        return privatizeCellInfoList(getServiceStateTracker().getAllCellInfo());
+    }
+
+    private List<CellInfo> privatizeCellInfoList(List<CellInfo> cellInfoList) {
+        if (Settings.Secure.getInt(getContext().getContentResolver(), "location_mode", 0) != 0) {
+            return cellInfoList;
+        }
+        ArrayList<CellInfo> privateCellInfoList = new ArrayList<>(cellInfoList.size());
+        for (CellInfo c : cellInfoList) {
+            if (c instanceof CellInfoCdma) {
+                CellInfoCdma cellInfoCdma = (CellInfoCdma) c;
+                CellIdentityCdma cellIdentity = cellInfoCdma.getCellIdentity();
+                CellIdentityCdma maskedCellIdentity = new CellIdentityCdma(cellIdentity.getNetworkId(), cellIdentity.getSystemId(), cellIdentity.getBasestationId(), Integer.MAX_VALUE, Integer.MAX_VALUE);
+                CellInfoCdma privateCellInfoCdma = new CellInfoCdma(cellInfoCdma);
+                privateCellInfoCdma.setCellIdentity(maskedCellIdentity);
+                privateCellInfoList.add(privateCellInfoCdma);
+            } else {
+                privateCellInfoList.add(c);
+            }
+        }
+        return privateCellInfoList;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCellInfoListRate(int rateInMillis) {
+        this.mCi.setCellInfoListRate(rateInMillis, null);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean getMessageWaitingIndicator() {
+        return this.mVmCount != 0;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean getCallForwardingIndicator() {
+        IccRecords r = this.mIccRecords.get();
+        if (r != null) {
+            return r.getVoiceCallForwardingFlag();
+        }
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallForwardingUncondTimerOption(int startHour, int startMinute, int endHour, int endMinute, int commandInterfaceCFReason, int commandInterfaceCFAction, String dialingNumber, Message onComplete) {
+        Rlog.e(LOG_TAG, "setCallForwardingUncondTimerOption error ");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallForwardingUncondTimerOption(int commandInterfaceCFReason, Message onComplete) {
+        Rlog.e(LOG_TAG, "getCallForwardingUncondTimerOption error ");
+    }
+
+    public void setCallForwardingPreference(boolean enabled) {
         Rlog.d(LOG_TAG, "Set callforwarding info to perferences");
-        Editor edit = PreferenceManager.getDefaultSharedPreferences(this.mContext).edit();
-        edit.putBoolean(CF_ENABLED + getSubId(), z);
+        SharedPreferences.Editor edit = PreferenceManager.getDefaultSharedPreferences(this.mContext).edit();
+        edit.putBoolean(CF_ENABLED + getSubId(), enabled);
         edit.commit();
         setSimImsi(getSubscriberId());
     }
 
-    public void setCallForwardingUncondTimerOption(int i, int i2, int i3, int i4, int i5, int i6, String str, Message message) {
-        Rlog.e(LOG_TAG, "setCallForwardingUncondTimerOption error ");
+    public boolean getCallForwardingPreference() {
+        Rlog.d(LOG_TAG, "Get callforwarding info from perferences");
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this.mContext);
+        if (TelephonyManager.getDefault().isMultiSimEnabled()) {
+            if (!sp.contains(CF_ENABLED + getSubId()) && sp.contains(CF_ENABLED + this.mPhoneId)) {
+                setCallForwardingPreference(sp.getBoolean(CF_ENABLED + this.mPhoneId, false));
+                SharedPreferences.Editor edit = sp.edit();
+                edit.remove(CF_ENABLED + this.mPhoneId);
+                edit.commit();
+            }
+        } else if (!sp.contains(CF_ENABLED + getSubId()) && sp.contains(CF_ENABLED)) {
+            setCallForwardingPreference(sp.getBoolean(CF_ENABLED, false));
+            SharedPreferences.Editor edit2 = sp.edit();
+            edit2.remove(CF_ENABLED);
+            edit2.commit();
+        }
+        return sp.getBoolean(CF_ENABLED + getSubId(), false);
     }
 
-    public void setCallWaiting(boolean z, int i, Message message) {
+    public String getSimImsi() {
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getContext());
+        if (TelephonyManager.getDefault().isMultiSimEnabled()) {
+            if (!sp.contains(SIM_IMSI + getSubId()) && sp.contains(VM_SIM_IMSI + this.mPhoneId)) {
+                setSimImsi(sp.getString(VM_SIM_IMSI + this.mPhoneId, null));
+                SharedPreferences.Editor editor = sp.edit();
+                editor.remove(VM_SIM_IMSI + this.mPhoneId);
+                editor.commit();
+            }
+        } else if (!sp.contains(SIM_IMSI + getSubId()) && sp.contains(VM_SIM_IMSI)) {
+            setSimImsi(sp.getString(VM_SIM_IMSI, null));
+            SharedPreferences.Editor editor2 = sp.edit();
+            editor2.remove(VM_SIM_IMSI);
+            editor2.commit();
+        }
+        return sp.getString(SIM_IMSI + getSubId(), null);
     }
 
-    public void setCallWaiting(boolean z, Message message) {
+    public void setSimImsi(String imsi) {
+        SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(getContext()).edit();
+        editor.putString(SIM_IMSI + getSubId(), imsi);
+        editor.apply();
     }
 
-    /* Access modifiers changed, original: protected */
-    public void setCardInPhoneBook() {
+    @Override // com.android.internal.telephony.Phone
+    public void queryCdmaRoamingPreference(Message response) {
+        this.mCi.queryCdmaRoamingPreference(response);
     }
 
-    public void setCdmaRoamingPreference(int i, Message message) {
-        this.mCi.setCdmaRoamingPreference(i, message);
+    @Override // com.android.internal.telephony.Phone
+    public SignalStrength getSignalStrength() {
+        ServiceStateTracker sst = getServiceStateTracker();
+        return sst == null ? new SignalStrength() : sst.getSignalStrength();
     }
 
-    public void setCdmaSubscription(int i, Message message) {
-        this.mCi.setCdmaSubscriptionSource(i, message);
+    @Override // com.android.internal.telephony.Phone
+    public void setCdmaRoamingPreference(int cdmaRoamingType, Message response) {
+        this.mCi.setCdmaRoamingPreference(cdmaRoamingType, response);
     }
 
-    public void setCellInfoListRate(int i) {
-        this.mCi.setCellInfoListRate(i, null);
+    @Override // com.android.internal.telephony.Phone
+    public void setCdmaSubscription(int cdmaSubscriptionType, Message response) {
+        this.mCi.setCdmaSubscriptionSource(cdmaSubscriptionType, response);
     }
 
-    public void setEchoSuppressionEnabled() {
+    @Override // com.android.internal.telephony.Phone
+    public void setPreferredNetworkType(int networkType, Message response) {
+        if (TelephonyManager.getDefault().getPhoneCount() > 1) {
+            ModemBindingPolicyHandler.getInstance().setPreferredNetworkType(networkType, getPhoneId(), response);
+        } else {
+            this.mCi.setPreferredNetworkType(networkType, response);
+        }
     }
 
-    public void setImsRegistrationState(boolean z) {
-        this.mDcTracker.setImsRegistrationState(z);
+    @Override // com.android.internal.telephony.Phone
+    public void getPreferredNetworkType(Message response) {
+        this.mCi.getPreferredNetworkType(response);
     }
 
-    public void setIncomingAnonymousCallBarring(boolean z, Message message) {
+    @Override // com.android.internal.telephony.Phone
+    public void getSmscAddress(Message result) {
+        this.mCi.getSmscAddress(result);
     }
 
-    public void setIncomingSpecificDnCallBarring(int i, String[] strArr, Message message) {
+    @Override // com.android.internal.telephony.Phone
+    public void setSmscAddress(String address, Message result) {
+        this.mCi.setSmscAddress(address, result);
     }
 
-    public void setLimitationByChameleon(boolean z, Message message) {
-        this.mCi.setLimitationByChameleon(z, message);
+    @Override // com.android.internal.telephony.Phone
+    public void setTTYMode(int ttyMode, Message onComplete) {
+        this.mCi.setTTYMode(ttyMode, onComplete);
     }
 
-    public void setLocalCallHold(int i) {
-        this.mCi.setLocalCallHold(i);
+    @Override // com.android.internal.telephony.Phone
+    public void setUiTTYMode(int uiTtyMode, Message onComplete) {
+        Rlog.d(LOG_TAG, "unexpected setUiTTYMode method call");
     }
 
-    public void setMobileDataEnabledDun(boolean z) {
+    @Override // com.android.internal.telephony.Phone
+    public void queryTTYMode(Message onComplete) {
+        this.mCi.queryTTYMode(onComplete);
     }
 
-    public void setModemSettingsByChameleon(int i, Message message) {
-        this.mCi.setModemSettingsByChameleon(i, message);
+    @Override // com.android.internal.telephony.Phone
+    public void enableEnhancedVoicePrivacy(boolean enable, Message onComplete) {
+        logUnexpectedCdmaMethodCall("enableEnhancedVoicePrivacy");
     }
 
-    public void setNetworkSelectionModeAutomatic(Message message) {
-        NetworkSelectMessage networkSelectMessage = new NetworkSelectMessage();
-        networkSelectMessage.message = message;
-        networkSelectMessage.operatorNumeric = "";
-        networkSelectMessage.operatorAlphaLong = "";
-        this.mCi.setNetworkSelectionModeAutomatic(obtainMessage(17, networkSelectMessage));
-        updateSavedNetworkOperator(networkSelectMessage);
+    @Override // com.android.internal.telephony.Phone
+    public void getEnhancedVoicePrivacy(Message onComplete) {
+        logUnexpectedCdmaMethodCall("getEnhancedVoicePrivacy");
     }
 
-    public void setOnEcbModeExitResponse(Handler handler, int i, Object obj) {
-        logUnexpectedCdmaMethodCall("setOnEcbModeExitResponse");
+    @Override // com.android.internal.telephony.Phone
+    public void setBandMode(int bandMode, Message response) {
+        this.mCi.setBandMode(bandMode, response);
     }
 
-    public boolean setOperatorBrandOverride(String str) {
+    @Override // com.android.internal.telephony.Phone
+    public void queryAvailableBandMode(Message response) {
+        this.mCi.queryAvailableBandMode(response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void invokeOemRilRequestRaw(byte[] data, Message response) {
+        this.mCi.invokeOemRilRequestRaw(data, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void invokeOemRilRequestStrings(String[] strings, Message response) {
+        this.mCi.invokeOemRilRequestStrings(strings, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void nvReadItem(int itemID, Message response) {
+        this.mCi.nvReadItem(itemID, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void nvWriteItem(int itemID, String itemValue, Message response) {
+        this.mCi.nvWriteItem(itemID, itemValue, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void nvWriteCdmaPrl(byte[] preferredRoamingList, Message response) {
+        this.mCi.nvWriteCdmaPrl(preferredRoamingList, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void nvResetConfig(int resetType, Message response) {
+        this.mCi.nvResetConfig(resetType, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void notifyDataActivity() {
+        this.mNotifier.notifyDataActivity(this);
+    }
+
+    public void notifyMessageWaitingIndicator() {
+        if (this.mIsVoiceCapable) {
+            this.mNotifier.notifyMessageWaitingChanged(this);
+        }
+    }
+
+    public void notifyDataConnection(String reason, String apnType, PhoneConstants.DataState state) {
+        this.mNotifier.notifyDataConnection(this, reason, apnType, state);
+    }
+
+    public void notifyDataConnection(String reason, String apnType) {
+        this.mNotifier.notifyDataConnection(this, reason, apnType, getDataConnectionState(apnType));
+    }
+
+    public void notifyDataConnection(String reason) {
+        String[] types = getActiveApnTypes();
+        for (String apnType : types) {
+            this.mNotifier.notifyDataConnection(this, reason, apnType, getDataConnectionState(apnType));
+        }
+    }
+
+    public void notifyOtaspChanged(int otaspMode) {
+        this.mNotifier.notifyOtaspChanged(this, otaspMode);
+    }
+
+    public void notifySignalStrength() {
+        this.mNotifier.notifySignalStrength(this);
+    }
+
+    public void notifyCellInfo(List<CellInfo> cellInfo) {
+        this.mNotifier.notifyCellInfo(this, privatizeCellInfoList(cellInfo));
+    }
+
+    public void notifyDataConnectionRealTimeInfo(DataConnectionRealTimeInfo dcRtInfo) {
+        this.mNotifier.notifyDataConnectionRealTimeInfo(this, dcRtInfo);
+    }
+
+    public void notifyVoLteServiceStateChanged(VoLteServiceState lteState) {
+        this.mNotifier.notifyVoLteServiceStateChanged(this, lteState);
+    }
+
+    public boolean isInEmergencyCall() {
         return false;
     }
 
-    public void setPreferredNetworkType(int i, Message message) {
-        if (TelephonyManager.getDefault().getPhoneCount() > 1) {
-            ModemBindingPolicyHandler.getInstance().setPreferredNetworkType(i, getPhoneId(), message);
-        } else {
-            this.mCi.setPreferredNetworkType(i, message);
+    public boolean isInEcm() {
+        return false;
+    }
+
+    public static int getVideoState(Call call) {
+        ImsPhoneConnection conn = (ImsPhoneConnection) call.getEarliestConnection();
+        if (conn != null) {
+            return conn.getVideoState();
+        }
+        return 0;
+    }
+
+    private boolean isImsVideoCall(Call call) {
+        return VideoProfile.VideoState.isVideo(getVideoState(call));
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isImsVtCallPresent() {
+        boolean isVideoCallActive = false;
+        if (this.mImsPhone != null) {
+            isVideoCallActive = isImsVideoCall(this.mImsPhone.getForegroundCall()) || isImsVideoCall(this.mImsPhone.getBackgroundCall()) || isImsVideoCall(this.mImsPhone.getRingingCall());
+        }
+        Rlog.d(LOG_TAG, "isVideoCallActive: " + isVideoCallActive);
+        return isVideoCallActive;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getVoiceMessageCount() {
+        return this.mVmCount;
+    }
+
+    public void setVoiceMessageCount(int countWaiting) {
+        this.mVmCount = countWaiting;
+        notifyMessageWaitingIndicator();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getCdmaEriIconIndex() {
+        logUnexpectedCdmaMethodCall("getCdmaEriIconIndex");
+        return -1;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getCdmaEriIconMode() {
+        logUnexpectedCdmaMethodCall("getCdmaEriIconMode");
+        return -1;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getCdmaEriText() {
+        logUnexpectedCdmaMethodCall("getCdmaEriText");
+        return "GSM nw, no ERI";
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getCdmaMin() {
+        logUnexpectedCdmaMethodCall("getCdmaMin");
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isMinInfoReady() {
+        logUnexpectedCdmaMethodCall("isMinInfoReady");
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getCdmaPrlVersion() {
+        logUnexpectedCdmaMethodCall("getCdmaPrlVersion");
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void sendBurstDtmf(String dtmfString, int on, int off, Message onComplete) {
+        logUnexpectedCdmaMethodCall("sendBurstDtmf");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void exitEmergencyCallbackMode() {
+        logUnexpectedCdmaMethodCall("exitEmergencyCallbackMode");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForCdmaOtaStatusChange(Handler h, int what, Object obj) {
+        logUnexpectedCdmaMethodCall("registerForCdmaOtaStatusChange");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForCdmaOtaStatusChange(Handler h) {
+        logUnexpectedCdmaMethodCall("unregisterForCdmaOtaStatusChange");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForSubscriptionInfoReady(Handler h, int what, Object obj) {
+        logUnexpectedCdmaMethodCall("registerForSubscriptionInfoReady");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForSubscriptionInfoReady(Handler h) {
+        logUnexpectedCdmaMethodCall("unregisterForSubscriptionInfoReady");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean needsOtaServiceProvisioning() {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isOtaSpNumber(String dialStr) {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForCallWaiting(Handler h, int what, Object obj) {
+        logUnexpectedCdmaMethodCall("registerForCallWaiting");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForCallWaiting(Handler h) {
+        logUnexpectedCdmaMethodCall("unregisterForCallWaiting");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForEcmTimerReset(Handler h, int what, Object obj) {
+        logUnexpectedCdmaMethodCall("registerForEcmTimerReset");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForEcmTimerReset(Handler h) {
+        logUnexpectedCdmaMethodCall("unregisterForEcmTimerReset");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForSignalInfo(Handler h, int what, Object obj) {
+        this.mCi.registerForSignalInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForSignalInfo(Handler h) {
+        this.mCi.unregisterForSignalInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForDisplayInfo(Handler h, int what, Object obj) {
+        this.mCi.registerForDisplayInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForDisplayInfo(Handler h) {
+        this.mCi.unregisterForDisplayInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForNumberInfo(Handler h, int what, Object obj) {
+        this.mCi.registerForNumberInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForNumberInfo(Handler h) {
+        this.mCi.unregisterForNumberInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForRedirectedNumberInfo(Handler h, int what, Object obj) {
+        this.mCi.registerForRedirectedNumberInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForRedirectedNumberInfo(Handler h) {
+        this.mCi.unregisterForRedirectedNumberInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForLineControlInfo(Handler h, int what, Object obj) {
+        this.mCi.registerForLineControlInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForLineControlInfo(Handler h) {
+        this.mCi.unregisterForLineControlInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerFoT53ClirlInfo(Handler h, int what, Object obj) {
+        this.mCi.registerFoT53ClirlInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForT53ClirInfo(Handler h) {
+        this.mCi.unregisterForT53ClirInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForT53AudioControlInfo(Handler h, int what, Object obj) {
+        this.mCi.registerForT53AudioControlInfo(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForT53AudioControlInfo(Handler h) {
+        this.mCi.unregisterForT53AudioControlInfo(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setOnEcbModeExitResponse(Handler h, int what, Object obj) {
+        logUnexpectedCdmaMethodCall("setOnEcbModeExitResponse");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unsetOnEcbModeExitResponse(Handler h) {
+        logUnexpectedCdmaMethodCall("unsetOnEcbModeExitResponse");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void registerForRadioOffOrNotAvailable(Handler h, int what, Object obj) {
+        this.mRadioOffOrNotAvailableRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void unregisterForRadioOffOrNotAvailable(Handler h) {
+        this.mRadioOffOrNotAvailableRegistrants.remove(h);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String[] getActiveApnTypes() {
+        return this.mDcTracker.getActiveApnTypes();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean hasMatchedTetherApnSetting() {
+        return this.mDcTracker.hasMatchedTetherApnSetting();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getActiveApnHost(String apnType) {
+        return this.mDcTracker.getActiveApnString(apnType);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public LinkProperties getLinkProperties(String apnType) {
+        return this.mDcTracker.getLinkProperties(apnType);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public NetworkCapabilities getNetworkCapabilities(String apnType) {
+        return this.mDcTracker.getNetworkCapabilities(apnType);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isDataConnectivityPossible() {
+        return isDataConnectivityPossible("default");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isOnDemandDataPossible(String apnType) {
+        return this.mDcTracker != null && this.mDcTracker.isOnDemandDataPossible(apnType);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isDataConnectivityPossible(String apnType) {
+        return this.mDcTracker != null && this.mDcTracker.isDataPossible(apnType);
+    }
+
+    public void notifyNewRingingConnectionP(Connection cn) {
+        if (this.mIsVoiceCapable) {
+            this.mNewRingingConnectionRegistrants.notifyRegistrants(new AsyncResult((Object) null, cn, (Throwable) null));
+            if (hasMessages(15)) {
+                return;
+            }
+            if ((getForegroundCall().isIdle() || getForegroundCall().isDialingOrAlerting()) && getBackgroundCall().isIdle()) {
+                Rlog.d(LOG_TAG, "notifyNewRingingConnectionP(): send EVENT_CALL_RING_CONTINUE");
+                sendMessageDelayed(obtainMessage(15, this.mCallRingContinueToken, 0), this.mCallRingDelay);
+            }
         }
     }
 
-    public void setPreferredNetworkTypeWithOptimizeSetting(int i, boolean z, Message message) {
-        this.mCi.setRatModeOptimizeSetting(z, obtainMessage(EVENT_SET_RAT_MODE_OPTIMIZE_SETTING_COMPLETE, i, 0, message));
+    public void notifyUnknownConnectionP(Connection cn) {
+        this.mUnknownConnectionRegistrants.notifyResult(cn);
     }
 
-    public void setProfilePdpType(int i, String str) {
+    public void notifyForVideoCapabilityChanged(boolean isVideoCallCapable) {
+        this.mIsVideoCapable = isVideoCallCapable;
+        this.mVideoCapabilityChangedRegistrants.notifyRegistrants(new AsyncResult((Object) null, Boolean.valueOf(isVideoCallCapable), (Throwable) null));
     }
 
-    public boolean setRoamingOverride(List<String> list, List<String> list2, List<String> list3, List<String> list4) {
-        String iccSerialNumber = getIccSerialNumber();
-        if (TextUtils.isEmpty(iccSerialNumber)) {
+    private void notifyIncomingRing() {
+        if (this.mIsVoiceCapable) {
+            this.mIncomingRingRegistrants.notifyRegistrants(new AsyncResult((Object) null, this, (Throwable) null));
+        }
+    }
+
+    private void sendIncomingCallRingNotification(int token) {
+        if (!this.mIsVoiceCapable || this.mDoesRilSendMultipleCallRing || token != this.mCallRingContinueToken) {
+            Rlog.d(LOG_TAG, "Ignoring ring notification request, mDoesRilSendMultipleCallRing=" + this.mDoesRilSendMultipleCallRing + " token=" + token + " mCallRingContinueToken=" + this.mCallRingContinueToken + " mIsVoiceCapable=" + this.mIsVoiceCapable);
+            return;
+        }
+        Rlog.d(LOG_TAG, "Sending notifyIncomingRing");
+        notifyIncomingRing();
+        sendMessageDelayed(obtainMessage(15, token, 0), this.mCallRingDelay);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isManualNetSelAllowed() {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isCspPlmnEnabled() {
+        logUnexpectedGsmMethodCall("isCspPlmnEnabled");
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public IsimRecords getIsimRecords() {
+        Rlog.e(LOG_TAG, "getIsimRecords() is only supported on LTE devices");
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getMsisdn() {
+        logUnexpectedGsmMethodCall("getMsisdn");
+        return null;
+    }
+
+    private static void logUnexpectedCdmaMethodCall(String name) {
+        Rlog.e(LOG_TAG, "Error! " + name + "() in PhoneBase should not be called, CDMAPhone inactive.");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public PhoneConstants.DataState getDataConnectionState() {
+        return getDataConnectionState("default");
+    }
+
+    private static void logUnexpectedGsmMethodCall(String name) {
+        Rlog.e(LOG_TAG, "Error! " + name + "() in PhoneBase should not be called, GSMPhone inactive.");
+    }
+
+    public void notifyCallForwardingIndicator() {
+        Rlog.e(LOG_TAG, "Error! This function should never be executed, inactive CDMAPhone.");
+    }
+
+    public void notifyDataConnectionFailed(String reason, String apnType) {
+        this.mNotifier.notifyDataConnectionFailed(this, reason, apnType);
+    }
+
+    public void notifyPreciseDataConnectionFailed(String reason, String apnType, String apn, String failCause) {
+        this.mNotifier.notifyPreciseDataConnectionFailed(this, reason, apnType, apn, failCause);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getLteOnCdmaMode() {
+        return this.mCi.getLteOnCdmaMode();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setVoiceMessageWaiting(int line, int countWaiting) {
+        Rlog.e(LOG_TAG, "Error! This function should never be executed, inactive Phone.");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public UsimServiceTable getUsimServiceTable() {
+        IccRecords r = this.mIccRecords.get();
+        if (r != null) {
+            return r.getUsimServiceTable();
+        }
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public UiccCard getUiccCard() {
+        return this.mUiccController.getUiccCard(this.mPhoneId);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String[] getPcscfAddress(String apnType) {
+        return this.mDcTracker.getPcscfAddress(apnType);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setImsRegistrationState(boolean registered) {
+        this.mDcTracker.setImsRegistrationState(registered);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public Phone getImsPhone() {
+        return this.mImsPhone;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isUtEnabled() {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public ImsPhone relinquishOwnershipOfImsPhone() {
+        ImsPhone imsPhone = null;
+        synchronized (this.mImsLock) {
+            if (this.mImsPhone != null) {
+                imsPhone = this.mImsPhone;
+                this.mImsPhone = null;
+                CallManager.getInstance().unregisterPhone(imsPhone);
+                imsPhone.unregisterForSilentRedial(this);
+            }
+        }
+        return imsPhone;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void acquireOwnershipOfImsPhone(ImsPhone imsPhone) {
+        synchronized (this.mImsLock) {
+            if (imsPhone != null) {
+                if (this.mImsPhone != null) {
+                    Rlog.e(LOG_TAG, "acquireOwnershipOfImsPhone: non-null mImsPhone. Shouldn't happen - but disposing");
+                    this.mImsPhone.dispose();
+                }
+                this.mImsPhone = imsPhone;
+                this.mImsServiceReady = true;
+                this.mImsPhone.updateParentPhone(this);
+                CallManager.getInstance().registerPhone(this.mImsPhone);
+                this.mImsPhone.registerForSilentRedial(this, 32, null);
+            }
+        }
+    }
+
+    protected void updateImsPhone() {
+        synchronized (this.mImsLock) {
+            Rlog.d(LOG_TAG, "updateImsPhone mImsServiceReady=" + this.mImsServiceReady);
+            if (this.mImsServiceReady && this.mImsPhone == null) {
+                for (Phone phone : CallManager.getInstance().getAllPhones()) {
+                    if (phone != null && phone.getPhoneType() == 5) {
+                        Rlog.d(LOG_TAG, "Found IMSPhone = " + phone);
+                        return;
+                    }
+                }
+                Rlog.d(LOG_TAG, "Not found IMSPhone ~~~ make new");
+                this.mImsPhone = PhoneFactory.makeImsPhone(this.mNotifier, this);
+                CallManager.getInstance().registerPhone(this.mImsPhone);
+                this.mImsPhone.registerForSilentRedial(this, 32, null);
+            } else if (!this.mImsServiceReady && this.mImsPhone != null) {
+                CallManager.getInstance().unregisterPhone(this.mImsPhone);
+                this.mImsPhone.unregisterForSilentRedial(this);
+                this.mImsPhone.dispose();
+                this.mImsPhone = null;
+            }
+        }
+    }
+
+    protected Connection dialInternal(String dialString, UUSInfo uusInfo, int videoState) throws CallStateException {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getSubId() {
+        return SubscriptionController.getInstance().getSubIdUsingPhoneId(this.mPhoneId);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getPhoneId() {
+        return this.mPhoneId;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getVoicePhoneServiceState() {
+        ImsPhone imsPhone = this.mImsPhone;
+        if (imsPhone == null || imsPhone.getServiceState().getState() != 0) {
+            return getServiceState().getState();
+        }
+        return 0;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean setOperatorBrandOverride(String brand) {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean setRoamingOverride(List<String> gsmRoamingList, List<String> gsmNonRoamingList, List<String> cdmaRoamingList, List<String> cdmaNonRoamingList) {
+        String iccId = getIccSerialNumber();
+        if (TextUtils.isEmpty(iccId)) {
             return false;
         }
-        setRoamingOverrideHelper(list, GSM_ROAMING_LIST_OVERRIDE_PREFIX, iccSerialNumber);
-        setRoamingOverrideHelper(list2, GSM_NON_ROAMING_LIST_OVERRIDE_PREFIX, iccSerialNumber);
-        setRoamingOverrideHelper(list3, CDMA_ROAMING_LIST_OVERRIDE_PREFIX, iccSerialNumber);
-        setRoamingOverrideHelper(list4, CDMA_NON_ROAMING_LIST_OVERRIDE_PREFIX, iccSerialNumber);
-        ServiceStateTracker serviceStateTracker = getServiceStateTracker();
-        if (serviceStateTracker != null) {
-            serviceStateTracker.pollState();
+        setRoamingOverrideHelper(gsmRoamingList, GSM_ROAMING_LIST_OVERRIDE_PREFIX, iccId);
+        setRoamingOverrideHelper(gsmNonRoamingList, GSM_NON_ROAMING_LIST_OVERRIDE_PREFIX, iccId);
+        setRoamingOverrideHelper(cdmaRoamingList, CDMA_ROAMING_LIST_OVERRIDE_PREFIX, iccId);
+        setRoamingOverrideHelper(cdmaNonRoamingList, CDMA_NON_ROAMING_LIST_OVERRIDE_PREFIX, iccId);
+        ServiceStateTracker tracker = getServiceStateTracker();
+        if (tracker != null) {
+            tracker.pollState();
         }
         return true;
     }
 
-    public void setSimImsi(String str) {
-        Editor edit = PreferenceManager.getDefaultSharedPreferences(getContext()).edit();
-        edit.putString(SIM_IMSI + getSubId(), str);
-        edit.apply();
-    }
-
-    public void setSmscAddress(String str, Message message) {
-        this.mCi.setSmscAddress(str, message);
-    }
-
-    public void setSystemProperty(String str, String str2) {
-        if (!getUnitTestMode()) {
-            SystemProperties.set(str, str2);
+    private void setRoamingOverrideHelper(List<String> list, String prefix, String iccId) {
+        SharedPreferences.Editor spEditor = PreferenceManager.getDefaultSharedPreferences(this.mContext).edit();
+        String key = prefix + iccId;
+        if (list == null || list.isEmpty()) {
+            spEditor.remove(key).commit();
+        } else {
+            spEditor.putStringSet(key, new HashSet(list)).commit();
         }
     }
 
-    public void setTTYMode(int i, Message message) {
-        this.mCi.setTTYMode(i, message);
+    public boolean isMccMncMarkedAsRoaming(String mccMnc) {
+        return getRoamingOverrideHelper(GSM_ROAMING_LIST_OVERRIDE_PREFIX, mccMnc);
     }
 
-    public void setUiTTYMode(int i, Message message) {
-        Rlog.d(LOG_TAG, "unexpected setUiTTYMode method call");
+    public boolean isMccMncMarkedAsNonRoaming(String mccMnc) {
+        return getRoamingOverrideHelper(GSM_NON_ROAMING_LIST_OVERRIDE_PREFIX, mccMnc);
     }
 
-    public void setUnitTestMode(boolean z) {
-        this.mUnitTestMode = z;
+    public boolean isSidMarkedAsRoaming(int SID) {
+        return getRoamingOverrideHelper(CDMA_ROAMING_LIST_OVERRIDE_PREFIX, Integer.toString(SID));
     }
 
-    public void setVoiceMessageCount(int i) {
-        this.mVmCount = i;
-        notifyMessageWaitingIndicator();
+    public boolean isSidMarkedAsNonRoaming(int SID) {
+        return getRoamingOverrideHelper(CDMA_NON_ROAMING_LIST_OVERRIDE_PREFIX, Integer.toString(SID));
     }
 
-    public void setVoiceMessageWaiting(int i, int i2) {
-        Rlog.e(LOG_TAG, "Error! This function should never be executed, inactive Phone.");
+    @Override // com.android.internal.telephony.Phone
+    public boolean isImsRegistered() {
+        ImsPhone imsPhone = this.mImsPhone;
+        boolean isImsRegistered = false;
+        if (imsPhone != null) {
+            isImsRegistered = imsPhone.isImsRegistered();
+        } else {
+            ServiceStateTracker sst = getServiceStateTracker();
+            if (sst != null) {
+                isImsRegistered = sst.isImsRegistered();
+            }
+        }
+        Rlog.d(LOG_TAG, "isImsRegistered =" + isImsRegistered);
+        return isImsRegistered;
     }
 
+    private boolean getRoamingOverrideHelper(String prefix, String key) {
+        Set<String> value;
+        String iccId = getIccSerialNumber();
+        if (TextUtils.isEmpty(iccId) || TextUtils.isEmpty(key) || (value = PreferenceManager.getDefaultSharedPreferences(this.mContext).getStringSet(prefix + iccId, null)) == null) {
+            return false;
+        }
+        return value.contains(key);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isRadioAvailable() {
+        return this.mCi.getRadioState().isAvailable();
+    }
+
+    @Override // com.android.internal.telephony.Phone
     public void shutdownRadio() {
         getServiceStateTracker().requestShutdown();
     }
 
-    public void unregisterForCallWaiting(Handler handler) {
-        logUnexpectedCdmaMethodCall("unregisterForCallWaiting");
+    @Override // com.android.internal.telephony.Phone
+    public void getCallBarringOption(String facility, String password, Message onComplete) {
+        logUnexpectedCdmaMethodCall("getCallBarringOption");
     }
 
-    public void unregisterForCdmaOtaStatusChange(Handler handler) {
-        logUnexpectedCdmaMethodCall("unregisterForCdmaOtaStatusChange");
+    @Override // com.android.internal.telephony.Phone
+    public void setCallBarringOption(String facility, boolean lockState, String password, Message onComplete) {
+        logUnexpectedCdmaMethodCall("setCallBarringOption");
     }
 
-    public void unregisterForDisconnect(Handler handler) {
-        this.mDisconnectRegistrants.remove(handler);
+    @Override // com.android.internal.telephony.Phone
+    public void requestChangeCbPsw(String facility, String oldPwd, String newPwd, Message result) {
+        logUnexpectedCdmaMethodCall("requestChangeCbPsw");
     }
 
-    public void unregisterForDisplayInfo(Handler handler) {
-        this.mCi.unregisterForDisplayInfo(handler);
+    @Override // com.android.internal.telephony.Phone
+    public void setLocalCallHold(int lchStatus) {
+        this.mCi.setLocalCallHold(lchStatus);
     }
 
-    public void unregisterForEcmTimerReset(Handler handler) {
-        logUnexpectedCdmaMethodCall("unregisterForEcmTimerReset");
+    @Override // com.android.internal.telephony.Phone
+    public String getMccMncOnSimLock() {
+        return null;
     }
 
-    public void unregisterForHandoverStateChanged(Handler handler) {
-        this.mHandoverRegistrants.remove(handler);
+    @Override // com.android.internal.telephony.Phone
+    public void deflectCall(String number) throws CallStateException {
+        throw new CallStateException("Unexpected deflectCall method call");
     }
 
-    public void unregisterForInCallVoicePrivacyOff(Handler handler) {
-        this.mCi.unregisterForInCallVoicePrivacyOff(handler);
+    @Override // com.android.internal.telephony.Phone
+    public void addParticipant(String dialString) throws CallStateException {
+        throw new CallStateException("addParticipant is not supported in this phone " + this);
     }
 
-    public void unregisterForInCallVoicePrivacyOn(Handler handler) {
-        this.mCi.unregisterForInCallVoicePrivacyOn(handler);
-    }
-
-    public void unregisterForIncomingRing(Handler handler) {
-        this.mIncomingRingRegistrants.remove(handler);
-    }
-
-    public void unregisterForLineControlInfo(Handler handler) {
-        this.mCi.unregisterForLineControlInfo(handler);
-    }
-
-    public void unregisterForMmiComplete(Handler handler) {
-        checkCorrectThread(handler);
-        this.mMmiCompleteRegistrants.remove(handler);
-    }
-
-    public void unregisterForMmiInitiate(Handler handler) {
-        this.mMmiRegistrants.remove(handler);
-    }
-
-    public void unregisterForNewRingingConnection(Handler handler) {
-        this.mNewRingingConnectionRegistrants.remove(handler);
-    }
-
-    public void unregisterForNumberInfo(Handler handler) {
-        this.mCi.unregisterForNumberInfo(handler);
-    }
-
-    public void unregisterForOnHoldTone(Handler handler) {
-    }
-
-    public void unregisterForPreciseCallStateChanged(Handler handler) {
-        this.mPreciseCallStateRegistrants.remove(handler);
-    }
-
-    public void unregisterForRadioOffOrNotAvailable(Handler handler) {
-        this.mRadioOffOrNotAvailableRegistrants.remove(handler);
-    }
-
-    public void unregisterForRedirectedNumberInfo(Handler handler) {
-        this.mCi.unregisterForRedirectedNumberInfo(handler);
-    }
-
-    public void unregisterForResendIncallMute(Handler handler) {
-        this.mCi.unregisterForResendIncallMute(handler);
-    }
-
-    public void unregisterForRingbackTone(Handler handler) {
-        this.mCi.unregisterForRingbackTone(handler);
-    }
-
-    public void unregisterForServiceStateChanged(Handler handler) {
-        this.mServiceStateRegistrants.remove(handler);
-    }
-
-    public void unregisterForSignalInfo(Handler handler) {
-        this.mCi.unregisterForSignalInfo(handler);
-    }
-
-    public void unregisterForSimRecordsLoaded(Handler handler) {
-        logUnexpectedCdmaMethodCall("unregisterForSimRecordsLoaded");
-    }
-
-    public void unregisterForSubscriptionInfoReady(Handler handler) {
-        logUnexpectedCdmaMethodCall("unregisterForSubscriptionInfoReady");
-    }
-
-    public void unregisterForSuppServiceFailed(Handler handler) {
-        this.mSuppServiceFailedRegistrants.remove(handler);
-    }
-
-    public void unregisterForT53AudioControlInfo(Handler handler) {
-        this.mCi.unregisterForT53AudioControlInfo(handler);
-    }
-
-    public void unregisterForT53ClirInfo(Handler handler) {
-        this.mCi.unregisterForT53ClirInfo(handler);
-    }
-
-    public void unregisterForTtyModeReceived(Handler handler) {
-    }
-
-    public void unregisterForUnknownConnection(Handler handler) {
-        this.mUnknownConnectionRegistrants.remove(handler);
-    }
-
-    public void unregisterForVideoCapabilityChanged(Handler handler) {
-        this.mVideoCapabilityChangedRegistrants.remove(handler);
-    }
-
-    public void unsetOnEcbModeExitResponse(Handler handler) {
-        logUnexpectedCdmaMethodCall("unsetOnEcbModeExitResponse");
-    }
-
-    /* Access modifiers changed, original: protected */
-    /* JADX WARNING: Missing block: B:34:?, code skipped:
-            return;
-     */
-    public void updateImsPhone() {
-        /*
-        r5 = this;
-        r1 = r5.mImsLock;
-        monitor-enter(r1);
-        r0 = "PhoneBase";
-        r2 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0082 }
-        r2.<init>();	 Catch:{ all -> 0x0082 }
-        r3 = "updateImsPhone mImsServiceReady=";
-        r2 = r2.append(r3);	 Catch:{ all -> 0x0082 }
-        r3 = r5.mImsServiceReady;	 Catch:{ all -> 0x0082 }
-        r2 = r2.append(r3);	 Catch:{ all -> 0x0082 }
-        r2 = r2.toString();	 Catch:{ all -> 0x0082 }
-        android.telephony.Rlog.d(r0, r2);	 Catch:{ all -> 0x0082 }
-        r0 = r5.mImsServiceReady;	 Catch:{ all -> 0x0082 }
-        if (r0 == 0) goto L_0x0085;
-    L_0x0021:
-        r0 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        if (r0 != 0) goto L_0x0085;
-    L_0x0025:
-        r0 = com.android.internal.telephony.CallManager.getInstance();	 Catch:{ all -> 0x0082 }
-        r0 = r0.getAllPhones();	 Catch:{ all -> 0x0082 }
-        r2 = r0.iterator();	 Catch:{ all -> 0x0082 }
-    L_0x0031:
-        r0 = r2.hasNext();	 Catch:{ all -> 0x0082 }
-        if (r0 == 0) goto L_0x0060;
-    L_0x0037:
-        r0 = r2.next();	 Catch:{ all -> 0x0082 }
-        r0 = (com.android.internal.telephony.Phone) r0;	 Catch:{ all -> 0x0082 }
-        if (r0 == 0) goto L_0x0031;
-    L_0x003f:
-        r3 = r0.getPhoneType();	 Catch:{ all -> 0x0082 }
-        r4 = 5;
-        if (r3 != r4) goto L_0x0031;
-    L_0x0046:
-        r2 = "PhoneBase";
-        r3 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0082 }
-        r3.<init>();	 Catch:{ all -> 0x0082 }
-        r4 = "Found IMSPhone = ";
-        r3 = r3.append(r4);	 Catch:{ all -> 0x0082 }
-        r0 = r3.append(r0);	 Catch:{ all -> 0x0082 }
-        r0 = r0.toString();	 Catch:{ all -> 0x0082 }
-        android.telephony.Rlog.d(r2, r0);	 Catch:{ all -> 0x0082 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0082 }
-    L_0x005f:
-        return;
-    L_0x0060:
-        r0 = "PhoneBase";
-        r2 = "Not found IMSPhone ~~~ make new";
-        android.telephony.Rlog.d(r0, r2);	 Catch:{ all -> 0x0082 }
-        r0 = r5.mNotifier;	 Catch:{ all -> 0x0082 }
-        r0 = com.android.internal.telephony.PhoneFactory.makeImsPhone(r0, r5);	 Catch:{ all -> 0x0082 }
-        r5.mImsPhone = r0;	 Catch:{ all -> 0x0082 }
-        r0 = com.android.internal.telephony.CallManager.getInstance();	 Catch:{ all -> 0x0082 }
-        r2 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        r0.registerPhone(r2);	 Catch:{ all -> 0x0082 }
-        r0 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        r2 = 32;
-        r3 = 0;
-        r0.registerForSilentRedial(r5, r2, r3);	 Catch:{ all -> 0x0082 }
-    L_0x0080:
-        monitor-exit(r1);	 Catch:{ all -> 0x0082 }
-        goto L_0x005f;
-    L_0x0082:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0082 }
-        throw r0;
-    L_0x0085:
-        r0 = r5.mImsServiceReady;	 Catch:{ all -> 0x0082 }
-        if (r0 != 0) goto L_0x0080;
-    L_0x0089:
-        r0 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        if (r0 == 0) goto L_0x0080;
-    L_0x008d:
-        r0 = com.android.internal.telephony.CallManager.getInstance();	 Catch:{ all -> 0x0082 }
-        r2 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        r0.unregisterPhone(r2);	 Catch:{ all -> 0x0082 }
-        r0 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        r0.unregisterForSilentRedial(r5);	 Catch:{ all -> 0x0082 }
-        r0 = r5.mImsPhone;	 Catch:{ all -> 0x0082 }
-        r0.dispose();	 Catch:{ all -> 0x0082 }
-        r0 = 0;
-        r5.mImsPhone = r0;	 Catch:{ all -> 0x0082 }
-        goto L_0x0080;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.PhoneBase.updateImsPhone():void");
-    }
-
-    public void updatePhoneObject(int i) {
-        Rlog.d(LOG_TAG, "updatePhoneObject: phoneid = " + this.mPhoneId + " rat = " + i);
-        Phone phone = PhoneFactory.getPhone(this.mPhoneId);
-        if (phone != null) {
-            phone.updatePhoneObject(i);
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("PhoneBase: subId=" + getSubId());
+        pw.println(" mPhoneId=" + this.mPhoneId);
+        pw.println(" mCi=" + this.mCi);
+        pw.println(" mDnsCheckDisabled=" + this.mDnsCheckDisabled);
+        pw.println(" mDcTracker=" + this.mDcTracker);
+        pw.println(" mDoesRilSendMultipleCallRing=" + this.mDoesRilSendMultipleCallRing);
+        pw.println(" mCallRingContinueToken=" + this.mCallRingContinueToken);
+        pw.println(" mCallRingDelay=" + this.mCallRingDelay);
+        pw.println(" mIsTheCurrentActivePhone=" + this.mIsTheCurrentActivePhone);
+        pw.println(" mIsVoiceCapable=" + this.mIsVoiceCapable);
+        pw.println(" mIccRecords=" + this.mIccRecords.get());
+        pw.println(" mUiccApplication=" + this.mUiccApplication.get());
+        pw.println(" mSmsStorageMonitor=" + this.mSmsStorageMonitor);
+        pw.println(" mSmsUsageMonitor=" + this.mSmsUsageMonitor);
+        pw.flush();
+        pw.println(" mLooper=" + this.mLooper);
+        pw.println(" mContext=" + this.mContext);
+        pw.println(" mNotifier=" + this.mNotifier);
+        pw.println(" mSimulatedRadioControl=" + this.mSimulatedRadioControl);
+        pw.println(" mUnitTestMode=" + this.mUnitTestMode);
+        pw.println(" isDnsCheckDisabled()=" + isDnsCheckDisabled());
+        pw.println(" getUnitTestMode()=" + getUnitTestMode());
+        pw.println(" getState()=" + getState());
+        pw.println(" getIccSerialNumber()=" + getIccSerialNumber());
+        pw.println(" getIccRecordsLoaded()=" + getIccRecordsLoaded());
+        pw.println(" getMessageWaitingIndicator()=" + getMessageWaitingIndicator());
+        pw.println(" getCallForwardingIndicator()=" + getCallForwardingIndicator());
+        pw.println(" isInEmergencyCall()=" + isInEmergencyCall());
+        pw.flush();
+        pw.println(" isInEcm()=" + isInEcm());
+        pw.println(" getPhoneName()=" + getPhoneName());
+        pw.println(" getPhoneType()=" + getPhoneType());
+        pw.println(" getVoiceMessageCount()=" + getVoiceMessageCount());
+        pw.println(" getActiveApnTypes()=" + getActiveApnTypes());
+        pw.println(" isDataConnectivityPossible()=" + isDataConnectivityPossible());
+        pw.println(" needsOtaServiceProvisioning=" + needsOtaServiceProvisioning());
+        pw.flush();
+        pw.println("++++++++++++++++++++++++++++++++");
+        try {
+            this.mDcTracker.dump(fd, pw, args);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+        pw.flush();
+        pw.println("++++++++++++++++++++++++++++++++");
+        try {
+            getServiceStateTracker().dump(fd, pw, args);
+        } catch (Exception e2) {
+            e2.printStackTrace();
+        }
+        pw.flush();
+        pw.println("++++++++++++++++++++++++++++++++");
+        try {
+            getCallTracker().dump(fd, pw, args);
+        } catch (Exception e3) {
+            e3.printStackTrace();
+        }
+        pw.flush();
+        pw.println("++++++++++++++++++++++++++++++++");
+        try {
+            ((RIL) this.mCi).dump(fd, pw, args);
+        } catch (Exception e4) {
+            e4.printStackTrace();
+        }
+        pw.flush();
+        pw.println("++++++++++++++++++++++++++++++++");
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setPreferredNetworkTypeWithOptimizeSetting(int networkType, boolean enable, Message response) {
+        this.mCi.setRatModeOptimizeSetting(enable, obtainMessage(EVENT_SET_RAT_MODE_OPTIMIZE_SETTING_COMPLETE, networkType, 0, response));
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getPreferredNetworkTypeWithOptimizeSetting(Message response) {
+        this.mCi.getPreferredNetworkTypeWithOptimizeSetting(response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setBandPref(long lteBand, int wcdmaBand, Message response) {
+        this.mCi.setBandPref(lteBand, wcdmaBand, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getBandPref(Message response) {
+        this.mCi.getBandPref(response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void resetDunProfiles() {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getIncomingAnonymousCallBarring(Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setIncomingAnonymousCallBarring(boolean lockState, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getIncomingSpecificDnCallBarring(Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setIncomingSpecificDnCallBarring(int operation, String[] icbNum, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setLimitationByChameleon(boolean isLimitation, Message response) {
+        this.mCi.setLimitationByChameleon(isLimitation, response);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallForwardingOption(int commandInterfaceCFReason, int serviceClass, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallForwardingOption(int commandInterfaceCFReason, int commandInterfaceCFAction, String dialingNumber, int timerSeconds, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallForwardingOption(int commandInterfaceCFReason, int commandInterfaceCFAction, int serviceClass, String dialingNumber, int timerSeconds, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallWaiting(Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallWaiting(int serviceClass, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallWaiting(boolean enable, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallWaiting(boolean enable, int serviceClass, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallBarring(String facility, boolean lockState, String password, int serviceClass, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallBarring(String facility, String password, int serviceClass, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setCallBarring(String facility, boolean lockState, String password, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallBarring(String facility, String password, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void getCallBarring(String facility, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String getImsiOnSimLock() {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getBrand() {
+        return 0;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void declineCall() throws CallStateException {
+        throw new CallStateException("declineCall is not supported in this phone " + this);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public Connection dial(String dialString, int videoState, Bundle extras, int prefix) throws CallStateException {
+        if (!TelBrand.IS_DCM) {
+            return null;
+        }
+        throw new CallStateException("Dial with CallDetails is not supported in this phone " + this);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public Connection dial(String dialString, int videoState, int prefix) throws CallStateException {
+        if (!TelBrand.IS_DCM) {
+            return null;
+        }
+        throw new CallStateException("Dial with CallDetails is not supported in this phone " + this);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public Connection dial(String dialString, UUSInfo uusInfo, int videoState, int prefix) throws CallStateException {
+        if (!TelBrand.IS_DCM) {
+            return null;
+        }
+        throw new CallStateException("Dial with CallDetails is not supported in this phone " + this);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public boolean isDunConnectionPossible() {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setMobileDataEnabledDun(boolean isEnable) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setProfilePdpType(int cid, String pdpType) {
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int changeMode(boolean mode, String apn, String userId, String password, int authType, String dns1, String dns2, String proxyHost, String proxyPort) {
+        return this.mDcTracker.changeOemKddiCpaMode(mode, apn, userId, password, authType, dns1, dns2, proxyHost, proxyPort);
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public int getConnStatus() {
+        return this.mDcTracker.getOemKddiCpaConnStatus();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public String[] getConnInfo() {
+        return this.mDcTracker.getOemKddiCpaConnInfo();
+    }
+
+    @Override // com.android.internal.telephony.Phone
+    public void setModemSettingsByChameleon(int pattern, Message response) {
+        this.mCi.setModemSettingsByChameleon(pattern, response);
     }
 }

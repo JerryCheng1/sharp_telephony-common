@@ -4,11 +4,16 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.text.TextUtils;
 import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class PduComposer {
-    static final /* synthetic */ boolean $assertionsDisabled = (!PduComposer.class.desiredAssertionStatus());
+    static final /* synthetic */ boolean $assertionsDisabled;
     private static final int END_STRING_FLAG = 0;
     private static final int LENGTH_QUOTE = 31;
     private static final int LONG_INTEGER_LENGTH_MAX = 8;
@@ -33,164 +38,230 @@ public class PduComposer {
     static final String STRING_PHONE_NUMBER_ADDRESS_TYPE = "/TYPE=PLMN";
     private static final int TEXT_MAX = 127;
     private static HashMap<String, Integer> mContentTypeMap;
-    protected ByteArrayOutputStream mMessage = null;
-    private GenericPdu mPdu = null;
-    private PduHeaders mPduHeader = null;
-    protected int mPosition = 0;
+    protected ByteArrayOutputStream mMessage;
+    private GenericPdu mPdu;
+    private PduHeaders mPduHeader;
+    protected int mPosition;
     private final ContentResolver mResolver;
-    private BufferStack mStack = null;
-
-    private class BufferStack {
-        private LengthRecordNode stack;
-        int stackSize;
-        private LengthRecordNode toCopy;
-
-        private BufferStack() {
-            this.stack = null;
-            this.toCopy = null;
-            this.stackSize = 0;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public void copy() {
-            PduComposer.this.arraycopy(this.toCopy.currentMessage.toByteArray(), 0, this.toCopy.currentPosition);
-            this.toCopy = null;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public PositionMarker mark() {
-            PositionMarker positionMarker = new PositionMarker();
-            positionMarker.c_pos = PduComposer.this.mPosition;
-            positionMarker.currentStackSize = this.stackSize;
-            return positionMarker;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public void newbuf() {
-            if (this.toCopy != null) {
-                throw new RuntimeException("BUG: Invalid newbuf() before copy()");
-            }
-            LengthRecordNode lengthRecordNode = new LengthRecordNode();
-            lengthRecordNode.currentMessage = PduComposer.this.mMessage;
-            lengthRecordNode.currentPosition = PduComposer.this.mPosition;
-            lengthRecordNode.next = this.stack;
-            this.stack = lengthRecordNode;
-            this.stackSize++;
-            PduComposer.this.mMessage = new ByteArrayOutputStream();
-            PduComposer.this.mPosition = 0;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public void pop() {
-            ByteArrayOutputStream byteArrayOutputStream = PduComposer.this.mMessage;
-            int i = PduComposer.this.mPosition;
-            PduComposer.this.mMessage = this.stack.currentMessage;
-            PduComposer.this.mPosition = this.stack.currentPosition;
-            this.toCopy = this.stack;
-            this.stack = this.stack.next;
-            this.stackSize--;
-            this.toCopy.currentMessage = byteArrayOutputStream;
-            this.toCopy.currentPosition = i;
-        }
-    }
-
-    private static class LengthRecordNode {
-        ByteArrayOutputStream currentMessage;
-        public int currentPosition;
-        public LengthRecordNode next;
-
-        private LengthRecordNode() {
-            this.currentMessage = null;
-            this.currentPosition = 0;
-            this.next = null;
-        }
-    }
-
-    private class PositionMarker {
-        private int c_pos;
-        private int currentStackSize;
-
-        private PositionMarker() {
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public int getLength() {
-            if (this.currentStackSize == PduComposer.this.mStack.stackSize) {
-                return PduComposer.this.mPosition - this.c_pos;
-            }
-            throw new RuntimeException("BUG: Invalid call to getLength()");
-        }
-    }
+    private BufferStack mStack;
 
     static {
-        int i = 0;
+        $assertionsDisabled = !PduComposer.class.desiredAssertionStatus();
         mContentTypeMap = null;
-        mContentTypeMap = new HashMap();
-        while (i < PduContentTypes.contentTypes.length) {
+        mContentTypeMap = new HashMap<>();
+        for (int i = 0; i < PduContentTypes.contentTypes.length; i++) {
             mContentTypeMap.put(PduContentTypes.contentTypes[i], Integer.valueOf(i));
-            i++;
         }
     }
 
-    public PduComposer(Context context, GenericPdu genericPdu) {
-        this.mPdu = genericPdu;
+    public PduComposer(Context context, GenericPdu pdu) {
+        this.mMessage = null;
+        this.mPdu = null;
+        this.mPosition = 0;
+        this.mStack = null;
+        this.mPduHeader = null;
+        this.mPdu = pdu;
         this.mResolver = context.getContentResolver();
-        this.mPduHeader = genericPdu.getPduHeaders();
+        this.mPduHeader = pdu.getPduHeaders();
         this.mStack = new BufferStack();
         this.mMessage = new ByteArrayOutputStream();
         this.mPosition = 0;
     }
 
-    private EncodedStringValue appendAddressType(EncodedStringValue encodedStringValue) {
-        try {
-            int checkAddressType = checkAddressType(encodedStringValue.getString());
-            EncodedStringValue copy = EncodedStringValue.copy(encodedStringValue);
-            if (1 == checkAddressType) {
-                copy.appendTextString(STRING_PHONE_NUMBER_ADDRESS_TYPE.getBytes());
-                return copy;
-            } else if (3 == checkAddressType) {
-                copy.appendTextString(STRING_IPV4_ADDRESS_TYPE.getBytes());
-                return copy;
-            } else if (4 != checkAddressType) {
-                return copy;
-            } else {
-                copy.appendTextString(STRING_IPV6_ADDRESS_TYPE.getBytes());
-                return copy;
+    public byte[] make() {
+        int type = this.mPdu.getMessageType();
+        switch (type) {
+            case 128:
+            case 132:
+                if (makeSendRetrievePdu(type) != 0) {
+                    return null;
+                }
+                break;
+            case 129:
+            case 130:
+            case 134:
+            default:
+                return null;
+            case 131:
+                if (makeNotifyResp() != 0) {
+                    return null;
+                }
+                break;
+            case 133:
+                if (makeAckInd() != 0) {
+                    return null;
+                }
+                break;
+            case 135:
+                if (makeReadRecInd() != 0) {
+                    return null;
+                }
+                break;
+        }
+        return this.mMessage.toByteArray();
+    }
+
+    protected void arraycopy(byte[] buf, int pos, int length) {
+        this.mMessage.write(buf, pos, length);
+        this.mPosition += length;
+    }
+
+    protected void append(int value) {
+        this.mMessage.write(value);
+        this.mPosition++;
+    }
+
+    protected void appendShortInteger(int value) {
+        append((value | 128) & 255);
+    }
+
+    protected void appendOctet(int number) {
+        append(number);
+    }
+
+    protected void appendShortLength(int value) {
+        append(value);
+    }
+
+    protected void appendLongInteger(long longInt) {
+        long temp = longInt;
+        int size = 0;
+        while (temp != 0 && size < 8) {
+            temp >>>= 8;
+            size++;
+        }
+        appendShortLength(size);
+        int shift = (size - 1) * 8;
+        for (int i = 0; i < size; i++) {
+            append((int) ((longInt >>> shift) & 255));
+            shift -= 8;
+        }
+    }
+
+    protected void appendTextString(byte[] text) {
+        if ((text[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) > 127) {
+            append(127);
+        }
+        arraycopy(text, 0, text.length);
+        append(0);
+    }
+
+    protected void appendTextString(String str) {
+        appendTextString(str.getBytes());
+    }
+
+    protected void appendEncodedString(EncodedStringValue enStr) {
+        if ($assertionsDisabled || enStr != null) {
+            int charset = enStr.getCharacterSet();
+            byte[] textString = enStr.getTextString();
+            if (textString != null) {
+                this.mStack.newbuf();
+                PositionMarker start = this.mStack.mark();
+                appendShortInteger(charset);
+                appendTextString(textString);
+                int len = start.getLength();
+                this.mStack.pop();
+                appendValueLength(len);
+                this.mStack.copy();
+                return;
             }
+            return;
+        }
+        throw new AssertionError();
+    }
+
+    protected void appendUintvarInteger(long value) {
+        long max = 127;
+        int i = 0;
+        while (i < 5 && value >= max) {
+            max = (max << 7) | 127;
+            i++;
+        }
+        while (i > 0) {
+            append((int) ((128 | ((value >>> (i * 7)) & 127)) & 255));
+            i--;
+        }
+        append((int) (value & 127));
+    }
+
+    protected void appendDateValue(long date) {
+        appendLongInteger(date);
+    }
+
+    protected void appendValueLength(long value) {
+        if (value < 31) {
+            appendShortLength((int) value);
+            return;
+        }
+        append(31);
+        appendUintvarInteger(value);
+    }
+
+    protected void appendQuotedString(byte[] text) {
+        append(34);
+        arraycopy(text, 0, text.length);
+        append(0);
+    }
+
+    protected void appendQuotedString(String str) {
+        appendQuotedString(str.getBytes());
+    }
+
+    private EncodedStringValue appendAddressType(EncodedStringValue address) {
+        try {
+            int addressType = checkAddressType(address.getString());
+            EncodedStringValue temp = EncodedStringValue.copy(address);
+            if (1 == addressType) {
+                temp.appendTextString(STRING_PHONE_NUMBER_ADDRESS_TYPE.getBytes());
+            } else if (3 == addressType) {
+                temp.appendTextString(STRING_IPV4_ADDRESS_TYPE.getBytes());
+            } else if (4 == addressType) {
+                temp.appendTextString(STRING_IPV6_ADDRESS_TYPE.getBytes());
+            }
+            return temp;
         } catch (NullPointerException e) {
             return null;
         }
     }
 
-    private int appendHeader(int i) {
-        int length;
-        long longInteger;
-        byte[] textString;
-        switch (i) {
+    private int appendHeader(int field) {
+        switch (field) {
             case 129:
             case 130:
             case 151:
-                EncodedStringValue[] encodedStringValues = this.mPduHeader.getEncodedStringValues(i);
-                if (encodedStringValues == null) {
-                    return 2;
-                }
-                for (EncodedStringValue appendAddressType : encodedStringValues) {
-                    EncodedStringValue appendAddressType2 = appendAddressType(appendAddressType2);
-                    if (appendAddressType2 == null) {
-                        return 1;
+                EncodedStringValue[] addr = this.mPduHeader.getEncodedStringValues(field);
+                if (addr != null) {
+                    for (EncodedStringValue encodedStringValue : addr) {
+                        EncodedStringValue temp = appendAddressType(encodedStringValue);
+                        if (temp == null) {
+                            return 1;
+                        }
+                        appendOctet(field);
+                        appendEncodedString(temp);
                     }
-                    appendOctet(i);
-                    appendEncodedString(appendAddressType2);
-                }
-                return 0;
-            case 133:
-                longInteger = this.mPduHeader.getLongInteger(i);
-                if (-1 == longInteger) {
+                    break;
+                } else {
                     return 2;
                 }
-                appendOctet(i);
-                appendDateValue(longInteger);
-                return 0;
+            case 131:
+            case 132:
+            case 135:
+            case 140:
+            case 142:
+            case 146:
+            case 147:
+            case 148:
+            default:
+                return 3;
+            case 133:
+                long date = this.mPduHeader.getLongInteger(field);
+                if (-1 != date) {
+                    appendOctet(field);
+                    appendDateValue(date);
+                    break;
+                } else {
+                    return 2;
+                }
             case 134:
             case 143:
             case 144:
@@ -198,119 +269,139 @@ public class PduComposer {
             case 149:
             case 153:
             case 155:
-                int octet = this.mPduHeader.getOctet(i);
-                if (octet == 0) {
+                int octet = this.mPduHeader.getOctet(field);
+                if (octet != 0) {
+                    appendOctet(field);
+                    appendOctet(octet);
+                    break;
+                } else {
                     return 2;
                 }
-                appendOctet(i);
-                appendOctet(octet);
-                return 0;
             case 136:
-                longInteger = this.mPduHeader.getLongInteger(i);
-                if (-1 == longInteger) {
+                long expiry = this.mPduHeader.getLongInteger(field);
+                if (-1 != expiry) {
+                    appendOctet(field);
+                    this.mStack.newbuf();
+                    PositionMarker expiryStart = this.mStack.mark();
+                    append(129);
+                    appendLongInteger(expiry);
+                    int expiryLength = expiryStart.getLength();
+                    this.mStack.pop();
+                    appendValueLength(expiryLength);
+                    this.mStack.copy();
+                    break;
+                } else {
                     return 2;
                 }
-                appendOctet(i);
-                this.mStack.newbuf();
-                PositionMarker mark = this.mStack.mark();
-                append(129);
-                appendLongInteger(longInteger);
-                length = mark.getLength();
-                this.mStack.pop();
-                appendValueLength((long) length);
-                this.mStack.copy();
-                return 0;
             case 137:
-                appendOctet(i);
-                EncodedStringValue encodedStringValue = this.mPduHeader.getEncodedStringValue(i);
-                if (encodedStringValue == null || TextUtils.isEmpty(encodedStringValue.getString()) || new String(encodedStringValue.getTextString()).equals(PduHeaders.FROM_INSERT_ADDRESS_TOKEN_STR)) {
+                appendOctet(field);
+                EncodedStringValue from = this.mPduHeader.getEncodedStringValue(field);
+                if (from == null || TextUtils.isEmpty(from.getString()) || new String(from.getTextString()).equals(PduHeaders.FROM_INSERT_ADDRESS_TOKEN_STR)) {
                     append(1);
                     append(129);
-                    return 0;
-                }
-                this.mStack.newbuf();
-                PositionMarker mark2 = this.mStack.mark();
-                append(128);
-                encodedStringValue = appendAddressType(encodedStringValue);
-                if (encodedStringValue == null) {
-                    return 1;
-                }
-                appendEncodedString(encodedStringValue);
-                length = mark2.getLength();
-                this.mStack.pop();
-                appendValueLength((long) length);
-                this.mStack.copy();
-                return 0;
-            case 138:
-                textString = this.mPduHeader.getTextString(i);
-                if (textString == null) {
-                    return 2;
-                }
-                appendOctet(i);
-                if (Arrays.equals(textString, PduHeaders.MESSAGE_CLASS_ADVERTISEMENT_STR.getBytes())) {
-                    appendOctet(129);
-                    return 0;
-                } else if (Arrays.equals(textString, PduHeaders.MESSAGE_CLASS_AUTO_STR.getBytes())) {
-                    appendOctet(131);
-                    return 0;
-                } else if (Arrays.equals(textString, PduHeaders.MESSAGE_CLASS_PERSONAL_STR.getBytes())) {
-                    appendOctet(128);
-                    return 0;
-                } else if (Arrays.equals(textString, PduHeaders.MESSAGE_CLASS_INFORMATIONAL_STR.getBytes())) {
-                    appendOctet(130);
-                    return 0;
+                    break;
                 } else {
-                    appendTextString(textString);
-                    return 0;
+                    this.mStack.newbuf();
+                    PositionMarker fstart = this.mStack.mark();
+                    append(128);
+                    EncodedStringValue temp2 = appendAddressType(from);
+                    if (temp2 != null) {
+                        appendEncodedString(temp2);
+                        int flen = fstart.getLength();
+                        this.mStack.pop();
+                        appendValueLength(flen);
+                        this.mStack.copy();
+                        break;
+                    } else {
+                        return 1;
+                    }
+                }
+                break;
+            case 138:
+                byte[] messageClass = this.mPduHeader.getTextString(field);
+                if (messageClass != null) {
+                    appendOctet(field);
+                    if (!Arrays.equals(messageClass, PduHeaders.MESSAGE_CLASS_ADVERTISEMENT_STR.getBytes())) {
+                        if (!Arrays.equals(messageClass, PduHeaders.MESSAGE_CLASS_AUTO_STR.getBytes())) {
+                            if (!Arrays.equals(messageClass, PduHeaders.MESSAGE_CLASS_PERSONAL_STR.getBytes())) {
+                                if (Arrays.equals(messageClass, PduHeaders.MESSAGE_CLASS_INFORMATIONAL_STR.getBytes())) {
+                                    appendOctet(130);
+                                    break;
+                                } else {
+                                    appendTextString(messageClass);
+                                    break;
+                                }
+                            } else {
+                                appendOctet(128);
+                                break;
+                            }
+                        } else {
+                            appendOctet(131);
+                            break;
+                        }
+                    } else {
+                        appendOctet(129);
+                        break;
+                    }
+                } else {
+                    return 2;
                 }
             case 139:
             case 152:
-                textString = this.mPduHeader.getTextString(i);
-                if (textString == null) {
+                byte[] textString = this.mPduHeader.getTextString(field);
+                if (textString != null) {
+                    appendOctet(field);
+                    appendTextString(textString);
+                    break;
+                } else {
                     return 2;
                 }
-                appendOctet(i);
-                appendTextString(textString);
-                return 0;
             case 141:
-                appendOctet(i);
-                length = this.mPduHeader.getOctet(i);
-                if (length == 0) {
+                appendOctet(field);
+                int version = this.mPduHeader.getOctet(field);
+                if (version == 0) {
                     appendShortInteger(18);
-                    return 0;
+                    break;
+                } else {
+                    appendShortInteger(version);
+                    break;
                 }
-                appendShortInteger(length);
-                return 0;
             case 150:
             case 154:
-                EncodedStringValue encodedStringValue2 = this.mPduHeader.getEncodedStringValue(i);
-                if (encodedStringValue2 == null) {
+                EncodedStringValue enString = this.mPduHeader.getEncodedStringValue(field);
+                if (enString != null) {
+                    appendOctet(field);
+                    appendEncodedString(enString);
+                    break;
+                } else {
                     return 2;
                 }
-                appendOctet(i);
-                appendEncodedString(encodedStringValue2);
-                return 0;
-            default:
-                return 3;
         }
+        return 0;
     }
 
-    protected static int checkAddressType(String str) {
-        if (str != null) {
-            if (str.matches(REGEXP_IPV4_ADDRESS_TYPE)) {
-                return 3;
-            }
-            if (str.matches(REGEXP_PHONE_NUMBER_ADDRESS_TYPE)) {
-                return 1;
-            }
-            if (str.matches(REGEXP_EMAIL_ADDRESS_TYPE)) {
-                return 2;
-            }
-            if (str.matches(REGEXP_IPV6_ADDRESS_TYPE)) {
-                return 4;
-            }
+    private int makeReadRecInd() {
+        if (this.mMessage == null) {
+            this.mMessage = new ByteArrayOutputStream();
+            this.mPosition = 0;
         }
-        return 5;
+        appendOctet(140);
+        appendOctet(135);
+        if (appendHeader(141) != 0 || appendHeader(139) != 0 || appendHeader(151) != 0 || appendHeader(137) != 0) {
+            return 1;
+        }
+        appendHeader(133);
+        return appendHeader(155) == 0 ? 0 : 1;
+    }
+
+    private int makeNotifyResp() {
+        if (this.mMessage == null) {
+            this.mMessage = new ByteArrayOutputStream();
+            this.mPosition = 0;
+        }
+        appendOctet(140);
+        appendOctet(131);
+        return (appendHeader(152) == 0 && appendHeader(141) == 0 && appendHeader(149) == 0) ? 0 : 1;
     }
 
     private int makeAckInd() {
@@ -327,387 +418,19 @@ public class PduComposer {
         return 0;
     }
 
-    /* JADX WARNING: Removed duplicated region for block: B:90:0x01fd A:{SYNTHETIC, Splitter:B:90:0x01fd} */
-    /* JADX WARNING: Removed duplicated region for block: B:98:0x020b A:{SYNTHETIC, Splitter:B:98:0x020b} */
-    /* JADX WARNING: Removed duplicated region for block: B:106:0x0219 A:{SYNTHETIC, Splitter:B:106:0x0219} */
-    private int makeMessageBody(int r14) {
-        /*
-        r13 = this;
-        r0 = r13.mStack;
-        r0.newbuf();
-        r0 = r13.mStack;
-        r1 = r0.mark();
-        r0 = new java.lang.String;
-        r2 = r13.mPduHeader;
-        r3 = 132; // 0x84 float:1.85E-43 double:6.5E-322;
-        r2 = r2.getTextString(r3);
-        r0.<init>(r2);
-        r2 = mContentTypeMap;
-        r0 = r2.get(r0);
-        r0 = (java.lang.Integer) r0;
-        if (r0 != 0) goto L_0x0024;
-    L_0x0022:
-        r0 = 1;
-    L_0x0023:
-        return r0;
-    L_0x0024:
-        r0 = r0.intValue();
-        r13.appendShortInteger(r0);
-        r0 = 132; // 0x84 float:1.85E-43 double:6.5E-322;
-        if (r14 != r0) goto L_0x0051;
-    L_0x002f:
-        r0 = r13.mPdu;
-        r0 = (com.google.android.mms.pdu.RetrieveConf) r0;
-        r0 = r0.getBody();
-        r6 = r0;
-    L_0x0038:
-        if (r6 == 0) goto L_0x0040;
-    L_0x003a:
-        r0 = r6.getPartsNum();
-        if (r0 != 0) goto L_0x005b;
-    L_0x0040:
-        r0 = 0;
-        r13.appendUintvarInteger(r0);
-        r0 = r13.mStack;
-        r0.pop();
-        r0 = r13.mStack;
-        r0.copy();
-        r0 = 0;
-        goto L_0x0023;
-    L_0x0051:
-        r0 = r13.mPdu;
-        r0 = (com.google.android.mms.pdu.SendReq) r0;
-        r0 = r0.getBody();
-        r6 = r0;
-        goto L_0x0038;
-    L_0x005b:
-        r0 = 0;
-        r0 = r6.getPart(r0);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r2 = r0.getContentId();	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        if (r2 == 0) goto L_0x007e;
-    L_0x0066:
-        r3 = 138; // 0x8a float:1.93E-43 double:6.8E-322;
-        r13.appendOctet(r3);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r3 = 60;
-        r4 = 0;
-        r4 = r2[r4];
-        if (r3 != r4) goto L_0x00cb;
-    L_0x0072:
-        r3 = 62;
-        r4 = r2.length;	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r4 = r4 + -1;
-        r4 = r2[r4];	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        if (r3 != r4) goto L_0x00cb;
-    L_0x007b:
-        r13.appendTextString(r2);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-    L_0x007e:
-        r2 = 137; // 0x89 float:1.92E-43 double:6.77E-322;
-        r13.appendOctet(r2);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r0 = r0.getContentType();	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r13.appendTextString(r0);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-    L_0x008a:
-        r0 = r1.getLength();
-        r1 = r13.mStack;
-        r1.pop();
-        r0 = (long) r0;
-        r13.appendValueLength(r0);
-        r0 = r13.mStack;
-        r0.copy();
-        r7 = r6.getPartsNum();
-        r0 = (long) r7;
-        r13.appendUintvarInteger(r0);
-        r0 = 0;
-        r5 = r0;
-    L_0x00a6:
-        if (r5 >= r7) goto L_0x0234;
-    L_0x00a8:
-        r8 = r6.getPart(r5);
-        r0 = r13.mStack;
-        r0.newbuf();
-        r0 = r13.mStack;
-        r9 = r0.mark();
-        r0 = r13.mStack;
-        r0.newbuf();
-        r0 = r13.mStack;
-        r1 = r0.mark();
-        r2 = r8.getContentType();
-        if (r2 != 0) goto L_0x00f2;
-    L_0x00c8:
-        r0 = 1;
-        goto L_0x0023;
-    L_0x00cb:
-        r3 = new java.lang.StringBuilder;	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r3.<init>();	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r4 = "<";
-        r3 = r3.append(r4);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r4 = new java.lang.String;	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r4.<init>(r2);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r2 = r3.append(r4);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r3 = ">";
-        r2 = r2.append(r3);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r2 = r2.toString();	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        r13.appendTextString(r2);	 Catch:{ ArrayIndexOutOfBoundsException -> 0x00ed }
-        goto L_0x007e;
-    L_0x00ed:
-        r0 = move-exception;
-        r0.printStackTrace();
-        goto L_0x008a;
-    L_0x00f2:
-        r0 = mContentTypeMap;
-        r3 = new java.lang.String;
-        r3.<init>(r2);
-        r0 = r0.get(r3);
-        r0 = (java.lang.Integer) r0;
-        if (r0 != 0) goto L_0x011f;
-    L_0x0101:
-        r13.appendTextString(r2);
-    L_0x0104:
-        r0 = r8.getName();
-        if (r0 != 0) goto L_0x0127;
-    L_0x010a:
-        r0 = r8.getFilename();
-        if (r0 != 0) goto L_0x0127;
-    L_0x0110:
-        r0 = r8.getContentLocation();
-        if (r0 != 0) goto L_0x0127;
-    L_0x0116:
-        r0 = r8.getContentId();
-        if (r0 != 0) goto L_0x0127;
-    L_0x011c:
-        r0 = 1;
-        goto L_0x0023;
-    L_0x011f:
-        r0 = r0.intValue();
-        r13.appendShortInteger(r0);
-        goto L_0x0104;
-    L_0x0127:
-        r2 = 133; // 0x85 float:1.86E-43 double:6.57E-322;
-        r13.appendOctet(r2);
-        r13.appendTextString(r0);
-        r0 = r8.getCharset();
-        if (r0 == 0) goto L_0x013d;
-    L_0x0135:
-        r2 = 129; // 0x81 float:1.81E-43 double:6.37E-322;
-        r13.appendOctet(r2);
-        r13.appendShortInteger(r0);
-    L_0x013d:
-        r0 = r1.getLength();
-        r1 = r13.mStack;
-        r1.pop();
-        r0 = (long) r0;
-        r13.appendValueLength(r0);
-        r0 = r13.mStack;
-        r0.copy();
-        r0 = r8.getContentId();
-        if (r0 == 0) goto L_0x016d;
-    L_0x0155:
-        r1 = 192; // 0xc0 float:2.69E-43 double:9.5E-322;
-        r13.appendOctet(r1);
-        r1 = 60;
-        r2 = 0;
-        r2 = r0[r2];
-        if (r1 != r2) goto L_0x019b;
-    L_0x0161:
-        r1 = 62;
-        r2 = r0.length;
-        r2 = r2 + -1;
-        r2 = r0[r2];
-        if (r1 != r2) goto L_0x019b;
-    L_0x016a:
-        r13.appendQuotedString(r0);
-    L_0x016d:
-        r0 = r8.getContentLocation();
-        if (r0 == 0) goto L_0x017b;
-    L_0x0173:
-        r1 = 142; // 0x8e float:1.99E-43 double:7.0E-322;
-        r13.appendOctet(r1);
-        r13.appendTextString(r0);
-    L_0x017b:
-        r10 = r9.getLength();
-        r0 = 0;
-        r1 = r8.getData();
-        if (r1 == 0) goto L_0x01bd;
-    L_0x0186:
-        r0 = 0;
-        r2 = r1.length;
-        r13.arraycopy(r1, r0, r2);
-        r0 = r1.length;
-    L_0x018c:
-        r1 = r9.getLength();
-        r1 = r1 - r10;
-        if (r0 == r1) goto L_0x021d;
-    L_0x0193:
-        r0 = new java.lang.RuntimeException;
-        r1 = "BUG: Length sanity check failed";
-        r0.<init>(r1);
-        throw r0;
-    L_0x019b:
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "<";
-        r1 = r1.append(r2);
-        r2 = new java.lang.String;
-        r2.<init>(r0);
-        r0 = r1.append(r2);
-        r1 = ">";
-        r0 = r0.append(r1);
-        r0 = r0.toString();
-        r13.appendQuotedString(r0);
-        goto L_0x016d;
-    L_0x01bd:
-        r2 = 0;
-        r3 = 0;
-        r4 = 0;
-        r1 = 0;
-        r11 = 1024; // 0x400 float:1.435E-42 double:5.06E-321;
-        r11 = new byte[r11];	 Catch:{ FileNotFoundException -> 0x01eb, IOException -> 0x01f9, RuntimeException -> 0x0207, all -> 0x0215 }
-        r12 = r13.mResolver;	 Catch:{ FileNotFoundException -> 0x01eb, IOException -> 0x01f9, RuntimeException -> 0x0207, all -> 0x0215 }
-        r8 = r8.getDataUri();	 Catch:{ FileNotFoundException -> 0x01eb, IOException -> 0x01f9, RuntimeException -> 0x0207, all -> 0x0215 }
-        r1 = r12.openInputStream(r8);	 Catch:{ FileNotFoundException -> 0x01eb, IOException -> 0x01f9, RuntimeException -> 0x0207, all -> 0x0215 }
-    L_0x01cf:
-        r2 = r1.read(r11);	 Catch:{ FileNotFoundException -> 0x023f, IOException -> 0x023d, RuntimeException -> 0x023b, all -> 0x0239 }
-        r3 = -1;
-        if (r2 == r3) goto L_0x01e3;
-    L_0x01d6:
-        r3 = r13.mMessage;	 Catch:{ FileNotFoundException -> 0x023f, IOException -> 0x023d, RuntimeException -> 0x023b, all -> 0x0239 }
-        r4 = 0;
-        r3.write(r11, r4, r2);	 Catch:{ FileNotFoundException -> 0x023f, IOException -> 0x023d, RuntimeException -> 0x023b, all -> 0x0239 }
-        r3 = r13.mPosition;	 Catch:{ FileNotFoundException -> 0x023f, IOException -> 0x023d, RuntimeException -> 0x023b, all -> 0x0239 }
-        r3 = r3 + r2;
-        r13.mPosition = r3;	 Catch:{ FileNotFoundException -> 0x023f, IOException -> 0x023d, RuntimeException -> 0x023b, all -> 0x0239 }
-        r0 = r0 + r2;
-        goto L_0x01cf;
-    L_0x01e3:
-        if (r1 == 0) goto L_0x018c;
-    L_0x01e5:
-        r1.close();	 Catch:{ IOException -> 0x01e9 }
-        goto L_0x018c;
-    L_0x01e9:
-        r1 = move-exception;
-        goto L_0x018c;
-    L_0x01eb:
-        r0 = move-exception;
-        r0 = r1;
-    L_0x01ed:
-        if (r0 == 0) goto L_0x0022;
-    L_0x01ef:
-        r0.close();	 Catch:{ IOException -> 0x01f5 }
-        r0 = 1;
-        goto L_0x0023;
-    L_0x01f5:
-        r0 = move-exception;
-        r0 = 1;
-        goto L_0x0023;
-    L_0x01f9:
-        r0 = move-exception;
-        r1 = r2;
-    L_0x01fb:
-        if (r1 == 0) goto L_0x0022;
-    L_0x01fd:
-        r1.close();	 Catch:{ IOException -> 0x0203 }
-        r0 = 1;
-        goto L_0x0023;
-    L_0x0203:
-        r0 = move-exception;
-        r0 = 1;
-        goto L_0x0023;
-    L_0x0207:
-        r0 = move-exception;
-        r1 = r3;
-    L_0x0209:
-        if (r1 == 0) goto L_0x0022;
-    L_0x020b:
-        r1.close();	 Catch:{ IOException -> 0x0211 }
-        r0 = 1;
-        goto L_0x0023;
-    L_0x0211:
-        r0 = move-exception;
-        r0 = 1;
-        goto L_0x0023;
-    L_0x0215:
-        r0 = move-exception;
-        r1 = r4;
-    L_0x0217:
-        if (r1 == 0) goto L_0x021c;
-    L_0x0219:
-        r1.close();	 Catch:{ IOException -> 0x0237 }
-    L_0x021c:
-        throw r0;
-    L_0x021d:
-        r1 = r13.mStack;
-        r1.pop();
-        r2 = (long) r10;
-        r13.appendUintvarInteger(r2);
-        r0 = (long) r0;
-        r13.appendUintvarInteger(r0);
-        r0 = r13.mStack;
-        r0.copy();
-        r0 = r5 + 1;
-        r5 = r0;
-        goto L_0x00a6;
-    L_0x0234:
-        r0 = 0;
-        goto L_0x0023;
-    L_0x0237:
-        r1 = move-exception;
-        goto L_0x021c;
-    L_0x0239:
-        r0 = move-exception;
-        goto L_0x0217;
-    L_0x023b:
-        r0 = move-exception;
-        goto L_0x0209;
-    L_0x023d:
-        r0 = move-exception;
-        goto L_0x01fb;
-    L_0x023f:
-        r0 = move-exception;
-        r0 = r1;
-        goto L_0x01ed;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.google.android.mms.pdu.PduComposer.makeMessageBody(int):int");
-    }
-
-    private int makeNotifyResp() {
+    private int makeSendRetrievePdu(int type) {
         if (this.mMessage == null) {
             this.mMessage = new ByteArrayOutputStream();
             this.mPosition = 0;
         }
         appendOctet(140);
-        appendOctet(131);
-        return (appendHeader(152) == 0 && appendHeader(141) == 0 && appendHeader(149) == 0) ? 0 : 1;
-    }
-
-    private int makeReadRecInd() {
-        if (this.mMessage == null) {
-            this.mMessage = new ByteArrayOutputStream();
-            this.mPosition = 0;
-        }
-        appendOctet(140);
-        appendOctet(135);
-        if (appendHeader(141) == 0 && appendHeader(139) == 0 && appendHeader(151) == 0 && appendHeader(137) == 0) {
-            appendHeader(133);
-            if (appendHeader(155) == 0) {
-                return 0;
-            }
-        }
-        return 1;
-    }
-
-    private int makeSendRetrievePdu(int i) {
-        int i2 = 0;
-        if (this.mMessage == null) {
-            this.mMessage = new ByteArrayOutputStream();
-            this.mPosition = 0;
-        }
-        appendOctet(140);
-        appendOctet(i);
+        appendOctet(type);
         appendOctet(152);
-        byte[] textString = this.mPduHeader.getTextString(152);
-        if (textString == null) {
+        byte[] trid = this.mPduHeader.getTextString(152);
+        if (trid == null) {
             throw new IllegalArgumentException("Transaction-ID is null.");
         }
-        appendTextString(textString);
+        appendTextString(trid);
         if (appendHeader(141) != 0) {
             return 1;
         }
@@ -715,16 +438,17 @@ public class PduComposer {
         if (appendHeader(137) != 0) {
             return 1;
         }
+        boolean recipient = false;
         if (appendHeader(151) != 1) {
-            i2 = 1;
+            recipient = true;
         }
         if (appendHeader(130) != 1) {
-            i2 = 1;
+            recipient = true;
         }
         if (appendHeader(129) != 1) {
-            i2 = 1;
+            recipient = true;
         }
-        if (i2 == 0) {
+        if (!recipient) {
             return 1;
         }
         appendHeader(150);
@@ -733,163 +457,277 @@ public class PduComposer {
         appendHeader(143);
         appendHeader(134);
         appendHeader(144);
-        if (i == 132) {
+        if (type == 132) {
             appendHeader(153);
             appendHeader(154);
         }
         appendOctet(132);
-        return makeMessageBody(i);
+        return makeMessageBody(type);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void append(int i) {
-        this.mMessage.write(i);
-        this.mPosition++;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendDateValue(long j) {
-        appendLongInteger(j);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendEncodedString(EncodedStringValue encodedStringValue) {
-        if ($assertionsDisabled || encodedStringValue != null) {
-            int characterSet = encodedStringValue.getCharacterSet();
-            byte[] textString = encodedStringValue.getTextString();
-            if (textString != null) {
-                this.mStack.newbuf();
-                PositionMarker mark = this.mStack.mark();
-                appendShortInteger(characterSet);
-                appendTextString(textString);
-                characterSet = mark.getLength();
-                this.mStack.pop();
-                appendValueLength((long) characterSet);
-                this.mStack.copy();
-                return;
+    private int makeMessageBody(int type) {
+        PduBody body;
+        this.mStack.newbuf();
+        PositionMarker ctStart = this.mStack.mark();
+        Integer contentTypeIdentifier = mContentTypeMap.get(new String(this.mPduHeader.getTextString(132)));
+        if (contentTypeIdentifier == null) {
+            return 1;
+        }
+        appendShortInteger(contentTypeIdentifier.intValue());
+        if (type == 132) {
+            body = ((RetrieveConf) this.mPdu).getBody();
+        } else {
+            body = ((SendReq) this.mPdu).getBody();
+        }
+        if (body == null || body.getPartsNum() == 0) {
+            appendUintvarInteger(0L);
+            this.mStack.pop();
+            this.mStack.copy();
+            return 0;
+        }
+        try {
+            PduPart part = body.getPart(0);
+            byte[] start = part.getContentId();
+            if (start != null) {
+                appendOctet(138);
+                if (60 == start[0] && 62 == start[start.length - 1]) {
+                    appendTextString(start);
+                } else {
+                    appendTextString("<" + new String(start) + ">");
+                }
             }
-            return;
+            appendOctet(137);
+            appendTextString(part.getContentType());
+        } catch (ArrayIndexOutOfBoundsException e) {
+            e.printStackTrace();
         }
-        throw new AssertionError();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendLongInteger(long j) {
-        int i = 0;
-        long j2 = j;
-        int i2 = 0;
-        while (j2 != 0 && i2 < 8) {
-            j2 >>>= 8;
-            i2++;
-        }
-        appendShortLength(i2);
-        long j3 = (i2 - 1) * 8;
-        while (i < i2) {
-            append((int) ((j >>> j3) & 255));
-            j3 -= 8;
-            i++;
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendOctet(int i) {
-        append(i);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendQuotedString(String str) {
-        appendQuotedString(str.getBytes());
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendQuotedString(byte[] bArr) {
-        append(34);
-        arraycopy(bArr, 0, bArr.length);
-        append(0);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendShortInteger(int i) {
-        append((i | 128) & 255);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendShortLength(int i) {
-        append(i);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendTextString(String str) {
-        appendTextString(str.getBytes());
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendTextString(byte[] bArr) {
-        if ((bArr[0] & 255) > 127) {
-            append(127);
-        }
-        arraycopy(bArr, 0, bArr.length);
-        append(0);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendUintvarInteger(long j) {
-        int i = 0;
-        long j2 = 127;
-        while (i < 5 && j >= j2) {
-            j2 = (j2 << 7) | 127;
-            i++;
-        }
-        while (i > 0) {
-            append((int) ((128 | ((j >>> (i * 7)) & 127)) & 255));
-            i--;
-        }
-        append((int) (j & 127));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void appendValueLength(long j) {
-        if (j < 31) {
-            appendShortLength((int) j);
-            return;
-        }
-        append(31);
-        appendUintvarInteger(j);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void arraycopy(byte[] bArr, int i, int i2) {
-        this.mMessage.write(bArr, i, i2);
-        this.mPosition += i2;
-    }
-
-    public byte[] make() {
-        int messageType = this.mPdu.getMessageType();
-        switch (messageType) {
-            case 128:
-            case 132:
-                if (makeSendRetrievePdu(messageType) != 0) {
-                    return null;
+        int ctLength = ctStart.getLength();
+        this.mStack.pop();
+        appendValueLength(ctLength);
+        this.mStack.copy();
+        int partNum = body.getPartsNum();
+        appendUintvarInteger(partNum);
+        for (int i = 0; i < partNum; i++) {
+            PduPart part2 = body.getPart(i);
+            this.mStack.newbuf();
+            PositionMarker attachment = this.mStack.mark();
+            this.mStack.newbuf();
+            PositionMarker contentTypeBegin = this.mStack.mark();
+            byte[] partContentType = part2.getContentType();
+            if (partContentType == null) {
+                return 1;
+            }
+            Integer partContentTypeIdentifier = mContentTypeMap.get(new String(partContentType));
+            if (partContentTypeIdentifier == null) {
+                appendTextString(partContentType);
+            } else {
+                appendShortInteger(partContentTypeIdentifier.intValue());
+            }
+            byte[] name = part2.getName();
+            if (name == null && (name = part2.getFilename()) == null && (name = part2.getContentLocation()) == null && (name = part2.getContentId()) == null) {
+                return 1;
+            }
+            appendOctet(133);
+            appendTextString(name);
+            int charset = part2.getCharset();
+            if (charset != 0) {
+                appendOctet(129);
+                appendShortInteger(charset);
+            }
+            int contentTypeLength = contentTypeBegin.getLength();
+            this.mStack.pop();
+            appendValueLength(contentTypeLength);
+            this.mStack.copy();
+            byte[] contentId = part2.getContentId();
+            if (contentId != null) {
+                appendOctet(192);
+                if (60 == contentId[0] && 62 == contentId[contentId.length - 1]) {
+                    appendQuotedString(contentId);
+                } else {
+                    appendQuotedString("<" + new String(contentId) + ">");
                 }
-                break;
-            case 131:
-                if (makeNotifyResp() != 0) {
-                    return null;
+            }
+            byte[] contentLocation = part2.getContentLocation();
+            if (contentLocation != null) {
+                appendOctet(142);
+                appendTextString(contentLocation);
+            }
+            int headerLength = attachment.getLength();
+            int dataLength = 0;
+            byte[] partData = part2.getData();
+            if (partData != null) {
+                arraycopy(partData, 0, partData.length);
+                dataLength = partData.length;
+            } else {
+                InputStream cr = null;
+                try {
+                    byte[] buffer = new byte[PDU_COMPOSER_BLOCK_SIZE];
+                    cr = this.mResolver.openInputStream(part2.getDataUri());
+                    while (true) {
+                        int len = cr.read(buffer);
+                        if (len == -1) {
+                            break;
+                        }
+                        this.mMessage.write(buffer, 0, len);
+                        this.mPosition += len;
+                        dataLength += len;
+                    }
+                    if (cr != null) {
+                        try {
+                            cr.close();
+                        } catch (IOException e2) {
+                        }
+                    }
+                } catch (FileNotFoundException e3) {
+                    if (cr == null) {
+                        return 1;
+                    }
+                    try {
+                        cr.close();
+                        return 1;
+                    } catch (IOException e4) {
+                        return 1;
+                    }
+                } catch (IOException e5) {
+                    if (cr == null) {
+                        return 1;
+                    }
+                    try {
+                        cr.close();
+                        return 1;
+                    } catch (IOException e6) {
+                        return 1;
+                    }
+                } catch (RuntimeException e7) {
+                    if (cr == null) {
+                        return 1;
+                    }
+                    try {
+                        cr.close();
+                        return 1;
+                    } catch (IOException e8) {
+                        return 1;
+                    }
+                } catch (Throwable th) {
+                    if (cr != null) {
+                        try {
+                            cr.close();
+                        } catch (IOException e9) {
+                        }
+                    }
+                    throw th;
                 }
-                break;
-            case 133:
-                if (makeAckInd() != 0) {
-                    return null;
-                }
-                break;
-            case 135:
-                if (makeReadRecInd() != 0) {
-                    return null;
-                }
-                break;
-            default:
-                return null;
+            }
+            if (dataLength != attachment.getLength() - headerLength) {
+                throw new RuntimeException("BUG: Length sanity check failed");
+            }
+            this.mStack.pop();
+            appendUintvarInteger(headerLength);
+            appendUintvarInteger(dataLength);
+            this.mStack.copy();
         }
-        return this.mMessage.toByteArray();
+        return 0;
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class LengthRecordNode {
+        ByteArrayOutputStream currentMessage;
+        public int currentPosition;
+        public LengthRecordNode next;
+
+        private LengthRecordNode() {
+            this.currentMessage = null;
+            this.currentPosition = 0;
+            this.next = null;
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class PositionMarker {
+        private int c_pos;
+        private int currentStackSize;
+
+        private PositionMarker() {
+        }
+
+        int getLength() {
+            if (this.currentStackSize == PduComposer.this.mStack.stackSize) {
+                return PduComposer.this.mPosition - this.c_pos;
+            }
+            throw new RuntimeException("BUG: Invalid call to getLength()");
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class BufferStack {
+        private LengthRecordNode stack;
+        int stackSize;
+        private LengthRecordNode toCopy;
+
+        private BufferStack() {
+            this.stack = null;
+            this.toCopy = null;
+            this.stackSize = 0;
+        }
+
+        void newbuf() {
+            if (this.toCopy != null) {
+                throw new RuntimeException("BUG: Invalid newbuf() before copy()");
+            }
+            LengthRecordNode temp = new LengthRecordNode();
+            temp.currentMessage = PduComposer.this.mMessage;
+            temp.currentPosition = PduComposer.this.mPosition;
+            temp.next = this.stack;
+            this.stack = temp;
+            this.stackSize++;
+            PduComposer.this.mMessage = new ByteArrayOutputStream();
+            PduComposer.this.mPosition = 0;
+        }
+
+        void pop() {
+            ByteArrayOutputStream currentMessage = PduComposer.this.mMessage;
+            int currentPosition = PduComposer.this.mPosition;
+            PduComposer.this.mMessage = this.stack.currentMessage;
+            PduComposer.this.mPosition = this.stack.currentPosition;
+            this.toCopy = this.stack;
+            this.stack = this.stack.next;
+            this.stackSize--;
+            this.toCopy.currentMessage = currentMessage;
+            this.toCopy.currentPosition = currentPosition;
+        }
+
+        void copy() {
+            PduComposer.this.arraycopy(this.toCopy.currentMessage.toByteArray(), 0, this.toCopy.currentPosition);
+            this.toCopy = null;
+        }
+
+        PositionMarker mark() {
+            PositionMarker m = new PositionMarker();
+            m.c_pos = PduComposer.this.mPosition;
+            m.currentStackSize = this.stackSize;
+            return m;
+        }
+    }
+
+    protected static int checkAddressType(String address) {
+        if (address == null) {
+            return 5;
+        }
+        if (address.matches(REGEXP_IPV4_ADDRESS_TYPE)) {
+            return 3;
+        }
+        if (address.matches(REGEXP_PHONE_NUMBER_ADDRESS_TYPE)) {
+            return 1;
+        }
+        if (address.matches(REGEXP_EMAIL_ADDRESS_TYPE)) {
+            return 2;
+        }
+        if (address.matches(REGEXP_IPV6_ADDRESS_TYPE)) {
+            return 4;
+        }
+        return 5;
     }
 }

@@ -2,6 +2,7 @@ package com.android.internal.telephony.gsm;
 
 import android.telephony.PhoneNumberUtils;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SuppServiceNotification {
     public static final int MO_CODE_CALL_DEFLECTED = 8;
     public static final int MO_CODE_CALL_FORWARDED = 2;

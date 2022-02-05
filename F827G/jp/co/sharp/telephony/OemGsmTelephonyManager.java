@@ -4,10 +4,9 @@ import android.os.Handler;
 import android.os.Message;
 import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.PhoneFactory;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OEM_RIL_CDMA_BC;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OemCdmaDataConverter;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class OemGsmTelephonyManager {
     private static final int CDMA_START = 33554432;
     public static final int GSM_1800 = 1800;
@@ -29,63 +28,60 @@ public class OemGsmTelephonyManager {
     private OemGsmTelephonyManager() {
     }
 
-    public static OemGsmTelephonyManager getInstance() {
+    public static synchronized OemGsmTelephonyManager getInstance() {
+        OemGsmTelephonyManager oemGsmTelephonyManager;
         synchronized (OemGsmTelephonyManager.class) {
-            try {
-                if (mInstance == null) {
-                    mInstance = new OemGsmTelephonyManager();
-                }
-                OemGsmTelephonyManager oemGsmTelephonyManager = mInstance;
-                return oemGsmTelephonyManager;
-            } finally {
-                Object obj = OemGsmTelephonyManager.class;
+            if (mInstance == null) {
+                mInstance = new OemGsmTelephonyManager();
             }
+            oemGsmTelephonyManager = mInstance;
         }
+        return oemGsmTelephonyManager;
     }
 
-    private Message obtainMessage(int i) {
-        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(i);
+    private Message obtainMessage(int what) {
+        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(what);
     }
 
-    private Message obtainMessage(int i, Object obj) {
-        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(i, obj);
+    private Message obtainMessage(int what, Object obj) {
+        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(what, obj);
     }
 
-    public OEM_RIL_CDMA_Errno getGsmEnablement(Handler handler, int i) {
-        int i2 = -1;
-        switch (i) {
-            case GSM_900 /*900*/:
-                i2 = OEM_RIL_REQUEST_GSM_GET_900;
+    public OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno getGsmEnablement(Handler msgH, int index) {
+        int msgid = -1;
+        switch (index) {
+            case GSM_900 /* 900 */:
+                msgid = OEM_RIL_REQUEST_GSM_GET_900;
                 break;
-            case GSM_1800 /*1800*/:
-                i2 = OEM_RIL_REQUEST_GSM_GET_1800;
+            case GSM_1800 /* 1800 */:
+                msgid = OEM_RIL_REQUEST_GSM_GET_1800;
                 break;
-            case GSM_1900 /*1900*/:
-                i2 = OEM_RIL_REQUEST_GSM_GET_1900;
-                break;
-        }
-        Message obtainMessage = obtainMessage(i2);
-        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaDataConverter.writeHookHeader(i2), obtainMessage, handler);
-        return OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
-    }
-
-    public OEM_RIL_CDMA_Errno setGsmEnablement(int i, String str, Handler handler, int i2) {
-        int i3 = -1;
-        switch (i2) {
-            case GSM_900 /*900*/:
-                i3 = OEM_RIL_REQUEST_GSM_SET_900;
-                break;
-            case GSM_1800 /*1800*/:
-                i3 = OEM_RIL_REQUEST_GSM_SET_1800;
-                break;
-            case GSM_1900 /*1900*/:
-                i3 = OEM_RIL_REQUEST_GSM_SET_1900;
+            case GSM_1900 /* 1900 */:
+                msgid = OEM_RIL_REQUEST_GSM_GET_1900;
                 break;
         }
-        Message obtainMessage = obtainMessage(i3);
-        OEM_RIL_CDMA_BC oem_ril_cdma_bc = new OEM_RIL_CDMA_BC();
-        oem_ril_cdma_bc.status = i;
-        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaDataConverter.BCToByteArr(oem_ril_cdma_bc, i3, str), obtainMessage, handler);
-        return OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
+        Message msg = obtainMessage(msgid);
+        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaTelephonyManager.OemCdmaDataConverter.writeHookHeader(msgid), msg, msgH);
+        return OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
+    }
+
+    public OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno setGsmEnablement(int status, String spcLockCode, Handler msgH, int index) {
+        int msgid = -1;
+        switch (index) {
+            case GSM_900 /* 900 */:
+                msgid = OEM_RIL_REQUEST_GSM_SET_900;
+                break;
+            case GSM_1800 /* 1800 */:
+                msgid = OEM_RIL_REQUEST_GSM_SET_1800;
+                break;
+            case GSM_1900 /* 1900 */:
+                msgid = OEM_RIL_REQUEST_GSM_SET_1900;
+                break;
+        }
+        Message msg = obtainMessage(msgid);
+        OemCdmaTelephonyManager.OEM_RIL_CDMA_BC bc = new OemCdmaTelephonyManager.OEM_RIL_CDMA_BC();
+        bc.status = status;
+        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaTelephonyManager.OemCdmaDataConverter.BCToByteArr(bc, msgid, spcLockCode), msg, msgH);
+        return OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
     }
 }

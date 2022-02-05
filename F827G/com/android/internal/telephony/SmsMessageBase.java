@@ -1,13 +1,13 @@
 package com.android.internal.telephony;
 
-import android.provider.Telephony.Mms;
-import com.android.internal.telephony.SmsConstants.MessageClass;
+import android.provider.Telephony;
+import com.android.internal.telephony.SmsConstants;
 import java.util.Arrays;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class SmsMessageBase {
     protected String mEmailBody;
     protected String mEmailFrom;
-    protected int mIndexOnIcc = -1;
     protected boolean mIsEmail;
     protected boolean mIsMwi;
     protected String mMessageBody;
@@ -20,100 +20,18 @@ public abstract class SmsMessageBase {
     protected SmsAddress mRecipientAddress;
     protected String mScAddress;
     protected long mScTimeMillis;
-    protected int mStatusOnIcc = -1;
     protected byte[] mUserData;
     protected SmsHeader mUserDataHeader;
+    protected int mStatusOnIcc = -1;
+    protected int mIndexOnIcc = -1;
 
-    public static abstract class SubmitPduBase {
-        public byte[] encodedMessage;
-        public byte[] encodedScAddress;
-
-        public String toString() {
-            return "SubmitPdu: encodedScAddress = " + Arrays.toString(this.encodedScAddress) + ", encodedMessage = " + Arrays.toString(this.encodedMessage);
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void extractEmailAddressFromMessageBody() {
-        String[] split = this.mMessageBody.split("( /)|( )", 2);
-        if (split.length >= 2) {
-            this.mEmailFrom = split[0];
-            this.mEmailBody = split[1];
-            this.mIsEmail = Mms.isEmailAddress(this.mEmailFrom);
-        }
-    }
-
-    public String getDisplayMessageBody() {
-        return this.mIsEmail ? this.mEmailBody : getMessageBody();
-    }
-
-    public String getDisplayOriginatingAddress() {
-        return this.mIsEmail ? this.mEmailFrom : getOriginatingAddress();
-    }
-
-    public String getEmailBody() {
-        return this.mEmailBody;
-    }
-
-    public String getEmailFrom() {
-        return this.mEmailFrom;
-    }
-
-    public int getIndexOnIcc() {
-        return this.mIndexOnIcc;
-    }
-
-    public String getMessageBody() {
-        return this.mMessageBody;
-    }
-
-    public abstract MessageClass getMessageClass();
-
-    public String getOriginatingAddress() {
-        return this.mOriginatingAddress == null ? null : this.mOriginatingAddress.getAddressString();
-    }
-
-    public byte[] getPdu() {
-        return this.mPdu;
-    }
+    public abstract SmsConstants.MessageClass getMessageClass();
 
     public abstract int getProtocolIdentifier();
 
-    public String getPseudoSubject() {
-        return this.mPseudoSubject == null ? "" : this.mPseudoSubject;
-    }
-
-    public String getRecipientAddress() {
-        return this.mRecipientAddress == null ? null : this.mRecipientAddress.getAddressString();
-    }
-
-    public String getServiceCenterAddress() {
-        return this.mScAddress;
-    }
-
     public abstract int getStatus();
 
-    public int getStatusOnIcc() {
-        return this.mStatusOnIcc;
-    }
-
-    public long getTimestampMillis() {
-        return this.mScTimeMillis;
-    }
-
-    public byte[] getUserData() {
-        return this.mUserData;
-    }
-
-    public SmsHeader getUserDataHeader() {
-        return this.mUserDataHeader;
-    }
-
     public abstract boolean isCphsMwiMessage();
-
-    public boolean isEmail() {
-        return this.mIsEmail;
-    }
 
     public abstract boolean isMWIClearMessage();
 
@@ -127,10 +45,98 @@ public abstract class SmsMessageBase {
 
     public abstract boolean isStatusReportMessage();
 
-    /* Access modifiers changed, original: protected */
-    public void parseMessageBody() {
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static abstract class SubmitPduBase {
+        public byte[] encodedMessage;
+        public byte[] encodedScAddress;
+
+        public String toString() {
+            return "SubmitPdu: encodedScAddress = " + Arrays.toString(this.encodedScAddress) + ", encodedMessage = " + Arrays.toString(this.encodedMessage);
+        }
+    }
+
+    public String getServiceCenterAddress() {
+        return this.mScAddress;
+    }
+
+    public String getOriginatingAddress() {
+        if (this.mOriginatingAddress == null) {
+            return null;
+        }
+        return this.mOriginatingAddress.getAddressString();
+    }
+
+    public String getDisplayOriginatingAddress() {
+        return this.mIsEmail ? this.mEmailFrom : getOriginatingAddress();
+    }
+
+    public String getMessageBody() {
+        return this.mMessageBody;
+    }
+
+    public String getDisplayMessageBody() {
+        return this.mIsEmail ? this.mEmailBody : getMessageBody();
+    }
+
+    public String getPseudoSubject() {
+        return this.mPseudoSubject == null ? "" : this.mPseudoSubject;
+    }
+
+    public long getTimestampMillis() {
+        return this.mScTimeMillis;
+    }
+
+    public boolean isEmail() {
+        return this.mIsEmail;
+    }
+
+    public String getEmailBody() {
+        return this.mEmailBody;
+    }
+
+    public String getEmailFrom() {
+        return this.mEmailFrom;
+    }
+
+    public byte[] getUserData() {
+        return this.mUserData;
+    }
+
+    public SmsHeader getUserDataHeader() {
+        return this.mUserDataHeader;
+    }
+
+    public byte[] getPdu() {
+        return this.mPdu;
+    }
+
+    public int getStatusOnIcc() {
+        return this.mStatusOnIcc;
+    }
+
+    public int getIndexOnIcc() {
+        return this.mIndexOnIcc;
+    }
+
+    protected void parseMessageBody() {
         if (this.mOriginatingAddress != null && this.mOriginatingAddress.couldBeEmailGateway()) {
             extractEmailAddressFromMessageBody();
         }
+    }
+
+    protected void extractEmailAddressFromMessageBody() {
+        String[] parts = this.mMessageBody.split("( /)|( )", 2);
+        if (parts.length >= 2) {
+            this.mEmailFrom = parts[0];
+            this.mEmailBody = parts[1];
+            this.mIsEmail = Telephony.Mms.isEmailAddress(this.mEmailFrom);
+        }
+    }
+
+    public String getRecipientAddress() {
+        if (this.mRecipientAddress == null) {
+            return null;
+        }
+        return this.mRecipientAddress.getAddressString();
     }
 }

@@ -14,22 +14,21 @@ import android.telephony.ServiceState;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import com.android.internal.telephony.CommandException;
-import com.android.internal.telephony.CommandException.Error;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.IccCard;
-import com.android.internal.telephony.IccCardConstants.State;
+import com.android.internal.telephony.IccCardConstants;
+import com.android.internal.telephony.MccTable;
 import com.android.internal.telephony.TelBrand;
 import com.android.internal.telephony.cdma.CdmaSubscriptionSourceManager;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppState;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppType;
-import com.android.internal.telephony.uicc.IccCardApplicationStatus.PersoSubState;
-import com.android.internal.telephony.uicc.IccCardStatus.CardState;
-import com.android.internal.telephony.uicc.IccCardStatus.PinState;
+import com.android.internal.telephony.uicc.IccCardApplicationStatus;
+import com.android.internal.telephony.uicc.IccCardStatus;
+import com.google.android.mms.pdu.PduPart;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class IccCardProxy extends Handler implements IccCard {
     private static final boolean DBG = true;
     private static final String ENCRYPTED_STATE = "encrypted";
@@ -69,453 +68,314 @@ public class IccCardProxy extends Handler implements IccCard {
     private static final int SIM_ABSENT_NOT_RECEIVED = 0;
     private static final int SIM_ABSENT_RECEIVED = 1;
     private static final boolean SMARTCARD_DBG = false;
-    protected boolean dontPollBroadcastSharp = false;
-    private RegistrantList mAbsentRegistrants = new RegistrantList();
-    private CdmaSubscriptionSourceManager mCdmaSSM = null;
+    private CdmaSubscriptionSourceManager mCdmaSSM;
     private CommandsInterface mCi;
     private Context mContext;
-    private int mCurrentAppType = 1;
-    protected State mExternalState = State.UNKNOWN;
-    protected State mExternalStateSharp = State.UNKNOWN;
-    private IccOpenLogicalChannel mIccOpenLogicalChannel = new IccOpenLogicalChannel();
-    private IccRecords mIccRecords = null;
-    private boolean mInitialized = false;
-    private boolean mIsCardStatusAvailable = false;
+    private Integer mPhoneId;
+    private UiccController mUiccController;
     private final Object mLock = new Object();
-    private RegistrantList mPersoLockedRegistrants = new RegistrantList();
-    private PersoSubState mPersoSubState = PersoSubState.PERSOSUBSTATE_UNKNOWN;
-    private Integer mPhoneId = null;
+    private RegistrantList mAbsentRegistrants = new RegistrantList();
     private RegistrantList mPinLockedRegistrants = new RegistrantList();
-    private boolean mQuietMode = false;
-    private boolean mRadioOn = false;
-    private int mSimLock = 0;
-    private UiccCardApplication mUiccApplication = null;
+    private RegistrantList mPersoLockedRegistrants = new RegistrantList();
+    private int mCurrentAppType = 1;
     private UiccCard mUiccCard = null;
-    private UiccController mUiccController = null;
+    private UiccCardApplication mUiccApplication = null;
+    private IccRecords mIccRecords = null;
+    private boolean mRadioOn = false;
+    private boolean mQuietMode = false;
+    private boolean mInitialized = false;
+    protected IccCardConstants.State mExternalState = IccCardConstants.State.UNKNOWN;
+    private boolean mIsCardStatusAvailable = false;
+    private IccCardApplicationStatus.PersoSubState mPersoSubState = IccCardApplicationStatus.PersoSubState.PERSOSUBSTATE_UNKNOWN;
+    protected IccCardConstants.State mExternalStateSharp = IccCardConstants.State.UNKNOWN;
+    protected boolean dontPollBroadcastSharp = false;
+    private int mSimLock = 0;
+    private IccOpenLogicalChannel mIccOpenLogicalChannel = new IccOpenLogicalChannel();
 
-    /* renamed from: com.android.internal.telephony.uicc.IccCardProxy$1 */
-    static /* synthetic */ class AnonymousClass1 {
-        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$IccCardConstants$State = new int[State.values().length];
-
-        static {
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.ABSENT.ordinal()] = 1;
-            } catch (NoSuchFieldError e) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.PIN_REQUIRED.ordinal()] = 2;
-            } catch (NoSuchFieldError e2) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.PUK_REQUIRED.ordinal()] = 3;
-            } catch (NoSuchFieldError e3) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.PERSO_LOCKED.ordinal()] = 4;
-            } catch (NoSuchFieldError e4) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.READY.ordinal()] = 5;
-            } catch (NoSuchFieldError e5) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.NOT_READY.ordinal()] = 6;
-            } catch (NoSuchFieldError e6) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.PERM_DISABLED.ordinal()] = 7;
-            } catch (NoSuchFieldError e7) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.CARD_IO_ERROR.ordinal()] = 8;
-            } catch (NoSuchFieldError e8) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.SIM_NETWORK_SUBSET_LOCKED.ordinal()] = 9;
-            } catch (NoSuchFieldError e9) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[State.FOREVER.ordinal()] = 10;
-            } catch (NoSuchFieldError e10) {
-            }
-            $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState = new int[AppState.values().length];
-            try {
-                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[AppState.APPSTATE_UNKNOWN.ordinal()] = 1;
-            } catch (NoSuchFieldError e11) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[AppState.APPSTATE_PIN.ordinal()] = 2;
-            } catch (NoSuchFieldError e12) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[AppState.APPSTATE_PUK.ordinal()] = 3;
-            } catch (NoSuchFieldError e13) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[AppState.APPSTATE_SUBSCRIPTION_PERSO.ordinal()] = 4;
-            } catch (NoSuchFieldError e14) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[AppState.APPSTATE_READY.ordinal()] = 5;
-            } catch (NoSuchFieldError e15) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[AppState.APPSTATE_DETECTED.ordinal()] = 6;
-            } catch (NoSuchFieldError e16) {
-            }
-        }
-    }
-
-    private class IccOpenLogicalChannel extends Handler {
-        private static final String CAS_AID = "F0000000010001FF81FF10FFFFFFFF02";
-        public static final int DEFAULT_MAX_CHANNEL = 4;
-        private static final int EVENT_GET_STATUS_DONE = 2;
-        private static final int EVENT_GET_TMM_DONE = 1;
-        private static final int EVENT_OPEN_CHANNEL_DONE = 3;
-        private int mMaxChannels = 4;
-        private int mRequestCount = 0;
-
-        private class LookForVacantChannel {
-            public static final int TMM_NOT_OPEN_CHANNEL = 0;
-            private String mAID = null;
-            private int mCheckedNo = 0;
-            private int mMaxChannels = 4;
-            private Message mOnComplete = null;
-            private int mTMMChannel = 0;
-            private int mVacantCount = 0;
-
-            public LookForVacantChannel(String str, Message message, int i) {
-                this.mAID = str;
-                this.mOnComplete = message;
-                this.mMaxChannels = i;
-            }
-
-            public void addVacant() {
-                this.mVacantCount++;
-            }
-
-            public String getAID() {
-                return this.mAID;
-            }
-
-            public Message getOnComplete() {
-                return this.mOnComplete;
-            }
-
-            public boolean isCheckEnd() {
-                return this.mCheckedNo >= this.mMaxChannels;
-            }
-
-            public boolean isOpenChannel() {
-                if (this.mTMMChannel > 0) {
-                    if (this.mVacantCount <= 0) {
-                        return false;
-                    }
-                } else if (this.mVacantCount - 1 <= 0) {
-                    return false;
-                }
-                return true;
-            }
-
-            public int reqNextChannelWithUpdate() {
-                this.mCheckedNo++;
-                if (this.mTMMChannel == this.mCheckedNo) {
-                    this.mCheckedNo++;
-                }
-                return this.mCheckedNo;
-            }
-
-            public void setTMMChannel(int i) {
-                this.mTMMChannel = i;
-            }
-        }
-
-        private void checkGetCardStatusResponse(LookForVacantChannel lookForVacantChannel, IccIoResult iccIoResult) {
-            if (iccIoResult.sw1 == 106 && iccIoResult.sw2 == 130) {
-                lookForVacantChannel.setTMMChannel(0);
-            } else if (iccIoResult.success()) {
-                int length = iccIoResult.payload.length;
-                if (length > 1) {
-                }
-                if (length > 0) {
-                    lookForVacantChannel.setTMMChannel(iccIoResult.payload[0]);
-                } else {
-                    lookForVacantChannel.setTMMChannel(0);
-                }
-            } else {
-                lookForVacantChannel.setTMMChannel(0);
-            }
-        }
-
-        private void checkGetStatusResponse(LookForVacantChannel lookForVacantChannel, IccIoResult iccIoResult) {
-            if (iccIoResult.sw1 == 104 && iccIoResult.sw2 == 129) {
-                lookForVacantChannel.addVacant();
-            }
-        }
-
-        private String eventString(int i) {
-            switch (i) {
-                case 1:
-                    return "EVENT_GET_TMM_DONE";
-                case 2:
-                    return "EVENT_GET_STATUS_DONE";
-                case 3:
-                    return "EVENT_OPEN_CHANNEL_DONE";
-                default:
-                    return "Unknown event";
-            }
-        }
-
-        private void getChannelStatus(LookForVacantChannel lookForVacantChannel, int i) {
-            IccCardProxy.this.mCi.iccExchangeAPDU(i < 4 ? i + 128 : (i + 192) - 4, 242, 0, 0, 0, 0, null, obtainMessage(2, lookForVacantChannel));
-        }
-
-        private void getOpenLogicalChannel(LookForVacantChannel lookForVacantChannel) {
-            IccCardProxy.this.mUiccApplication.openLogicalChannel(lookForVacantChannel.getAID(), obtainMessage(3, lookForVacantChannel));
-        }
-
-        private void getTMMChannel(String str, LookForVacantChannel lookForVacantChannel) {
-            IccCardProxy.this.mCi.iccExchangeAPDU(144, 242, 0, 0, 0, str.length() / 2, str, obtainMessage(1, lookForVacantChannel));
-        }
-
-        private void sendFailureMessage(Message message, Throwable th) {
-            AsyncResult.forMessage(message, new int[]{0}, th);
-            message.sendToTarget();
-        }
-
-        private void sendNonVacantChannelMessage(Message message) {
-            int[] iArr = new int[]{0};
-            AsyncResult.forMessage(message, iArr, new CommandException(Error.MISSING_RESOURCE));
-            message.sendToTarget();
-        }
-
-        private void sendSuccessMessage(Message message, AsyncResult asyncResult) {
-            asyncResult.userObj = message.obj;
-            message.obj = asyncResult;
-            message.sendToTarget();
-        }
-
-        public void handleMessage(Message message) {
-            AsyncResult asyncResult = (AsyncResult) message.obj;
-            LookForVacantChannel lookForVacantChannel = (LookForVacantChannel) asyncResult.userObj;
-            if (asyncResult.exception != null) {
-                sendFailureMessage(lookForVacantChannel.getOnComplete(), asyncResult.exception);
-                return;
-            }
-            switch (message.what) {
-                case 1:
-                    checkGetCardStatusResponse(lookForVacantChannel, (IccIoResult) asyncResult.result);
-                    break;
-                case 2:
-                    checkGetStatusResponse(lookForVacantChannel, (IccIoResult) asyncResult.result);
-                    break;
-                case 3:
-                    sendSuccessMessage(lookForVacantChannel.getOnComplete(), asyncResult);
-                    return;
-            }
-            int reqNextChannelWithUpdate = lookForVacantChannel.reqNextChannelWithUpdate();
-            if (!lookForVacantChannel.isCheckEnd()) {
-                getChannelStatus(lookForVacantChannel, reqNextChannelWithUpdate);
-            } else if (lookForVacantChannel.isOpenChannel()) {
-                getOpenLogicalChannel(lookForVacantChannel);
-            } else {
-                sendNonVacantChannelMessage(lookForVacantChannel.getOnComplete());
-            }
-        }
-
-        public void iccOpenChannel(String str, Message message) {
-            getTMMChannel(CAS_AID, new LookForVacantChannel(str, message, this.mMaxChannels));
-        }
-    }
-
-    public IccCardProxy(Context context, CommandsInterface commandsInterface, int i) {
-        log("ctor: ci=" + commandsInterface + " phoneId=" + i);
+    public IccCardProxy(Context context, CommandsInterface ci, int phoneId) {
+        this.mPhoneId = null;
+        this.mUiccController = null;
+        this.mCdmaSSM = null;
+        log("ctor: ci=" + ci + " phoneId=" + phoneId);
         this.mContext = context;
-        this.mCi = commandsInterface;
-        this.mPhoneId = Integer.valueOf(i);
-        this.mCdmaSSM = CdmaSubscriptionSourceManager.getInstance(context, commandsInterface, this, 11, null);
+        this.mCi = ci;
+        this.mPhoneId = Integer.valueOf(phoneId);
+        this.mCdmaSSM = CdmaSubscriptionSourceManager.getInstance(context, ci, this, 11, null);
         this.mUiccController = UiccController.getInstance();
         this.mUiccController.registerForIccChanged(this, 3, null);
-        commandsInterface.registerForOn(this, 2, null);
-        commandsInterface.registerForOffOrNotAvailable(this, 1, null);
+        ci.registerForOn(this, 2, null);
+        ci.registerForOffOrNotAvailable(this, 1, null);
         resetProperties();
-        setExternalState(State.NOT_READY, false);
+        setExternalState(IccCardConstants.State.NOT_READY, false);
         sendMessage(obtainMessage(24));
         if (TelBrand.IS_SBM) {
-            commandsInterface.getSimLock(obtainMessage(25));
+            ci.getSimLock(obtainMessage(25));
         }
     }
 
-    private void broadcastIccStateChangedIntent(String str, String str2) {
+    public void dispose() {
         synchronized (this.mLock) {
-            if (this.mPhoneId == null || !SubscriptionManager.isValidSlotId(this.mPhoneId.intValue())) {
-                loge("broadcastIccStateChangedIntent: mPhoneId=" + this.mPhoneId + " is invalid; Return!!");
-            } else if (this.mQuietMode) {
-                log("broadcastIccStateChangedIntent: QuietMode NOT Broadcasting intent ACTION_SIM_STATE_CHANGED  value=" + str + " reason=" + str2);
-            } else if (TelBrand.IS_DCM && ENCRYPTED_STATE.equals(SystemProperties.get(PROP_RO_CRYPTO_STATE)) && MIN_FRAMEWORK_STATE.equals(SystemProperties.get(PROP_VOLD_DECRYPT)) && !"NOT_READY".equals(str) && !"ABSENT".equals(str)) {
-                log("Encrypted: NOT Broadcasting intent ACTION_SIM_STATE_CHANGED " + str + " reason " + str2);
+            log("Disposing");
+            this.mUiccController.unregisterForIccChanged(this);
+            this.mUiccController = null;
+            this.mCi.unregisterForOn(this);
+            this.mCi.unregisterForOffOrNotAvailable(this);
+            this.mCdmaSSM.dispose(this);
+        }
+    }
+
+    public void setVoiceRadioTech(int radioTech) {
+        synchronized (this.mLock) {
+            log("Setting radio tech " + ServiceState.rilRadioTechnologyToString(radioTech));
+            if (ServiceState.isGsm(radioTech)) {
+                this.mCurrentAppType = 1;
             } else {
-                Intent intent = new Intent("android.intent.action.SIM_STATE_CHANGED");
-                intent.addFlags(67108864);
-                intent.putExtra("phoneName", "Phone");
-                intent.putExtra("ss", str);
-                intent.putExtra("reason", str2);
-                SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhoneId.intValue());
-                log("broadcastIccStateChangedIntent intent ACTION_SIM_STATE_CHANGED value=" + str + " reason=" + str2 + " for mPhoneId=" + this.mPhoneId);
-                ActivityManagerNative.broadcastStickyIntent(intent, "android.permission.READ_PHONE_STATE", -1);
+                this.mCurrentAppType = 2;
+            }
+            updateQuietMode();
+            updateActiveRecord();
+        }
+    }
+
+    private void updateActiveRecord() {
+        log("updateActiveRecord app type = " + this.mCurrentAppType + "mIccRecords = " + this.mIccRecords);
+        if (this.mIccRecords != null) {
+            if (this.mCurrentAppType == 2) {
+                if (this.mCdmaSSM.getCdmaSubscriptionSource() == 0) {
+                    log("Setting Ruim Record as active");
+                    this.mIccRecords.recordsRequired();
+                }
+            } else if (this.mCurrentAppType == 1) {
+                log("Setting SIM Record as active");
+                this.mIccRecords.recordsRequired();
             }
         }
     }
 
-    private String getIccStateIntentString(State state) {
-        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$IccCardConstants$State[state.ordinal()]) {
+    private void updateQuietMode() {
+        boolean newQuietMode;
+        synchronized (this.mLock) {
+            boolean z = this.mQuietMode;
+            boolean isLteCapable = this.mContext.getResources().getBoolean(17957012);
+            int cdmaSource = -1;
+            if (this.mCurrentAppType == 1) {
+                newQuietMode = false;
+                log("updateQuietMode: 3GPP subscription -> newQuietMode=false");
+            } else {
+                cdmaSource = this.mCdmaSSM != null ? this.mCdmaSSM.getCdmaSubscriptionSource() : -1;
+                if (isLteCapable) {
+                    newQuietMode = false;
+                } else if (cdmaSource == 1 && this.mCurrentAppType == 2) {
+                    newQuietMode = true;
+                } else {
+                    newQuietMode = false;
+                }
+                log("updateQuietMode: cdmaSource=" + cdmaSource + " mCurrentAppType=" + this.mCurrentAppType + " newQuietMode=" + newQuietMode);
+            }
+            if (!this.mQuietMode && newQuietMode) {
+                log("Switching to QuietMode.");
+                setExternalState(IccCardConstants.State.READY);
+                this.mQuietMode = newQuietMode;
+            } else if (!this.mQuietMode || newQuietMode) {
+                log("updateQuietMode: no changes don't setExternalState");
+            } else {
+                log("updateQuietMode: Switching out from QuietMode. Force broadcast of current state=" + this.mExternalState);
+                this.mQuietMode = newQuietMode;
+                setExternalState(this.mExternalState, true);
+                if (TelBrand.IS_SBM) {
+                    setExternalStateSharp(this.mExternalStateSharp, true);
+                }
+            }
+            log("updateQuietMode: QuietMode is " + this.mQuietMode + " (app_type=" + this.mCurrentAppType + " cdmaSource=" + cdmaSource + ")");
+            this.mInitialized = true;
+            if (this.mIsCardStatusAvailable) {
+                sendMessage(obtainMessage(3));
+            }
+        }
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
             case 1:
-                return "ABSENT";
+                this.mRadioOn = false;
+                if (CommandsInterface.RadioState.RADIO_UNAVAILABLE == this.mCi.getRadioState()) {
+                    setExternalState(IccCardConstants.State.NOT_READY);
+                    return;
+                }
+                return;
             case 2:
-                return "LOCKED";
+                this.mRadioOn = true;
+                if (!this.mInitialized) {
+                    updateQuietMode();
+                }
+                updateExternalState();
+                return;
             case 3:
-                return "LOCKED";
+                this.mIsCardStatusAvailable = true;
+                if (this.mInitialized) {
+                    updateIccAvailability();
+                    return;
+                }
+                return;
             case 4:
-                return "LOCKED";
-            case 5:
-                return "READY";
-            case 6:
-                return "NOT_READY";
-            case 7:
-                return "ABSENT";
-            case 8:
-                return "CARD_IO_ERROR";
-            default:
-                return "UNKNOWN";
-        }
-    }
-
-    private String getIccStateReason(State state) {
-        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$IccCardConstants$State[state.ordinal()]) {
-            case 2:
-                return "PIN";
-            case 3:
-                return "PUK";
-            case 4:
-                return "PERSO";
-            case 7:
-                return "PERM_DISABLED";
-            case 8:
-                return "CARD_IO_ERROR";
-            default:
-                return null;
-        }
-    }
-
-    private void log(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    private void loge(String str) {
-        Rlog.e(LOG_TAG, str);
-    }
-
-    private void notifyCurrentExternalState() {
-        synchronized (this.mLock) {
-            if (!TelBrand.IS_DCM) {
-                SystemProperties.set("gsm.sim.state", this.mExternalState.toString());
-            } else if (!ENCRYPTED_STATE.equals(SystemProperties.get(PROP_RO_CRYPTO_STATE)) || !MIN_FRAMEWORK_STATE.equals(SystemProperties.get(PROP_VOLD_DECRYPT)) || "NOT_READY".equals(getIccStateIntentString(this.mExternalState)) || "ABSENT".equals(getIccStateIntentString(this.mExternalState))) {
-                SystemProperties.set("gsm.sim.state", this.mExternalState.toString());
-            }
-            broadcastIccStateChangedIntent(getIccStateIntentString(this.mExternalState), getIccStateReason(this.mExternalState));
-            if (State.ABSENT == this.mExternalState) {
                 this.mAbsentRegistrants.notifyRegistrants();
-            }
+                setExternalState(IccCardConstants.State.ABSENT);
+                return;
+            case 5:
+                processLockedState();
+                return;
+            case 6:
+                setExternalState(IccCardConstants.State.READY);
+                return;
+            case 7:
+                if (this.mIccRecords != null) {
+                    String operator = this.mIccRecords.getOperatorNumeric();
+                    log("operator=" + operator + " slotId=" + this.mPhoneId.intValue());
+                    if (operator != null) {
+                        log("update icc_operator_numeric=" + operator);
+                        setSystemProperty("gsm.sim.operator.numeric", operator);
+                        if (this.mCurrentAppType == 1) {
+                            setSystemProperty("gsm.apn.sim.operator.numeric", operator);
+                            log("update sim_operator_numeric=" + operator);
+                        } else if (this.mCurrentAppType == 2) {
+                            setSystemProperty("net.cdma.ruim.operator.numeric", operator);
+                            log("update ruim_operator_numeric=" + operator);
+                        }
+                        String countryCode = operator.substring(0, 3);
+                        if (countryCode != null) {
+                            setSystemProperty("gsm.sim.operator.iso-country", MccTable.countryCodeForMcc(Integer.parseInt(countryCode)));
+                        } else {
+                            loge("EVENT_RECORDS_LOADED Country code is null");
+                        }
+                    } else {
+                        loge("EVENT_RECORDS_LOADED Operator name is null");
+                    }
+                }
+                if (this.mUiccCard == null || this.mUiccCard.areCarrierPriviligeRulesLoaded()) {
+                    onRecordsLoaded();
+                    return;
+                } else {
+                    this.mUiccCard.registerForCarrierPrivilegeRulesLoaded(this, EVENT_CARRIER_PRIVILIGES_LOADED, null);
+                    return;
+                }
+            case 8:
+                broadcastIccStateChangedIntent("IMSI", null);
+                return;
+            case 9:
+                this.mPersoSubState = this.mUiccApplication.getPersoSubState();
+                this.mPersoLockedRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                setExternalState(IccCardConstants.State.PERSO_LOCKED);
+                return;
+            case 11:
+                updateQuietMode();
+                updateActiveRecord();
+                return;
+            case 17:
+                onGetPinPukRetryCountDone((AsyncResult) msg.obj);
+                notifyCurrentExternalState();
+                if (TelBrand.IS_SBM) {
+                    notifyCurrentExternalStateSharp();
+                    return;
+                }
+                return;
+            case 20:
+            case 21:
+            case 22:
+            case 23:
+                AsyncResult ar = (AsyncResult) msg.obj;
+                if (ar.exception != null) {
+                    loge("Error in SIM access with exception" + ar.exception);
+                }
+                AsyncResult.forMessage((Message) ar.userObj, ar.result, ar.exception);
+                ((Message) ar.userObj).sendToTarget();
+                return;
+            case 24:
+                synchronized (this.mLock) {
+                    if (this.mCi.isRunning()) {
+                        requestUnsolRadioStateChanged();
+                    } else {
+                        Message oemhookmsg = obtainMessage();
+                        oemhookmsg.what = 24;
+                        sendMessageDelayed(oemhookmsg, 1000L);
+                    }
+                }
+                return;
+            case 25:
+                log("EVENT_GET_SIM_LOCK_DONE");
+                AsyncResult arSimLock = (AsyncResult) msg.obj;
+                if (arSimLock.exception != null) {
+                    loge("Error in get sim lock with exception: " + arSimLock.exception);
+                    this.mSimLock = 1;
+                    return;
+                } else if (arSimLock.result != null) {
+                    int simLockState = 3;
+                    byte[] ret = (byte[]) arSimLock.result;
+                    ByteBuffer bbRet = ByteBuffer.wrap(ret);
+                    if (64 == ret.length) {
+                        int index = 0;
+                        while (true) {
+                            if ((index + 4) - 1 < ret.length) {
+                                if (bbRet.getInt(index) != 0) {
+                                    simLockState = 2;
+                                } else {
+                                    index += 8;
+                                }
+                            }
+                        }
+                        this.mSimLock = simLockState;
+                        if (2 == this.mSimLock) {
+                            log("mSimlock is ON");
+                            return;
+                        } else {
+                            log("mSimlock is OFF");
+                            return;
+                        }
+                    } else {
+                        this.mSimLock = 1;
+                        loge("The response has unexpected size: " + ret.length);
+                        return;
+                    }
+                } else {
+                    this.mSimLock = 1;
+                    loge("No result in get sim lock");
+                    return;
+                }
+            case 30:
+                synchronized (this.mLock) {
+                    String[] strIntent = (String[]) msg.obj;
+                    String value = strIntent[0];
+                    String reason = strIntent[1];
+                    if (!this.dontPollBroadcastSharp) {
+                        broadcastIccStateChangedIntentSharp(value, reason);
+                    }
+                }
+                return;
+            case EVENT_ICC_RECORD_EVENTS /* 500 */:
+                if (this.mCurrentAppType == 1 && this.mIccRecords != null && ((Integer) ((AsyncResult) msg.obj).result).intValue() == 2) {
+                    setSystemProperty("gsm.sim.operator.alpha", this.mIccRecords.getServiceProviderName());
+                    return;
+                }
+                return;
+            case EVENT_SUBSCRIPTION_ACTIVATED /* 501 */:
+                log("EVENT_SUBSCRIPTION_ACTIVATED");
+                onSubscriptionActivated();
+                return;
+            case EVENT_SUBSCRIPTION_DEACTIVATED /* 502 */:
+                log("EVENT_SUBSCRIPTION_DEACTIVATED");
+                onSubscriptionDeactivated();
+                return;
+            case EVENT_CARRIER_PRIVILIGES_LOADED /* 503 */:
+                log("EVENT_CARRIER_PRIVILEGES_LOADED");
+                if (this.mUiccCard != null) {
+                    this.mUiccCard.unregisterForCarrierPrivilegeRulesLoaded(this);
+                }
+                onRecordsLoaded();
+                return;
+            default:
+                loge("Unhandled message with number: " + msg.what);
+                return;
         }
-    }
-
-    private void notifyCurrentExternalStateSharp() {
-        synchronized (this.mLock) {
-            broadcastIccStateChangedIntentSharp(getIccStateIntentStringSharp(this.mExternalStateSharp), getIccStateReasonSharp(this.mExternalStateSharp));
-        }
-    }
-
-    /* JADX WARNING: Missing block: B:21:?, code skipped:
-            return;
-     */
-    private void onGetPinPukRetryCountDone(android.os.AsyncResult r6) {
-        /*
-        r5 = this;
-        r1 = r5.mLock;
-        monitor-enter(r1);
-        r0 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        if (r0 != 0) goto L_0x000e;
-    L_0x0007:
-        r0 = "Error in get pin puk retry count with mUiccCard is null";
-        r5.loge(r0);	 Catch:{ all -> 0x0033 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0033 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        r0 = r6.exception;	 Catch:{ all -> 0x0033 }
-        if (r0 == 0) goto L_0x0036;
-    L_0x0012:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0033 }
-        r0.<init>();	 Catch:{ all -> 0x0033 }
-        r2 = "Error in get pin puk retry count with exception: ";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0033 }
-        r2 = r6.exception;	 Catch:{ all -> 0x0033 }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0033 }
-        r0 = r0.toString();	 Catch:{ all -> 0x0033 }
-        r5.loge(r0);	 Catch:{ all -> 0x0033 }
-        r0 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        r2 = 0;
-        r3 = -1;
-        r0.setPinPukRetryCount(r2, r3);	 Catch:{ all -> 0x0033 }
-    L_0x0031:
-        monitor-exit(r1);	 Catch:{ all -> 0x0033 }
-        goto L_0x000d;
-    L_0x0033:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0033 }
-        throw r0;
-    L_0x0036:
-        r0 = r6.result;	 Catch:{ all -> 0x0033 }
-        if (r0 == 0) goto L_0x0065;
-    L_0x003a:
-        r0 = r6.result;	 Catch:{ all -> 0x0033 }
-        r0 = (byte[]) r0;	 Catch:{ all -> 0x0033 }
-        r0 = (byte[]) r0;	 Catch:{ all -> 0x0033 }
-        r2 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        r3 = 1;
-        r4 = 0;
-        r4 = r0[r4];	 Catch:{ all -> 0x0033 }
-        r2.setPinPukRetryCount(r3, r4);	 Catch:{ all -> 0x0033 }
-        r2 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        r3 = 2;
-        r4 = 1;
-        r4 = r0[r4];	 Catch:{ all -> 0x0033 }
-        r2.setPinPukRetryCount(r3, r4);	 Catch:{ all -> 0x0033 }
-        r2 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        r3 = 3;
-        r4 = 2;
-        r4 = r0[r4];	 Catch:{ all -> 0x0033 }
-        r2.setPinPukRetryCount(r3, r4);	 Catch:{ all -> 0x0033 }
-        r2 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        r3 = 4;
-        r4 = 3;
-        r0 = r0[r4];	 Catch:{ all -> 0x0033 }
-        r2.setPinPukRetryCount(r3, r0);	 Catch:{ all -> 0x0033 }
-        goto L_0x0031;
-    L_0x0065:
-        r0 = "No result in get pin puk retry count";
-        r5.loge(r0);	 Catch:{ all -> 0x0033 }
-        r0 = r5.mUiccCard;	 Catch:{ all -> 0x0033 }
-        r2 = 0;
-        r3 = -1;
-        r0.setPinPukRetryCount(r2, r3);	 Catch:{ all -> 0x0033 }
-        goto L_0x0031;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.onGetPinPukRetryCountDone(android.os.AsyncResult):void");
-    }
-
-    private void onRecordsLoaded() {
-        broadcastIccStateChangedIntent("LOADED", null);
     }
 
     private void onSubscriptionActivated() {
@@ -529,68 +389,103 @@ public class IccCardProxy extends Handler implements IccCard {
         updateStateProperty();
     }
 
-    /* JADX WARNING: Missing block: B:23:?, code skipped:
-            return;
-     */
-    private void processLockedState() {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x001a }
-        if (r0 != 0) goto L_0x0009;
-    L_0x0007:
-        monitor-exit(r1);	 Catch:{ all -> 0x001a }
-    L_0x0008:
-        return;
-    L_0x0009:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x001a }
-        r0 = r0.getPin1State();	 Catch:{ all -> 0x001a }
-        r2 = com.android.internal.telephony.uicc.IccCardStatus.PinState.PINSTATE_ENABLED_PERM_BLOCKED;	 Catch:{ all -> 0x001a }
-        if (r0 != r2) goto L_0x001d;
-    L_0x0013:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PERM_DISABLED;	 Catch:{ all -> 0x001a }
-        r3.setExternalState(r0);	 Catch:{ all -> 0x001a }
-        monitor-exit(r1);	 Catch:{ all -> 0x001a }
-        goto L_0x0008;
-    L_0x001a:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x001a }
-        throw r0;
-    L_0x001d:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x001a }
-        r0 = r0.getState();	 Catch:{ all -> 0x001a }
-        r2 = com.android.internal.telephony.uicc.IccCardProxy.AnonymousClass1.$SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState;	 Catch:{ all -> 0x001a }
-        r0 = r0.ordinal();	 Catch:{ all -> 0x001a }
-        r0 = r2[r0];	 Catch:{ all -> 0x001a }
-        switch(r0) {
-            case 2: goto L_0x0030;
-            case 3: goto L_0x003b;
-            default: goto L_0x002e;
-        };	 Catch:{ all -> 0x001a }
-    L_0x002e:
-        monitor-exit(r1);	 Catch:{ all -> 0x001a }
-        goto L_0x0008;
-    L_0x0030:
-        r0 = r3.mPinLockedRegistrants;	 Catch:{ all -> 0x001a }
-        r0.notifyRegistrants();	 Catch:{ all -> 0x001a }
-        r0 = com.android.internal.telephony.IccCardConstants.State.PIN_REQUIRED;	 Catch:{ all -> 0x001a }
-        r3.setExternalState(r0);	 Catch:{ all -> 0x001a }
-        goto L_0x002e;
-    L_0x003b:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PUK_REQUIRED;	 Catch:{ all -> 0x001a }
-        r3.setExternalState(r0);	 Catch:{ all -> 0x001a }
-        goto L_0x002e;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.processLockedState():void");
+    private void onRecordsLoaded() {
+        broadcastIccStateChangedIntent("LOADED", null);
     }
 
-    private void queueNextBroadcastSharpPoll(String str, String str2) {
-        if (!this.dontPollBroadcastSharp) {
-            Message obtainMessage = obtainMessage();
-            obtainMessage.what = 30;
-            obtainMessage.obj = new String[]{str, str2};
-            sendMessageDelayed(obtainMessage, 1000);
+    private void updateIccAvailability() {
+        synchronized (this.mLock) {
+            UiccCard newCard = this.mUiccController.getUiccCard(this.mPhoneId.intValue());
+            IccCardStatus.CardState cardState = IccCardStatus.CardState.CARDSTATE_ABSENT;
+            UiccCardApplication newApp = null;
+            IccRecords newRecords = null;
+            if (newCard != null) {
+                newCard.getCardState();
+                newApp = newCard.getApplication(this.mCurrentAppType);
+                if (newApp != null) {
+                    newRecords = newApp.getIccRecords();
+                }
+            }
+            if (!(this.mIccRecords == newRecords && this.mUiccApplication == newApp && this.mUiccCard == newCard)) {
+                log("Icc changed. Reregestering.");
+                unregisterUiccCardEvents();
+                this.mUiccCard = newCard;
+                this.mUiccApplication = newApp;
+                this.mIccRecords = newRecords;
+                registerUiccCardEvents();
+                updateActiveRecord();
+            }
+            updateExternalState();
+            if (TelBrand.IS_SBM) {
+                updateExternalStateSharp();
+            }
+        }
+    }
+
+    void resetProperties() {
+        if (this.mCurrentAppType == 1) {
+            log("update icc_operator_numeric=");
+            setSystemProperty("gsm.sim.operator.numeric", "");
+            setSystemProperty("gsm.sim.operator.iso-country", "");
+            setSystemProperty("gsm.sim.operator.alpha", "");
+        }
+    }
+
+    private void updateExternalState() {
+        if (this.mUiccCard == null) {
+            setExternalState(IccCardConstants.State.NOT_READY);
+        } else if (this.mUiccCard.getCardState() == IccCardStatus.CardState.CARDSTATE_ABSENT) {
+            if (SystemProperties.getInt("persist.radio.apm_sim_not_pwdn", 0) != 0) {
+                setExternalState(IccCardConstants.State.ABSENT);
+                if (1 == SystemProperties.getInt(SIM_ABSENT_CHECK, 0)) {
+                    broadcastIccStateChangedIntentAbsent();
+                }
+            } else if (this.mRadioOn) {
+                setExternalState(IccCardConstants.State.ABSENT);
+            } else {
+                setExternalState(IccCardConstants.State.NOT_READY);
+            }
+        } else if (this.mUiccCard.getCardState() == IccCardStatus.CardState.CARDSTATE_ERROR) {
+            if (TelBrand.IS_DCM) {
+                setExternalState(IccCardConstants.State.ABSENT);
+            } else {
+                setExternalState(IccCardConstants.State.CARD_IO_ERROR);
+            }
+        } else if (this.mUiccApplication == null) {
+            setExternalState(IccCardConstants.State.NOT_READY);
+        } else {
+            switch (this.mUiccApplication.getState()) {
+                case APPSTATE_UNKNOWN:
+                    setExternalState(IccCardConstants.State.UNKNOWN);
+                    return;
+                case APPSTATE_PIN:
+                    setExternalState(IccCardConstants.State.PIN_REQUIRED);
+                    return;
+                case APPSTATE_PUK:
+                    log("[UIM]updateExternalState app_state : APPSTATE_PUK");
+                    IccCardStatus.PinState pin1State = this.mUiccApplication.getPin1State();
+                    log("[UIM]updateExternalState pin1State : " + pin1State);
+                    if (pin1State == IccCardStatus.PinState.PINSTATE_ENABLED_PERM_BLOCKED) {
+                        setExternalState(IccCardConstants.State.PERM_DISABLED);
+                        return;
+                    } else {
+                        setExternalState(IccCardConstants.State.PUK_REQUIRED);
+                        return;
+                    }
+                case APPSTATE_SUBSCRIPTION_PERSO:
+                    if (this.mUiccApplication.isPersoLocked()) {
+                        this.mPersoSubState = this.mUiccApplication.getPersoSubState();
+                        setExternalState(IccCardConstants.State.PERSO_LOCKED);
+                        return;
+                    }
+                    setExternalState(IccCardConstants.State.UNKNOWN);
+                    return;
+                case APPSTATE_READY:
+                    setExternalState(IccCardConstants.State.READY);
+                    return;
+                default:
+                    return;
+            }
         }
     }
 
@@ -608,181 +503,6 @@ public class IccCardProxy extends Handler implements IccCard {
             this.mIccRecords.registerForRecordsLoaded(this, 7, null);
             this.mIccRecords.registerForRecordsEvents(this, EVENT_ICC_RECORD_EVENTS, null);
         }
-    }
-
-    private void requestGetPinPukRetryCount() {
-        byte[] bArr = new byte[("QOEMHOOK".length() + 8)];
-        ByteBuffer wrap = ByteBuffer.wrap(bArr);
-        wrap.order(ByteOrder.nativeOrder());
-        wrap.put("QOEMHOOK".getBytes());
-        wrap.putInt(589926);
-        this.mCi.invokeOemRilRequestRaw(bArr, obtainMessage(17));
-    }
-
-    private void requestUnsolRadioStateChanged() {
-        byte[] bArr = new byte[("QOEMHOOK".length() + 8)];
-        ByteBuffer wrap = ByteBuffer.wrap(bArr);
-        wrap.order(ByteOrder.nativeOrder());
-        wrap.put("QOEMHOOK".getBytes());
-        wrap.putInt(592029);
-        this.mCi.invokeOemRilRequestRaw(bArr, null);
-    }
-
-    private void setExternalState(State state) {
-        setExternalState(state, false);
-    }
-
-    /* JADX WARNING: Missing block: B:55:?, code skipped:
-            return;
-     */
-    private void setExternalState(com.android.internal.telephony.IccCardConstants.State r5, boolean r6) {
-        /*
-        r4 = this;
-        r1 = r4.mLock;
-        monitor-enter(r1);
-        r0 = r4.mPhoneId;	 Catch:{ all -> 0x0051 }
-        if (r0 == 0) goto L_0x0013;
-    L_0x0007:
-        r0 = r4.mPhoneId;	 Catch:{ all -> 0x0051 }
-        r0 = r0.intValue();	 Catch:{ all -> 0x0051 }
-        r0 = android.telephony.SubscriptionManager.isValidSlotId(r0);	 Catch:{ all -> 0x0051 }
-        if (r0 != 0) goto L_0x0033;
-    L_0x0013:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0051 }
-        r0.<init>();	 Catch:{ all -> 0x0051 }
-        r2 = "setExternalState: mPhoneId=";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r2 = r4.mPhoneId;	 Catch:{ all -> 0x0051 }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r2 = " is invalid; Return!!";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.toString();	 Catch:{ all -> 0x0051 }
-        r4.loge(r0);	 Catch:{ all -> 0x0051 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0051 }
-    L_0x0032:
-        return;
-    L_0x0033:
-        if (r6 != 0) goto L_0x0054;
-    L_0x0035:
-        r0 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        if (r5 != r0) goto L_0x0054;
-    L_0x0039:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0051 }
-        r0.<init>();	 Catch:{ all -> 0x0051 }
-        r2 = "setExternalState: !override and newstate unchanged from ";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.append(r5);	 Catch:{ all -> 0x0051 }
-        r0 = r0.toString();	 Catch:{ all -> 0x0051 }
-        r4.loge(r0);	 Catch:{ all -> 0x0051 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0051 }
-        goto L_0x0032;
-    L_0x0051:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0051 }
-        throw r0;
-    L_0x0054:
-        r4.mExternalState = r5;	 Catch:{ all -> 0x0051 }
-        r0 = com.android.internal.telephony.IccCardConstants.State.PIN_REQUIRED;	 Catch:{ all -> 0x0051 }
-        if (r5 == r0) goto L_0x006a;
-    L_0x005a:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PUK_REQUIRED;	 Catch:{ all -> 0x0051 }
-        if (r5 == r0) goto L_0x006a;
-    L_0x005e:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PERSO_LOCKED;	 Catch:{ all -> 0x0051 }
-        if (r5 == r0) goto L_0x006a;
-    L_0x0062:
-        r0 = com.android.internal.telephony.IccCardConstants.State.READY;	 Catch:{ all -> 0x0051 }
-        if (r5 == r0) goto L_0x006a;
-    L_0x0066:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PERM_DISABLED;	 Catch:{ all -> 0x0051 }
-        if (r5 != r0) goto L_0x006f;
-    L_0x006a:
-        r4.requestGetPinPukRetryCount();	 Catch:{ all -> 0x0051 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0051 }
-        goto L_0x0032;
-    L_0x006f:
-        r0 = r4.mUiccCard;	 Catch:{ all -> 0x0051 }
-        if (r0 == 0) goto L_0x007a;
-    L_0x0073:
-        r0 = r4.mUiccCard;	 Catch:{ all -> 0x0051 }
-        r2 = 0;
-        r3 = -1;
-        r0.setPinPukRetryCount(r2, r3);	 Catch:{ all -> 0x0051 }
-    L_0x007a:
-        r0 = com.android.internal.telephony.TelBrand.IS_DCM;	 Catch:{ all -> 0x0051 }
-        if (r0 == 0) goto L_0x00e0;
-    L_0x007e:
-        r0 = "encrypted";
-        r2 = "ro.crypto.state";
-        r2 = android.os.SystemProperties.get(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.equals(r2);	 Catch:{ all -> 0x0051 }
-        if (r0 == 0) goto L_0x00b6;
-    L_0x008c:
-        r0 = "trigger_restart_min_framework";
-        r2 = "vold.decrypt";
-        r2 = android.os.SystemProperties.get(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.equals(r2);	 Catch:{ all -> 0x0051 }
-        if (r0 == 0) goto L_0x00b6;
-    L_0x009a:
-        r0 = "NOT_READY";
-        r2 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        r2 = r4.getIccStateIntentString(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.equals(r2);	 Catch:{ all -> 0x0051 }
-        if (r0 != 0) goto L_0x00b6;
-    L_0x00a8:
-        r0 = "ABSENT";
-        r2 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        r2 = r4.getIccStateIntentString(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.equals(r2);	 Catch:{ all -> 0x0051 }
-        if (r0 == 0) goto L_0x00c3;
-    L_0x00b6:
-        r0 = "gsm.sim.state";
-        r2 = r4.getState();	 Catch:{ all -> 0x0051 }
-        r2 = r2.toString();	 Catch:{ all -> 0x0051 }
-        r4.setSystemProperty(r0, r2);	 Catch:{ all -> 0x0051 }
-    L_0x00c3:
-        r0 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        r0 = r4.getIccStateIntentString(r0);	 Catch:{ all -> 0x0051 }
-        r2 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        r2 = r4.getIccStateReason(r2);	 Catch:{ all -> 0x0051 }
-        r4.broadcastIccStateChangedIntent(r0, r2);	 Catch:{ all -> 0x0051 }
-        r0 = com.android.internal.telephony.IccCardConstants.State.ABSENT;	 Catch:{ all -> 0x0051 }
-        r2 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        if (r0 != r2) goto L_0x00dd;
-    L_0x00d8:
-        r0 = r4.mAbsentRegistrants;	 Catch:{ all -> 0x0051 }
-        r0.notifyRegistrants();	 Catch:{ all -> 0x0051 }
-    L_0x00dd:
-        monitor-exit(r1);	 Catch:{ all -> 0x0051 }
-        goto L_0x0032;
-    L_0x00e0:
-        r0 = new java.lang.StringBuilder;	 Catch:{ all -> 0x0051 }
-        r0.<init>();	 Catch:{ all -> 0x0051 }
-        r2 = "setExternalState: set mPhoneId=";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r2 = r4.mPhoneId;	 Catch:{ all -> 0x0051 }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r2 = " mExternalState=";
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r2 = r4.mExternalState;	 Catch:{ all -> 0x0051 }
-        r0 = r0.append(r2);	 Catch:{ all -> 0x0051 }
-        r0 = r0.toString();	 Catch:{ all -> 0x0051 }
-        r4.loge(r0);	 Catch:{ all -> 0x0051 }
-        r0 = "gsm.sim.state";
-        r2 = r4.getState();	 Catch:{ all -> 0x0051 }
-        r2 = r2.toString();	 Catch:{ all -> 0x0051 }
-        r4.setSystemProperty(r0, r2);	 Catch:{ all -> 0x0051 }
-        goto L_0x00c3;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.setExternalState(com.android.internal.telephony.IccCardConstants$State, boolean):void");
-    }
-
-    private void setExternalStateSharp(State state) {
-        setExternalStateSharp(state, false);
-    }
-
-    private void setSystemProperty(String str, String str2) {
-        TelephonyManager.setTelephonyProperty(this.mPhoneId.intValue(), str, str2);
     }
 
     private void unregisterUiccCardEvents() {
@@ -809,152 +529,58 @@ public class IccCardProxy extends Handler implements IccCard {
         }
     }
 
-    private void updateActiveRecord() {
-        log("updateActiveRecord app type = " + this.mCurrentAppType + "mIccRecords = " + this.mIccRecords);
-        if (this.mIccRecords != null) {
-            if (this.mCurrentAppType == 2) {
-                if (this.mCdmaSSM.getCdmaSubscriptionSource() == 0) {
-                    log("Setting Ruim Record as active");
-                    this.mIccRecords.recordsRequired();
-                }
-            } else if (this.mCurrentAppType == 1) {
-                log("Setting SIM Record as active");
-                this.mIccRecords.recordsRequired();
-            }
-        }
-    }
-
-    private void updateExternalState() {
-        if (this.mUiccCard == null) {
-            setExternalState(State.NOT_READY);
-        } else if (this.mUiccCard.getCardState() == CardState.CARDSTATE_ABSENT) {
-            if (SystemProperties.getInt("persist.radio.apm_sim_not_pwdn", 0) != 0) {
-                setExternalState(State.ABSENT);
-                if (1 == SystemProperties.getInt(SIM_ABSENT_CHECK, 0)) {
-                    broadcastIccStateChangedIntentAbsent();
-                }
-            } else if (this.mRadioOn) {
-                setExternalState(State.ABSENT);
-            } else {
-                setExternalState(State.NOT_READY);
-            }
-        } else if (this.mUiccCard.getCardState() == CardState.CARDSTATE_ERROR) {
-            if (TelBrand.IS_DCM) {
-                setExternalState(State.ABSENT);
-            } else {
-                setExternalState(State.CARD_IO_ERROR);
-            }
-        } else if (this.mUiccApplication == null) {
-            setExternalState(State.NOT_READY);
-        } else {
-            switch (this.mUiccApplication.getState()) {
-                case APPSTATE_UNKNOWN:
-                    setExternalState(State.UNKNOWN);
-                    return;
-                case APPSTATE_PIN:
-                    setExternalState(State.PIN_REQUIRED);
-                    return;
-                case APPSTATE_PUK:
-                    log("[UIM]updateExternalState app_state : APPSTATE_PUK");
-                    PinState pin1State = this.mUiccApplication.getPin1State();
-                    log("[UIM]updateExternalState pin1State : " + pin1State);
-                    if (pin1State == PinState.PINSTATE_ENABLED_PERM_BLOCKED) {
-                        setExternalState(State.PERM_DISABLED);
-                        return;
-                    } else {
-                        setExternalState(State.PUK_REQUIRED);
-                        return;
-                    }
-                case APPSTATE_SUBSCRIPTION_PERSO:
-                    if (this.mUiccApplication.isPersoLocked()) {
-                        this.mPersoSubState = this.mUiccApplication.getPersoSubState();
-                        setExternalState(State.PERSO_LOCKED);
-                        return;
-                    }
-                    setExternalState(State.UNKNOWN);
-                    return;
-                case APPSTATE_READY:
-                    setExternalState(State.READY);
-                    return;
-                default:
-                    return;
-            }
-        }
-    }
-
-    private void updateIccAvailability() {
-        synchronized (this.mLock) {
-            UiccCardApplication application;
-            IccRecords iccRecords;
-            UiccCard uiccCard = this.mUiccController.getUiccCard(this.mPhoneId.intValue());
-            CardState cardState = CardState.CARDSTATE_ABSENT;
-            if (uiccCard != null) {
-                uiccCard.getCardState();
-                application = uiccCard.getApplication(this.mCurrentAppType);
-                iccRecords = application != null ? application.getIccRecords() : null;
-            } else {
-                iccRecords = null;
-                application = null;
-            }
-            if (!(this.mIccRecords == iccRecords && this.mUiccApplication == application && this.mUiccCard == uiccCard)) {
-                log("Icc changed. Reregestering.");
-                unregisterUiccCardEvents();
-                this.mUiccCard = uiccCard;
-                this.mUiccApplication = application;
-                this.mIccRecords = iccRecords;
-                registerUiccCardEvents();
-                updateActiveRecord();
-            }
-            updateExternalState();
-            if (TelBrand.IS_SBM) {
-                updateExternalStateSharp();
-            }
-        }
-    }
-
-    private void updateQuietMode() {
-        int i = -1;
-        boolean z = false;
-        synchronized (this.mLock) {
-            boolean z2 = this.mQuietMode;
-            z2 = this.mContext.getResources().getBoolean(17957012);
-            if (this.mCurrentAppType == 1) {
-                log("updateQuietMode: 3GPP subscription -> newQuietMode=" + false);
-            } else {
-                if (this.mCdmaSSM != null) {
-                    i = this.mCdmaSSM.getCdmaSubscriptionSource();
-                }
-                if (!z2 && i == 1) {
-                    if (this.mCurrentAppType == 2) {
-                        z = true;
-                    }
-                }
-                log("updateQuietMode: cdmaSource=" + i + " mCurrentAppType=" + this.mCurrentAppType + " newQuietMode=" + z);
-            }
-            if (!this.mQuietMode && z) {
-                log("Switching to QuietMode.");
-                setExternalState(State.READY);
-                this.mQuietMode = z;
-            } else if (!this.mQuietMode || z) {
-                log("updateQuietMode: no changes don't setExternalState");
-            } else {
-                log("updateQuietMode: Switching out from QuietMode. Force broadcast of current state=" + this.mExternalState);
-                this.mQuietMode = z;
-                setExternalState(this.mExternalState, true);
-                if (TelBrand.IS_SBM) {
-                    setExternalStateSharp(this.mExternalStateSharp, true);
-                }
-            }
-            log("updateQuietMode: QuietMode is " + this.mQuietMode + " (app_type=" + this.mCurrentAppType + " cdmaSource=" + i + ")");
-            this.mInitialized = true;
-            if (this.mIsCardStatusAvailable) {
-                sendMessage(obtainMessage(3));
-            }
-        }
-    }
-
     private void updateStateProperty() {
         setSystemProperty("gsm.sim.state", getState().toString());
+    }
+
+    private void broadcastIccStateChangedIntent(String value, String reason) {
+        synchronized (this.mLock) {
+            if (this.mPhoneId == null || !SubscriptionManager.isValidSlotId(this.mPhoneId.intValue())) {
+                loge("broadcastIccStateChangedIntent: mPhoneId=" + this.mPhoneId + " is invalid; Return!!");
+            } else if (this.mQuietMode) {
+                log("broadcastIccStateChangedIntent: QuietMode NOT Broadcasting intent ACTION_SIM_STATE_CHANGED  value=" + value + " reason=" + reason);
+            } else if (!TelBrand.IS_DCM || !ENCRYPTED_STATE.equals(SystemProperties.get(PROP_RO_CRYPTO_STATE)) || !MIN_FRAMEWORK_STATE.equals(SystemProperties.get(PROP_VOLD_DECRYPT)) || "NOT_READY".equals(value) || "ABSENT".equals(value)) {
+                Intent intent = new Intent("android.intent.action.SIM_STATE_CHANGED");
+                intent.addFlags(67108864);
+                intent.putExtra("phoneName", "Phone");
+                intent.putExtra("ss", value);
+                intent.putExtra("reason", reason);
+                SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhoneId.intValue());
+                log("broadcastIccStateChangedIntent intent ACTION_SIM_STATE_CHANGED value=" + value + " reason=" + reason + " for mPhoneId=" + this.mPhoneId);
+                ActivityManagerNative.broadcastStickyIntent(intent, "android.permission.READ_PHONE_STATE", -1);
+            } else {
+                log("Encrypted: NOT Broadcasting intent ACTION_SIM_STATE_CHANGED " + value + " reason " + reason);
+            }
+        }
+    }
+
+    private void setExternalState(IccCardConstants.State newState, boolean override) {
+        synchronized (this.mLock) {
+            if (this.mPhoneId == null || !SubscriptionManager.isValidSlotId(this.mPhoneId.intValue())) {
+                loge("setExternalState: mPhoneId=" + this.mPhoneId + " is invalid; Return!!");
+            } else if (override || newState != this.mExternalState) {
+                this.mExternalState = newState;
+                if (newState == IccCardConstants.State.PIN_REQUIRED || newState == IccCardConstants.State.PUK_REQUIRED || newState == IccCardConstants.State.PERSO_LOCKED || newState == IccCardConstants.State.READY || newState == IccCardConstants.State.PERM_DISABLED) {
+                    requestGetPinPukRetryCount();
+                    return;
+                }
+                if (this.mUiccCard != null) {
+                    this.mUiccCard.setPinPukRetryCount(0, -1);
+                }
+                if (!TelBrand.IS_DCM) {
+                    loge("setExternalState: set mPhoneId=" + this.mPhoneId + " mExternalState=" + this.mExternalState);
+                    setSystemProperty("gsm.sim.state", getState().toString());
+                } else if (!ENCRYPTED_STATE.equals(SystemProperties.get(PROP_RO_CRYPTO_STATE)) || !MIN_FRAMEWORK_STATE.equals(SystemProperties.get(PROP_VOLD_DECRYPT)) || "NOT_READY".equals(getIccStateIntentString(this.mExternalState)) || "ABSENT".equals(getIccStateIntentString(this.mExternalState))) {
+                    setSystemProperty("gsm.sim.state", getState().toString());
+                }
+                broadcastIccStateChangedIntent(getIccStateIntentString(this.mExternalState), getIccStateReason(this.mExternalState));
+                if (IccCardConstants.State.ABSENT == this.mExternalState) {
+                    this.mAbsentRegistrants.notifyRegistrants();
+                }
+            } else {
+                loge("setExternalState: !override and newstate unchanged from " + newState);
+            }
+        }
     }
 
     public void broadcastIccStateChangedIntentAbsent() {
@@ -966,236 +592,165 @@ public class IccCardProxy extends Handler implements IccCard {
         }
     }
 
-    public void broadcastIccStateChangedIntentSharp(String str, String str2) {
-        synchronized (this.mLock) {
-            if (this.mQuietMode) {
-                log("QuietMode: NOT Broadcasting intent ACTION_SIM_STATE_CHANGED_SHARP " + str + " reason " + str2);
-                return;
-            }
-            Intent intent = new Intent("jp.co.sharp.android.uim.intent.action.SIM_STATE_CHANGED_SHARP");
-            intent.addFlags(536870912);
-            intent.putExtra("phoneName", "Phone");
-            intent.putExtra(IccCard.INTENT_KEY_ICC_STATE_SHARP, str);
-            intent.putExtra(IccCard.INTENT_KEY_LOCKED_REASON_SHARP, str2);
-            SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhoneId.intValue());
-            log("Broadcasting intent ACTION_SIM_STATE_CHANGED_SHARP " + str + " reason " + str2 + " for mPhoneId : " + this.mPhoneId);
-            ActivityManagerNative.broadcastStickyIntent(intent, "android.permission.READ_PHONE_STATE", -1);
-            queueNextBroadcastSharpPoll(str, str2);
-        }
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void changeIccFdnPassword(java.lang.String r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.changeIccFdnPassword(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.changeIccFdnPassword(java.lang.String, java.lang.String, android.os.Message):void");
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void changeIccLockPassword(java.lang.String r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.changeIccLockPassword(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.changeIccLockPassword(java.lang.String, java.lang.String, android.os.Message):void");
-    }
-
-    public void closeLogicalChannel(int i, Message message) {
+    private void processLockedState() {
         synchronized (this.mLock) {
             if (this.mUiccApplication != null) {
-                this.mUiccApplication.closeLogicalChannel(i, message);
-            } else {
-                log("UiccApplication is not exist.");
-                AsyncResult.forMessage(message).exception = new RuntimeException("ICC card is absent.");
-                message.sendToTarget();
-            }
-        }
-    }
-
-    public void dispose() {
-        synchronized (this.mLock) {
-            log("Disposing");
-            this.mUiccController.unregisterForIccChanged(this);
-            this.mUiccController = null;
-            this.mCi.unregisterForOn(this);
-            this.mCi.unregisterForOffOrNotAvailable(this);
-            this.mCdmaSSM.dispose(this);
-        }
-    }
-
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        int i;
-        int i2 = 0;
-        printWriter.println("IccCardProxy: " + this);
-        printWriter.println(" mContext=" + this.mContext);
-        printWriter.println(" mCi=" + this.mCi);
-        printWriter.println(" mAbsentRegistrants: size=" + this.mAbsentRegistrants.size());
-        for (i = 0; i < this.mAbsentRegistrants.size(); i++) {
-            printWriter.println("  mAbsentRegistrants[" + i + "]=" + ((Registrant) this.mAbsentRegistrants.get(i)).getHandler());
-        }
-        printWriter.println(" mPinLockedRegistrants: size=" + this.mPinLockedRegistrants.size());
-        for (i = 0; i < this.mPinLockedRegistrants.size(); i++) {
-            printWriter.println("  mPinLockedRegistrants[" + i + "]=" + ((Registrant) this.mPinLockedRegistrants.get(i)).getHandler());
-        }
-        printWriter.println(" mPersoLockedRegistrants: size=" + this.mPersoLockedRegistrants.size());
-        while (i2 < this.mPersoLockedRegistrants.size()) {
-            printWriter.println("  mPersoLockedRegistrants[" + i2 + "]=" + ((Registrant) this.mPersoLockedRegistrants.get(i2)).getHandler());
-            i2++;
-        }
-        printWriter.println(" mCurrentAppType=" + this.mCurrentAppType);
-        printWriter.println(" mUiccController=" + this.mUiccController);
-        printWriter.println(" mUiccCard=" + this.mUiccCard);
-        printWriter.println(" mUiccApplication=" + this.mUiccApplication);
-        printWriter.println(" mIccRecords=" + this.mIccRecords);
-        printWriter.println(" mCdmaSSM=" + this.mCdmaSSM);
-        printWriter.println(" mRadioOn=" + this.mRadioOn);
-        printWriter.println(" mQuietMode=" + this.mQuietMode);
-        printWriter.println(" mInitialized=" + this.mInitialized);
-        printWriter.println(" mExternalState=" + this.mExternalState);
-        printWriter.flush();
-    }
-
-    public void exchangeAPDU(int i, int i2, int i3, int i4, int i5, int i6, String str, Message message) {
-        synchronized (this.mLock) {
-            if (this.mUiccApplication != null) {
-                this.mUiccApplication.exchangeAPDU(i, i2, i3, i4, i5, i6, str, message);
-            } else {
-                log("UiccApplication is not exist.");
-                AsyncResult.forMessage(message).exception = new RuntimeException("ICC card is absent.");
-                message.sendToTarget();
-            }
-        }
-    }
-
-    public void exchangeSimIO(int i, int i2, int i3, int i4, int i5, String str, Message message) {
-        synchronized (this.mLock) {
-            if (this.mUiccApplication != null) {
-                this.mUiccApplication.exchangeSimIO(i, i2, i3, i4, i5, str, message);
-            } else {
-                log("UiccApplication is not exist.");
-                AsyncResult.forMessage(message).exception = new RuntimeException("ICC card is absent.");
-                message.sendToTarget();
-            }
-        }
-    }
-
-    public void getEfLock(Message message) {
-        if (TelBrand.IS_DCM) {
-            synchronized (this.mLock) {
-                IccFileHandler iccFileHandler = getIccFileHandler();
-                Object obj = (this.mUiccApplication == null || this.mUiccApplication.getType() != AppType.APPTYPE_USIM) ? null : 1;
-                if (iccFileHandler == null || obj == null) {
-                    AsyncResult.forMessage(message, null, null);
-                    message.sendToTarget();
-                } else {
-                    iccFileHandler.loadEFTransparent(IccConstants.EF_LOCK, 8, obtainMessage(23, message));
+                if (this.mUiccApplication.getPin1State() == IccCardStatus.PinState.PINSTATE_ENABLED_PERM_BLOCKED) {
+                    setExternalState(IccCardConstants.State.PERM_DISABLED);
+                    return;
+                }
+                switch (this.mUiccApplication.getState()) {
+                    case APPSTATE_PIN:
+                        this.mPinLockedRegistrants.notifyRegistrants();
+                        setExternalState(IccCardConstants.State.PIN_REQUIRED);
+                        break;
+                    case APPSTATE_PUK:
+                        setExternalState(IccCardConstants.State.PUK_REQUIRED);
+                        break;
                 }
             }
         }
     }
 
-    public boolean getIccFdnAvailable() {
-        return this.mUiccApplication != null ? this.mUiccApplication.getIccFdnAvailable() : false;
+    private void setExternalState(IccCardConstants.State newState) {
+        setExternalState(newState, false);
     }
 
-    public boolean getIccFdnEnabled() {
-        boolean booleanValue;
+    public boolean getIccRecordsLoaded() {
+        boolean recordsLoaded;
         synchronized (this.mLock) {
-            booleanValue = Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccFdnEnabled() : false).booleanValue();
+            recordsLoaded = this.mIccRecords != null ? this.mIccRecords.getRecordsLoaded() : false;
         }
-        return booleanValue;
+        return recordsLoaded;
     }
 
-    public IccFileHandler getIccFileHandler() {
-        synchronized (this.mLock) {
-            if (this.mUiccApplication != null) {
-                IccFileHandler iccFileHandler = this.mUiccApplication.getIccFileHandler();
-                return iccFileHandler;
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* renamed from: com.android.internal.telephony.uicc.IccCardProxy$1  reason: invalid class name */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static /* synthetic */ class AnonymousClass1 {
+        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$IccCardConstants$State = new int[IccCardConstants.State.values().length];
+
+        static {
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.ABSENT.ordinal()] = 1;
+            } catch (NoSuchFieldError e) {
             }
-            return null;
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.PIN_REQUIRED.ordinal()] = 2;
+            } catch (NoSuchFieldError e2) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.PUK_REQUIRED.ordinal()] = 3;
+            } catch (NoSuchFieldError e3) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.PERSO_LOCKED.ordinal()] = 4;
+            } catch (NoSuchFieldError e4) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.READY.ordinal()] = 5;
+            } catch (NoSuchFieldError e5) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.NOT_READY.ordinal()] = 6;
+            } catch (NoSuchFieldError e6) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.PERM_DISABLED.ordinal()] = 7;
+            } catch (NoSuchFieldError e7) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.CARD_IO_ERROR.ordinal()] = 8;
+            } catch (NoSuchFieldError e8) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.SIM_NETWORK_SUBSET_LOCKED.ordinal()] = 9;
+            } catch (NoSuchFieldError e9) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$IccCardConstants$State[IccCardConstants.State.FOREVER.ordinal()] = 10;
+            } catch (NoSuchFieldError e10) {
+            }
+            $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState = new int[IccCardApplicationStatus.AppState.values().length];
+            try {
+                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[IccCardApplicationStatus.AppState.APPSTATE_UNKNOWN.ordinal()] = 1;
+            } catch (NoSuchFieldError e11) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[IccCardApplicationStatus.AppState.APPSTATE_PIN.ordinal()] = 2;
+            } catch (NoSuchFieldError e12) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[IccCardApplicationStatus.AppState.APPSTATE_PUK.ordinal()] = 3;
+            } catch (NoSuchFieldError e13) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[IccCardApplicationStatus.AppState.APPSTATE_SUBSCRIPTION_PERSO.ordinal()] = 4;
+            } catch (NoSuchFieldError e14) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[IccCardApplicationStatus.AppState.APPSTATE_READY.ordinal()] = 5;
+            } catch (NoSuchFieldError e15) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$uicc$IccCardApplicationStatus$AppState[IccCardApplicationStatus.AppState.APPSTATE_DETECTED.ordinal()] = 6;
+            } catch (NoSuchFieldError e16) {
+            }
         }
     }
 
-    public boolean getIccLockEnabled() {
-        boolean booleanValue;
+    private String getIccStateIntentString(IccCardConstants.State state) {
+        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$IccCardConstants$State[state.ordinal()]) {
+            case 1:
+                return "ABSENT";
+            case 2:
+                return "LOCKED";
+            case 3:
+                return "LOCKED";
+            case 4:
+                return "LOCKED";
+            case 5:
+                return "READY";
+            case 6:
+                return "NOT_READY";
+            case 7:
+                return "ABSENT";
+            case 8:
+                return "CARD_IO_ERROR";
+            default:
+                return "UNKNOWN";
+        }
+    }
+
+    private String getIccStateReason(IccCardConstants.State state) {
+        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$IccCardConstants$State[state.ordinal()]) {
+            case 2:
+                return "PIN";
+            case 3:
+                return "PUK";
+            case 4:
+                return "PERSO";
+            case 5:
+            case 6:
+            default:
+                return null;
+            case 7:
+                return "PERM_DISABLED";
+            case 8:
+                return "CARD_IO_ERROR";
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public IccCardConstants.State getState() {
+        IccCardConstants.State state;
         synchronized (this.mLock) {
-            booleanValue = Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccLockEnabled() : false).booleanValue();
+            state = this.mExternalState;
         }
-        return booleanValue;
+        return state;
     }
 
-    public boolean getIccPin2Blocked() {
-        return Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccPin2Blocked() : false).booleanValue();
-    }
-
-    public int getIccPinPukRetryCountSc(int i) {
-        int iccPinPukRetryCountSc;
-        synchronized (this.mLock) {
-            iccPinPukRetryCountSc = this.mUiccCard != null ? this.mUiccCard.getIccPinPukRetryCountSc(i) : -1;
-        }
-        return iccPinPukRetryCountSc;
-    }
-
-    public boolean getIccPuk2Blocked() {
-        return Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccPuk2Blocked() : false).booleanValue();
-    }
-
+    @Override // com.android.internal.telephony.IccCard
     public IccRecords getIccRecords() {
         IccRecords iccRecords;
         synchronized (this.mLock) {
@@ -1204,18 +759,325 @@ public class IccCardProxy extends Handler implements IccCard {
         return iccRecords;
     }
 
-    public boolean getIccRecordsLoaded() {
+    @Override // com.android.internal.telephony.IccCard
+    public IccFileHandler getIccFileHandler() {
+        IccFileHandler iccFileHandler;
         synchronized (this.mLock) {
-            if (this.mIccRecords != null) {
-                boolean recordsLoaded = this.mIccRecords.getRecordsLoaded();
-                return recordsLoaded;
+            iccFileHandler = this.mUiccApplication != null ? this.mUiccApplication.getIccFileHandler() : null;
+        }
+        return iccFileHandler;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public int getSimLock() {
+        return this.mSimLock;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void registerForAbsent(Handler h, int what, Object obj) {
+        synchronized (this.mLock) {
+            Registrant r = new Registrant(h, what, obj);
+            this.mAbsentRegistrants.add(r);
+            if (getState() == IccCardConstants.State.ABSENT) {
+                r.notifyRegistrant();
             }
-            return false;
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public String getIccStateIntentStringSharp(State state) {
+    @Override // com.android.internal.telephony.IccCard
+    public void unregisterForAbsent(Handler h) {
+        synchronized (this.mLock) {
+            this.mAbsentRegistrants.remove(h);
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void registerForPersoLocked(Handler h, int what, Object obj) {
+        synchronized (this.mLock) {
+            Registrant r = new Registrant(h, what, obj);
+            this.mPersoLockedRegistrants.add(r);
+            if (getState() == IccCardConstants.State.PERSO_LOCKED) {
+                r.notifyRegistrant(new AsyncResult((Object) null, Integer.valueOf(this.mPersoSubState.ordinal()), (Throwable) null));
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void unregisterForPersoLocked(Handler h) {
+        synchronized (this.mLock) {
+            this.mPersoLockedRegistrants.remove(h);
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void registerForLocked(Handler h, int what, Object obj) {
+        synchronized (this.mLock) {
+            Registrant r = new Registrant(h, what, obj);
+            this.mPinLockedRegistrants.add(r);
+            if (getState().isPinLocked()) {
+                r.notifyRegistrant();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void unregisterForLocked(Handler h) {
+        synchronized (this.mLock) {
+            this.mPinLockedRegistrants.remove(h);
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void supplyPin(String pin, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.supplyPin(pin, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void supplyPuk(String puk, String newPin, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.supplyPuk(puk, newPin, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void supplyPin2(String pin2, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.supplyPin2(pin2, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void supplyPuk2(String puk2, String newPin2, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.supplyPuk2(puk2, newPin2, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void supplyDepersonalization(String pin, String type, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.supplyDepersonalization(pin, type, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("CommandsInterface is not set.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean getIccLockEnabled() {
+        boolean booleanValue;
+        synchronized (this.mLock) {
+            booleanValue = Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccLockEnabled() : false).booleanValue();
+        }
+        return booleanValue;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean getIccFdnEnabled() {
+        boolean booleanValue;
+        synchronized (this.mLock) {
+            booleanValue = Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccFdnEnabled() : false).booleanValue();
+        }
+        return booleanValue;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean getIccFdnAvailable() {
+        if (this.mUiccApplication != null) {
+            return this.mUiccApplication.getIccFdnAvailable();
+        }
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean getIccPin2Blocked() {
+        return Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccPin2Blocked() : false).booleanValue();
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean getIccPuk2Blocked() {
+        return Boolean.valueOf(this.mUiccApplication != null ? this.mUiccApplication.getIccPuk2Blocked() : false).booleanValue();
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void setIccLockEnabled(boolean enabled, String password, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.setIccLockEnabled(enabled, password, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void setIccFdnEnabled(boolean enabled, String password, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.setIccFdnEnabled(enabled, password, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void changeIccLockPassword(String oldPassword, String newPassword, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.changeIccLockPassword(oldPassword, newPassword, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void changeIccFdnPassword(String oldPassword, String newPassword, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.changeIccFdnPassword(oldPassword, newPassword, onComplete);
+            } else if (onComplete != null) {
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public String getServiceProviderName() {
+        String serviceProviderName;
+        synchronized (this.mLock) {
+            serviceProviderName = this.mIccRecords != null ? this.mIccRecords.getServiceProviderName() : null;
+        }
+        return serviceProviderName;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean isApplicationOnIcc(IccCardApplicationStatus.AppType type) {
+        boolean booleanValue;
+        synchronized (this.mLock) {
+            booleanValue = Boolean.valueOf(this.mUiccCard != null ? this.mUiccCard.isApplicationOnIcc(type) : false).booleanValue();
+        }
+        return booleanValue;
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public boolean hasIccCard() {
+        boolean z;
+        synchronized (this.mLock) {
+            z = (this.mUiccCard == null || this.mUiccCard.getCardState() == IccCardStatus.CardState.CARDSTATE_ABSENT) ? false : true;
+        }
+        return z;
+    }
+
+    private void setSystemProperty(String property, String value) {
+        TelephonyManager.setTelephonyProperty(this.mPhoneId.intValue(), property, value);
+    }
+
+    private void log(String s) {
+        Rlog.d(LOG_TAG, s);
+    }
+
+    private void loge(String msg) {
+        Rlog.e(LOG_TAG, msg);
+    }
+
+    protected void updateExternalStateSharp() {
+        if (this.mUiccCard != null) {
+            if (this.mUiccCard.getCardState() == IccCardStatus.CardState.CARDSTATE_ERROR) {
+                setExternalStateSharp(IccCardConstants.State.CARD_IO_ERROR);
+            } else if (this.mUiccCard.getCardState() == IccCardStatus.CardState.CARDSTATE_ABSENT) {
+                if (1 == SystemProperties.getInt(SIM_ABSENT_CHECK, 0)) {
+                    setExternalStateSharp(IccCardConstants.State.ABSENT);
+                } else {
+                    Rlog.d(LOG_TAG, "updateExternalStateSharp: waiting for the actual SIM state...");
+                }
+            } else if (this.mUiccApplication == null) {
+                setExternalStateSharp(IccCardConstants.State.UNKNOWN);
+            } else if (this.mUiccApplication.getPin1State() == IccCardStatus.PinState.PINSTATE_ENABLED_PERM_BLOCKED) {
+                setExternalStateSharp(IccCardConstants.State.FOREVER);
+            } else {
+                switch (this.mUiccApplication.getState()) {
+                    case APPSTATE_UNKNOWN:
+                    case APPSTATE_DETECTED:
+                        setExternalStateSharp(IccCardConstants.State.UNKNOWN);
+                        return;
+                    case APPSTATE_PIN:
+                        setExternalStateSharp(IccCardConstants.State.PIN_REQUIRED);
+                        return;
+                    case APPSTATE_PUK:
+                        setExternalStateSharp(IccCardConstants.State.PUK_REQUIRED);
+                        return;
+                    case APPSTATE_SUBSCRIPTION_PERSO:
+                        if (this.mUiccApplication.isPersoLocked()) {
+                            setExternalStateSharp(IccCardConstants.State.SIM_NETWORK_SUBSET_LOCKED);
+                            return;
+                        } else {
+                            setExternalStateSharp(IccCardConstants.State.UNKNOWN);
+                            return;
+                        }
+                    case APPSTATE_READY:
+                        setExternalStateSharp(IccCardConstants.State.READY);
+                        return;
+                    default:
+                        return;
+                }
+            }
+        }
+    }
+
+    protected void setExternalStateSharp(IccCardConstants.State newState, boolean override) {
+        synchronized (this.mLock) {
+            if (!override) {
+                if (newState == this.mExternalStateSharp) {
+                }
+            }
+            this.mExternalStateSharp = newState;
+            if (newState != IccCardConstants.State.PIN_REQUIRED && newState != IccCardConstants.State.PUK_REQUIRED && newState != IccCardConstants.State.PERSO_LOCKED && newState != IccCardConstants.State.READY && newState != IccCardConstants.State.PERM_DISABLED) {
+                broadcastIccStateChangedIntentSharp(getIccStateIntentStringSharp(this.mExternalStateSharp), getIccStateReasonSharp(this.mExternalStateSharp));
+            }
+        }
+    }
+
+    private void setExternalStateSharp(IccCardConstants.State newState) {
+        setExternalStateSharp(newState, false);
+    }
+
+    private void notifyCurrentExternalStateSharp() {
+        synchronized (this.mLock) {
+            broadcastIccStateChangedIntentSharp(getIccStateIntentStringSharp(this.mExternalStateSharp), getIccStateReasonSharp(this.mExternalStateSharp));
+        }
+    }
+
+    protected String getIccStateIntentStringSharp(IccCardConstants.State state) {
         switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$IccCardConstants$State[state.ordinal()]) {
             case 1:
                 return "ABSENT";
@@ -1242,8 +1104,7 @@ public class IccCardProxy extends Handler implements IccCard {
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public String getIccStateReasonSharp(State state) {
+    protected String getIccStateReasonSharp(IccCardConstants.State state) {
         switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$IccCardConstants$State[state.ordinal()]) {
             case 2:
                 return "PIN";
@@ -1251,6 +1112,10 @@ public class IccCardProxy extends Handler implements IccCard {
                 return "PUK";
             case 4:
                 return "PERSO";
+            case 5:
+            case 6:
+            default:
+                return null;
             case 7:
                 return "PERM_DISABLED";
             case 8:
@@ -1259,510 +1124,28 @@ public class IccCardProxy extends Handler implements IccCard {
                 return IccCard.INTENT_VALUE_LOCKED_NETWORK_SUBSET;
             case 10:
                 return IccCard.INTENT_VALUE_LOCKED_FOREVER;
-            default:
-                return null;
         }
     }
 
-    public String getServiceProviderName() {
+    public void broadcastIccStateChangedIntentSharp(String value, String reason) {
         synchronized (this.mLock) {
-            if (this.mIccRecords != null) {
-                String serviceProviderName = this.mIccRecords.getServiceProviderName();
-                return serviceProviderName;
+            if (this.mQuietMode) {
+                log("QuietMode: NOT Broadcasting intent ACTION_SIM_STATE_CHANGED_SHARP " + value + " reason " + reason);
+                return;
             }
-            return null;
+            Intent intent = new Intent("jp.co.sharp.android.uim.intent.action.SIM_STATE_CHANGED_SHARP");
+            intent.addFlags(536870912);
+            intent.putExtra("phoneName", "Phone");
+            intent.putExtra(IccCard.INTENT_KEY_ICC_STATE_SHARP, value);
+            intent.putExtra(IccCard.INTENT_KEY_LOCKED_REASON_SHARP, reason);
+            SubscriptionManager.putPhoneIdAndSubIdExtra(intent, this.mPhoneId.intValue());
+            log("Broadcasting intent ACTION_SIM_STATE_CHANGED_SHARP " + value + " reason " + reason + " for mPhoneId : " + this.mPhoneId);
+            ActivityManagerNative.broadcastStickyIntent(intent, "android.permission.READ_PHONE_STATE", -1);
+            queueNextBroadcastSharpPoll(value, reason);
         }
     }
 
-    public int getSimLock() {
-        return this.mSimLock;
-    }
-
-    public State getState() {
-        State state;
-        synchronized (this.mLock) {
-            state = this.mExternalState;
-        }
-        return state;
-    }
-
-    /* JADX WARNING: Removed duplicated region for block: B:99:0x0240  */
-    /* JADX WARNING: Removed duplicated region for block: B:97:0x0236  */
-    public void handleMessage(android.os.Message r10) {
-        /*
-        r9 = this;
-        r8 = 0;
-        r3 = 3;
-        r2 = 2;
-        r1 = 0;
-        r7 = 1;
-        r0 = r10.what;
-        switch(r0) {
-            case 1: goto L_0x0023;
-            case 2: goto L_0x0035;
-            case 3: goto L_0x0042;
-            case 4: goto L_0x004c;
-            case 5: goto L_0x0057;
-            case 6: goto L_0x005b;
-            case 7: goto L_0x0061;
-            case 8: goto L_0x0126;
-            case 9: goto L_0x012d;
-            case 11: goto L_0x0145;
-            case 17: goto L_0x01b9;
-            case 20: goto L_0x026b;
-            case 21: goto L_0x026b;
-            case 22: goto L_0x026b;
-            case 23: goto L_0x026b;
-            case 24: goto L_0x014d;
-            case 25: goto L_0x01e6;
-            case 30: goto L_0x01cc;
-            case 500: goto L_0x0183;
-            case 501: goto L_0x016f;
-            case 502: goto L_0x0179;
-            case 503: goto L_0x01a6;
-            default: goto L_0x000a;
-        };
-    L_0x000a:
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "Unhandled message with number: ";
-        r0 = r0.append(r1);
-        r1 = r10.what;
-        r0 = r0.append(r1);
-        r0 = r0.toString();
-        r9.loge(r0);
-    L_0x0022:
-        return;
-    L_0x0023:
-        r9.mRadioOn = r1;
-        r0 = com.android.internal.telephony.CommandsInterface.RadioState.RADIO_UNAVAILABLE;
-        r1 = r9.mCi;
-        r1 = r1.getRadioState();
-        if (r0 != r1) goto L_0x0022;
-    L_0x002f:
-        r0 = com.android.internal.telephony.IccCardConstants.State.NOT_READY;
-        r9.setExternalState(r0);
-        goto L_0x0022;
-    L_0x0035:
-        r9.mRadioOn = r7;
-        r0 = r9.mInitialized;
-        if (r0 != 0) goto L_0x003e;
-    L_0x003b:
-        r9.updateQuietMode();
-    L_0x003e:
-        r9.updateExternalState();
-        goto L_0x0022;
-    L_0x0042:
-        r9.mIsCardStatusAvailable = r7;
-        r0 = r9.mInitialized;
-        if (r0 == 0) goto L_0x0022;
-    L_0x0048:
-        r9.updateIccAvailability();
-        goto L_0x0022;
-    L_0x004c:
-        r0 = r9.mAbsentRegistrants;
-        r0.notifyRegistrants();
-        r0 = com.android.internal.telephony.IccCardConstants.State.ABSENT;
-        r9.setExternalState(r0);
-        goto L_0x0022;
-    L_0x0057:
-        r9.processLockedState();
-        goto L_0x0022;
-    L_0x005b:
-        r0 = com.android.internal.telephony.IccCardConstants.State.READY;
-        r9.setExternalState(r0);
-        goto L_0x0022;
-    L_0x0061:
-        r0 = r9.mIccRecords;
-        if (r0 == 0) goto L_0x00e0;
-    L_0x0065:
-        r0 = r9.mIccRecords;
-        r0 = r0.getOperatorNumeric();
-        r4 = r9.mPhoneId;
-        r4 = r4.intValue();
-        r5 = new java.lang.StringBuilder;
-        r5.<init>();
-        r6 = "operator=";
-        r5 = r5.append(r6);
-        r5 = r5.append(r0);
-        r6 = " slotId=";
-        r5 = r5.append(r6);
-        r4 = r5.append(r4);
-        r4 = r4.toString();
-        r9.log(r4);
-        if (r0 == 0) goto L_0x011b;
-    L_0x0093:
-        r4 = new java.lang.StringBuilder;
-        r4.<init>();
-        r5 = "update icc_operator_numeric=";
-        r4 = r4.append(r5);
-        r4 = r4.append(r0);
-        r4 = r4.toString();
-        r9.log(r4);
-        r4 = "gsm.sim.operator.numeric";
-        r9.setSystemProperty(r4, r0);
-        r4 = r9.mCurrentAppType;
-        if (r4 != r7) goto L_0x00f5;
-    L_0x00b2:
-        r2 = "gsm.apn.sim.operator.numeric";
-        r9.setSystemProperty(r2, r0);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "update sim_operator_numeric=";
-        r2 = r2.append(r4);
-        r2 = r2.append(r0);
-        r2 = r2.toString();
-        r9.log(r2);
-    L_0x00cd:
-        r0 = r0.substring(r1, r3);
-        if (r0 == 0) goto L_0x0115;
-    L_0x00d3:
-        r1 = "gsm.sim.operator.iso-country";
-        r0 = java.lang.Integer.parseInt(r0);
-        r0 = com.android.internal.telephony.MccTable.countryCodeForMcc(r0);
-        r9.setSystemProperty(r1, r0);
-    L_0x00e0:
-        r0 = r9.mUiccCard;
-        if (r0 == 0) goto L_0x0121;
-    L_0x00e4:
-        r0 = r9.mUiccCard;
-        r0 = r0.areCarrierPriviligeRulesLoaded();
-        if (r0 != 0) goto L_0x0121;
-    L_0x00ec:
-        r0 = r9.mUiccCard;
-        r1 = 503; // 0x1f7 float:7.05E-43 double:2.485E-321;
-        r0.registerForCarrierPrivilegeRulesLoaded(r9, r1, r8);
-        goto L_0x0022;
-    L_0x00f5:
-        r4 = r9.mCurrentAppType;
-        if (r4 != r2) goto L_0x00cd;
-    L_0x00f9:
-        r2 = "net.cdma.ruim.operator.numeric";
-        r9.setSystemProperty(r2, r0);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "update ruim_operator_numeric=";
-        r2 = r2.append(r4);
-        r2 = r2.append(r0);
-        r2 = r2.toString();
-        r9.log(r2);
-        goto L_0x00cd;
-    L_0x0115:
-        r0 = "EVENT_RECORDS_LOADED Country code is null";
-        r9.loge(r0);
-        goto L_0x00e0;
-    L_0x011b:
-        r0 = "EVENT_RECORDS_LOADED Operator name is null";
-        r9.loge(r0);
-        goto L_0x00e0;
-    L_0x0121:
-        r9.onRecordsLoaded();
-        goto L_0x0022;
-    L_0x0126:
-        r0 = "IMSI";
-        r9.broadcastIccStateChangedIntent(r0, r8);
-        goto L_0x0022;
-    L_0x012d:
-        r0 = r9.mUiccApplication;
-        r0 = r0.getPersoSubState();
-        r9.mPersoSubState = r0;
-        r1 = r9.mPersoLockedRegistrants;
-        r0 = r10.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1.notifyRegistrants(r0);
-        r0 = com.android.internal.telephony.IccCardConstants.State.PERSO_LOCKED;
-        r9.setExternalState(r0);
-        goto L_0x0022;
-    L_0x0145:
-        r9.updateQuietMode();
-        r9.updateActiveRecord();
-        goto L_0x0022;
-    L_0x014d:
-        r1 = r9.mLock;
-        monitor-enter(r1);
-        r0 = r9.mCi;	 Catch:{ all -> 0x015e }
-        r0 = r0.isRunning();	 Catch:{ all -> 0x015e }
-        if (r0 == 0) goto L_0x0161;
-    L_0x0158:
-        r9.requestUnsolRadioStateChanged();	 Catch:{ all -> 0x015e }
-    L_0x015b:
-        monitor-exit(r1);	 Catch:{ all -> 0x015e }
-        goto L_0x0022;
-    L_0x015e:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x015e }
-        throw r0;
-    L_0x0161:
-        r0 = r9.obtainMessage();	 Catch:{ all -> 0x015e }
-        r2 = 24;
-        r0.what = r2;	 Catch:{ all -> 0x015e }
-        r2 = 1000; // 0x3e8 float:1.401E-42 double:4.94E-321;
-        r9.sendMessageDelayed(r0, r2);	 Catch:{ all -> 0x015e }
-        goto L_0x015b;
-    L_0x016f:
-        r0 = "EVENT_SUBSCRIPTION_ACTIVATED";
-        r9.log(r0);
-        r9.onSubscriptionActivated();
-        goto L_0x0022;
-    L_0x0179:
-        r0 = "EVENT_SUBSCRIPTION_DEACTIVATED";
-        r9.log(r0);
-        r9.onSubscriptionDeactivated();
-        goto L_0x0022;
-    L_0x0183:
-        r0 = r9.mCurrentAppType;
-        if (r0 != r7) goto L_0x0022;
-    L_0x0187:
-        r0 = r9.mIccRecords;
-        if (r0 == 0) goto L_0x0022;
-    L_0x018b:
-        r0 = r10.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = r0.result;
-        r0 = (java.lang.Integer) r0;
-        r0 = r0.intValue();
-        if (r0 != r2) goto L_0x0022;
-    L_0x0199:
-        r0 = "gsm.sim.operator.alpha";
-        r1 = r9.mIccRecords;
-        r1 = r1.getServiceProviderName();
-        r9.setSystemProperty(r0, r1);
-        goto L_0x0022;
-    L_0x01a6:
-        r0 = "EVENT_CARRIER_PRIVILEGES_LOADED";
-        r9.log(r0);
-        r0 = r9.mUiccCard;
-        if (r0 == 0) goto L_0x01b4;
-    L_0x01af:
-        r0 = r9.mUiccCard;
-        r0.unregisterForCarrierPrivilegeRulesLoaded(r9);
-    L_0x01b4:
-        r9.onRecordsLoaded();
-        goto L_0x0022;
-    L_0x01b9:
-        r0 = r10.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r9.onGetPinPukRetryCountDone(r0);
-        r9.notifyCurrentExternalState();
-        r0 = com.android.internal.telephony.TelBrand.IS_SBM;
-        if (r0 == 0) goto L_0x0022;
-    L_0x01c7:
-        r9.notifyCurrentExternalStateSharp();
-        goto L_0x0022;
-    L_0x01cc:
-        r2 = r9.mLock;
-        monitor-enter(r2);
-        r0 = r10.obj;	 Catch:{ all -> 0x01e3 }
-        r0 = (java.lang.String[]) r0;	 Catch:{ all -> 0x01e3 }
-        r0 = (java.lang.String[]) r0;	 Catch:{ all -> 0x01e3 }
-        r1 = r0[r1];
-        r0 = r0[r7];
-        r3 = r9.dontPollBroadcastSharp;	 Catch:{ all -> 0x01e3 }
-        if (r3 != 0) goto L_0x01e0;
-    L_0x01dd:
-        r9.broadcastIccStateChangedIntentSharp(r1, r0);	 Catch:{ all -> 0x01e3 }
-    L_0x01e0:
-        monitor-exit(r2);	 Catch:{ all -> 0x01e3 }
-        goto L_0x0022;
-    L_0x01e3:
-        r0 = move-exception;
-        monitor-exit(r2);	 Catch:{ all -> 0x01e3 }
-        throw r0;
-    L_0x01e6:
-        r0 = "EVENT_GET_SIM_LOCK_DONE";
-        r9.log(r0);
-        r0 = r10.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r4 = r0.exception;
-        if (r4 == 0) goto L_0x020f;
-    L_0x01f3:
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "Error in get sim lock with exception: ";
-        r1 = r1.append(r2);
-        r0 = r0.exception;
-        r0 = r1.append(r0);
-        r0 = r0.toString();
-        r9.loge(r0);
-        r9.mSimLock = r7;
-        goto L_0x0022;
-    L_0x020f:
-        r4 = r0.result;
-        if (r4 == 0) goto L_0x0262;
-    L_0x0213:
-        r0 = r0.result;
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        r4 = java.nio.ByteBuffer.wrap(r0);
-        r5 = 64;
-        r6 = r0.length;
-        if (r5 != r6) goto L_0x0247;
-    L_0x0222:
-        r5 = r1 + 4;
-        r5 = r5 + -1;
-        r6 = r0.length;
-        if (r5 >= r6) goto L_0x029f;
-    L_0x0229:
-        r5 = r4.getInt(r1);
-        if (r5 == 0) goto L_0x023d;
-    L_0x022f:
-        r0 = r2;
-    L_0x0230:
-        r9.mSimLock = r0;
-        r0 = r9.mSimLock;
-        if (r2 != r0) goto L_0x0240;
-    L_0x0236:
-        r0 = "mSimlock is ON";
-        r9.log(r0);
-        goto L_0x0022;
-    L_0x023d:
-        r1 = r1 + 8;
-        goto L_0x0222;
-    L_0x0240:
-        r0 = "mSimlock is OFF";
-        r9.log(r0);
-        goto L_0x0022;
-    L_0x0247:
-        r9.mSimLock = r7;
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "The response has unexpected size: ";
-        r1 = r1.append(r2);
-        r0 = r0.length;
-        r0 = r1.append(r0);
-        r0 = r0.toString();
-        r9.loge(r0);
-        goto L_0x0022;
-    L_0x0262:
-        r9.mSimLock = r7;
-        r0 = "No result in get sim lock";
-        r9.loge(r0);
-        goto L_0x0022;
-    L_0x026b:
-        r0 = r10.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.exception;
-        if (r1 == 0) goto L_0x028b;
-    L_0x0273:
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "Error in SIM access with exception";
-        r1 = r1.append(r2);
-        r2 = r0.exception;
-        r1 = r1.append(r2);
-        r1 = r1.toString();
-        r9.loge(r1);
-    L_0x028b:
-        r1 = r0.userObj;
-        r1 = (android.os.Message) r1;
-        r2 = r0.result;
-        r3 = r0.exception;
-        android.os.AsyncResult.forMessage(r1, r2, r3);
-        r0 = r0.userObj;
-        r0 = (android.os.Message) r0;
-        r0.sendToTarget();
-        goto L_0x0022;
-    L_0x029f:
-        r0 = r3;
-        goto L_0x0230;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.handleMessage(android.os.Message):void");
-    }
-
-    /* JADX WARNING: Missing block: B:15:?, code skipped:
-            return false;
-     */
-    public boolean hasIccCard() {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccCard;	 Catch:{ all -> 0x0017 }
-        if (r0 == 0) goto L_0x0014;
-    L_0x0007:
-        r0 = r3.mUiccCard;	 Catch:{ all -> 0x0017 }
-        r0 = r0.getCardState();	 Catch:{ all -> 0x0017 }
-        r2 = com.android.internal.telephony.uicc.IccCardStatus.CardState.CARDSTATE_ABSENT;	 Catch:{ all -> 0x0017 }
-        if (r0 == r2) goto L_0x0014;
-    L_0x0011:
-        monitor-exit(r1);	 Catch:{ all -> 0x0017 }
-        r0 = 1;
-    L_0x0013:
-        return r0;
-    L_0x0014:
-        monitor-exit(r1);	 Catch:{ all -> 0x0017 }
-        r0 = 0;
-        goto L_0x0013;
-    L_0x0017:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0017 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.hasIccCard():boolean");
-    }
-
-    public boolean isApplicationOnIcc(AppType appType) {
-        boolean booleanValue;
-        synchronized (this.mLock) {
-            booleanValue = Boolean.valueOf(this.mUiccCard != null ? this.mUiccCard.isApplicationOnIcc(appType) : false).booleanValue();
-        }
-        return booleanValue;
-    }
-
-    public void openLogicalChannel(String str, Message message) {
-        synchronized (this.mLock) {
-            if (this.mUiccApplication == null) {
-                log("UiccApplication is not exist.");
-                AsyncResult.forMessage(message).exception = new RuntimeException("ICC card is absent.");
-                message.sendToTarget();
-            } else if (TelBrand.IS_DCM) {
-                this.mIccOpenLogicalChannel.iccOpenChannel(str, obtainMessage(21, message));
-            } else {
-                this.mUiccApplication.openLogicalChannel(str, message);
-            }
-        }
-    }
-
-    public void registerForAbsent(Handler handler, int i, Object obj) {
-        synchronized (this.mLock) {
-            Registrant registrant = new Registrant(handler, i, obj);
-            this.mAbsentRegistrants.add(registrant);
-            if (getState() == State.ABSENT) {
-                registrant.notifyRegistrant();
-            }
-        }
-    }
-
-    public void registerForLocked(Handler handler, int i, Object obj) {
-        synchronized (this.mLock) {
-            Registrant registrant = new Registrant(handler, i, obj);
-            this.mPinLockedRegistrants.add(registrant);
-            if (getState().isPinLocked()) {
-                registrant.notifyRegistrant();
-            }
-        }
-    }
-
-    public void registerForPersoLocked(Handler handler, int i, Object obj) {
-        synchronized (this.mLock) {
-            Registrant registrant = new Registrant(handler, i, obj);
-            this.mPersoLockedRegistrants.add(registrant);
-            if (getState() == State.PERSO_LOCKED) {
-                registrant.notifyRegistrant(new AsyncResult(null, Integer.valueOf(this.mPersoSubState.ordinal()), null));
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void resetProperties() {
-        if (this.mCurrentAppType == 1) {
-            log("update icc_operator_numeric=");
-            setSystemProperty("gsm.sim.operator.numeric", "");
-            setSystemProperty("gsm.sim.operator.iso-country", "");
-            setSystemProperty("gsm.sim.operator.alpha", "");
-        }
-    }
-
+    @Override // com.android.internal.telephony.IccCard
     public void responseBroadcastIntentSharp() {
         synchronized (this.mLock) {
             log("responseBroadcastIntentSharp");
@@ -1770,392 +1153,354 @@ public class IccCardProxy extends Handler implements IccCard {
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    /* JADX WARNING: Missing block: B:26:?, code skipped:
-            return;
-     */
-    public void setExternalStateSharp(com.android.internal.telephony.IccCardConstants.State r4, boolean r5) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        if (r5 != 0) goto L_0x000b;
-    L_0x0005:
-        r0 = r3.mExternalStateSharp;	 Catch:{ all -> 0x0023 }
-        if (r4 != r0) goto L_0x000b;
-    L_0x0009:
-        monitor-exit(r1);	 Catch:{ all -> 0x0023 }
-    L_0x000a:
-        return;
-    L_0x000b:
-        r3.mExternalStateSharp = r4;	 Catch:{ all -> 0x0023 }
-        r0 = com.android.internal.telephony.IccCardConstants.State.PIN_REQUIRED;	 Catch:{ all -> 0x0023 }
-        if (r4 == r0) goto L_0x0021;
-    L_0x0011:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PUK_REQUIRED;	 Catch:{ all -> 0x0023 }
-        if (r4 == r0) goto L_0x0021;
-    L_0x0015:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PERSO_LOCKED;	 Catch:{ all -> 0x0023 }
-        if (r4 == r0) goto L_0x0021;
-    L_0x0019:
-        r0 = com.android.internal.telephony.IccCardConstants.State.READY;	 Catch:{ all -> 0x0023 }
-        if (r4 == r0) goto L_0x0021;
-    L_0x001d:
-        r0 = com.android.internal.telephony.IccCardConstants.State.PERM_DISABLED;	 Catch:{ all -> 0x0023 }
-        if (r4 != r0) goto L_0x0026;
-    L_0x0021:
-        monitor-exit(r1);	 Catch:{ all -> 0x0023 }
-        goto L_0x000a;
-    L_0x0023:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0023 }
-        throw r0;
-    L_0x0026:
-        r0 = r3.mExternalStateSharp;	 Catch:{ all -> 0x0023 }
-        r0 = r3.getIccStateIntentStringSharp(r0);	 Catch:{ all -> 0x0023 }
-        r2 = r3.mExternalStateSharp;	 Catch:{ all -> 0x0023 }
-        r2 = r3.getIccStateReasonSharp(r2);	 Catch:{ all -> 0x0023 }
-        r3.broadcastIccStateChangedIntentSharp(r0, r2);	 Catch:{ all -> 0x0023 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0023 }
-        goto L_0x000a;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.setExternalStateSharp(com.android.internal.telephony.IccCardConstants$State, boolean):void");
+    private void queueNextBroadcastSharpPoll(String value, String reason) {
+        if (!this.dontPollBroadcastSharp) {
+            Message msg = obtainMessage();
+            msg.what = 30;
+            msg.obj = new String[]{value, reason};
+            sendMessageDelayed(msg, 1000L);
+        }
     }
 
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void setIccFdnEnabled(boolean r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.setIccFdnEnabled(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.setIccFdnEnabled(boolean, java.lang.String, android.os.Message):void");
+    @Override // com.android.internal.telephony.IccCard
+    public int getIccPinPukRetryCountSc(int isPinPuk) {
+        int retValue;
+        synchronized (this.mLock) {
+            retValue = this.mUiccCard != null ? this.mUiccCard.getIccPinPukRetryCountSc(isPinPuk) : -1;
+        }
+        return retValue;
     }
 
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void setIccLockEnabled(boolean r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.setIccLockEnabled(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.setIccLockEnabled(boolean, java.lang.String, android.os.Message):void");
+    private void requestGetPinPukRetryCount() {
+        byte[] request = new byte["QOEMHOOK".length() + 8];
+        ByteBuffer reqBuffer = ByteBuffer.wrap(request);
+        reqBuffer.order(ByteOrder.nativeOrder());
+        reqBuffer.put("QOEMHOOK".getBytes());
+        reqBuffer.putInt(589824 + 102);
+        this.mCi.invokeOemRilRequestRaw(request, obtainMessage(17));
     }
 
-    public void setPinPukRetryCount(int i, int i2) {
+    private void onGetPinPukRetryCountDone(AsyncResult ar) {
+        synchronized (this.mLock) {
+            if (this.mUiccCard == null) {
+                loge("Error in get pin puk retry count with mUiccCard is null");
+                return;
+            }
+            if (ar.exception != null) {
+                loge("Error in get pin puk retry count with exception: " + ar.exception);
+                this.mUiccCard.setPinPukRetryCount(0, -1);
+            } else if (ar.result != null) {
+                byte[] ret = (byte[]) ar.result;
+                this.mUiccCard.setPinPukRetryCount(1, ret[0]);
+                this.mUiccCard.setPinPukRetryCount(2, ret[1]);
+                this.mUiccCard.setPinPukRetryCount(3, ret[2]);
+                this.mUiccCard.setPinPukRetryCount(4, ret[3]);
+            } else {
+                loge("No result in get pin puk retry count");
+                this.mUiccCard.setPinPukRetryCount(0, -1);
+            }
+        }
+    }
+
+    private void notifyCurrentExternalState() {
+        synchronized (this.mLock) {
+            if (!TelBrand.IS_DCM) {
+                SystemProperties.set("gsm.sim.state", this.mExternalState.toString());
+            } else if (!ENCRYPTED_STATE.equals(SystemProperties.get(PROP_RO_CRYPTO_STATE)) || !MIN_FRAMEWORK_STATE.equals(SystemProperties.get(PROP_VOLD_DECRYPT)) || "NOT_READY".equals(getIccStateIntentString(this.mExternalState)) || "ABSENT".equals(getIccStateIntentString(this.mExternalState))) {
+                SystemProperties.set("gsm.sim.state", this.mExternalState.toString());
+            }
+            broadcastIccStateChangedIntent(getIccStateIntentString(this.mExternalState), getIccStateReason(this.mExternalState));
+            if (IccCardConstants.State.ABSENT == this.mExternalState) {
+                this.mAbsentRegistrants.notifyRegistrants();
+            }
+        }
+    }
+
+    private void requestUnsolRadioStateChanged() {
+        byte[] request = new byte["QOEMHOOK".length() + 8];
+        ByteBuffer reqBuffer = ByteBuffer.wrap(request);
+        reqBuffer.order(ByteOrder.nativeOrder());
+        reqBuffer.put("QOEMHOOK".getBytes());
+        reqBuffer.putInt(591824 + PduPart.P_CONTENT_TRANSFER_ENCODING + 5);
+        this.mCi.invokeOemRilRequestRaw(request, null);
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("IccCardProxy: " + this);
+        pw.println(" mContext=" + this.mContext);
+        pw.println(" mCi=" + this.mCi);
+        pw.println(" mAbsentRegistrants: size=" + this.mAbsentRegistrants.size());
+        for (int i = 0; i < this.mAbsentRegistrants.size(); i++) {
+            pw.println("  mAbsentRegistrants[" + i + "]=" + ((Registrant) this.mAbsentRegistrants.get(i)).getHandler());
+        }
+        pw.println(" mPinLockedRegistrants: size=" + this.mPinLockedRegistrants.size());
+        for (int i2 = 0; i2 < this.mPinLockedRegistrants.size(); i2++) {
+            pw.println("  mPinLockedRegistrants[" + i2 + "]=" + ((Registrant) this.mPinLockedRegistrants.get(i2)).getHandler());
+        }
+        pw.println(" mPersoLockedRegistrants: size=" + this.mPersoLockedRegistrants.size());
+        for (int i3 = 0; i3 < this.mPersoLockedRegistrants.size(); i3++) {
+            pw.println("  mPersoLockedRegistrants[" + i3 + "]=" + ((Registrant) this.mPersoLockedRegistrants.get(i3)).getHandler());
+        }
+        pw.println(" mCurrentAppType=" + this.mCurrentAppType);
+        pw.println(" mUiccController=" + this.mUiccController);
+        pw.println(" mUiccCard=" + this.mUiccCard);
+        pw.println(" mUiccApplication=" + this.mUiccApplication);
+        pw.println(" mIccRecords=" + this.mIccRecords);
+        pw.println(" mCdmaSSM=" + this.mCdmaSSM);
+        pw.println(" mRadioOn=" + this.mRadioOn);
+        pw.println(" mQuietMode=" + this.mQuietMode);
+        pw.println(" mInitialized=" + this.mInitialized);
+        pw.println(" mExternalState=" + this.mExternalState);
+        pw.flush();
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void exchangeAPDU(int cla, int command, int channel, int p1, int p2, int p3, String data, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.exchangeAPDU(cla, command, channel, p1, p2, p3, data, onComplete);
+            } else {
+                log("UiccApplication is not exist.");
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void openLogicalChannel(String AID, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication == null) {
+                log("UiccApplication is not exist.");
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            } else if (TelBrand.IS_DCM) {
+                this.mIccOpenLogicalChannel.iccOpenChannel(AID, obtainMessage(21, onComplete));
+            } else {
+                this.mUiccApplication.openLogicalChannel(AID, onComplete);
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void closeLogicalChannel(int channel, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.closeLogicalChannel(channel, onComplete);
+            } else {
+                log("UiccApplication is not exist.");
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void exchangeSimIO(int fileID, int command, int p1, int p2, int p3, String pathID, Message onComplete) {
+        synchronized (this.mLock) {
+            if (this.mUiccApplication != null) {
+                this.mUiccApplication.exchangeSimIO(fileID, command, p1, p2, p3, pathID, onComplete);
+            } else {
+                log("UiccApplication is not exist.");
+                AsyncResult.forMessage(onComplete).exception = new RuntimeException("ICC card is absent.");
+                onComplete.sendToTarget();
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void getEfLock(Message onComplete) {
+        if (TelBrand.IS_DCM) {
+            synchronized (this.mLock) {
+                IccFileHandler fh = getIccFileHandler();
+                boolean isTypeUsim = this.mUiccApplication != null && this.mUiccApplication.getType() == IccCardApplicationStatus.AppType.APPTYPE_USIM;
+                if (fh == null || !isTypeUsim) {
+                    AsyncResult.forMessage(onComplete, (Object) null, (Throwable) null);
+                    onComplete.sendToTarget();
+                } else {
+                    fh.loadEFTransparent(IccConstants.EF_LOCK, 8, obtainMessage(23, onComplete));
+                }
+            }
+        }
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    private class IccOpenLogicalChannel extends Handler {
+        private static final String CAS_AID = "F0000000010001FF81FF10FFFFFFFF02";
+        public static final int DEFAULT_MAX_CHANNEL = 4;
+        private static final int EVENT_GET_STATUS_DONE = 2;
+        private static final int EVENT_GET_TMM_DONE = 1;
+        private static final int EVENT_OPEN_CHANNEL_DONE = 3;
+        private int mMaxChannels = 4;
+        private int mRequestCount = 0;
+
+        /* JADX INFO: Access modifiers changed from: private */
+        /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+        public class LookForVacantChannel {
+            public static final int TMM_NOT_OPEN_CHANNEL = 0;
+            private String mAID;
+            private int mMaxChannels;
+            private Message mOnComplete;
+            private int mCheckedNo = 0;
+            private int mVacantCount = 0;
+            private int mTMMChannel = 0;
+
+            public LookForVacantChannel(String AID, Message onComplete, int max) {
+                this.mMaxChannels = 4;
+                this.mAID = null;
+                this.mOnComplete = null;
+                this.mAID = AID;
+                this.mOnComplete = onComplete;
+                this.mMaxChannels = max;
+            }
+
+            public boolean isCheckEnd() {
+                return this.mCheckedNo >= this.mMaxChannels;
+            }
+
+            public boolean isOpenChannel() {
+                return this.mTMMChannel > 0 ? this.mVacantCount > 0 : this.mVacantCount + (-1) > 0;
+            }
+
+            public int reqNextChannelWithUpdate() {
+                this.mCheckedNo++;
+                if (this.mTMMChannel == this.mCheckedNo) {
+                    this.mCheckedNo++;
+                }
+                return this.mCheckedNo;
+            }
+
+            public void addVacant() {
+                this.mVacantCount++;
+            }
+
+            public String getAID() {
+                return this.mAID;
+            }
+
+            public Message getOnComplete() {
+                return this.mOnComplete;
+            }
+
+            public void setTMMChannel(int channel) {
+                this.mTMMChannel = channel;
+            }
+        }
+
+        public IccOpenLogicalChannel() {
+        }
+
+        public void iccOpenChannel(String AID, Message onComplete) {
+            getTMMChannel(CAS_AID, new LookForVacantChannel(AID, onComplete, this.mMaxChannels));
+        }
+
+        @Override // android.os.Handler
+        public void handleMessage(Message msg) {
+            AsyncResult ar = (AsyncResult) msg.obj;
+            LookForVacantChannel result = (LookForVacantChannel) ar.userObj;
+            if (ar.exception != null) {
+                sendFailureMessage(result.getOnComplete(), ar.exception);
+                return;
+            }
+            switch (msg.what) {
+                case 1:
+                    checkGetCardStatusResponse(result, (IccIoResult) ar.result);
+                    break;
+                case 2:
+                    checkGetStatusResponse(result, (IccIoResult) ar.result);
+                    break;
+                case 3:
+                    sendSuccessMessage(result.getOnComplete(), ar);
+                    return;
+            }
+            int channel = result.reqNextChannelWithUpdate();
+            if (!result.isCheckEnd()) {
+                getChannelStatus(result, channel);
+            } else if (result.isOpenChannel()) {
+                getOpenLogicalChannel(result);
+            } else {
+                sendNonVacantChannelMessage(result.getOnComplete());
+            }
+        }
+
+        private String eventString(int event) {
+            switch (event) {
+                case 1:
+                    return "EVENT_GET_TMM_DONE";
+                case 2:
+                    return "EVENT_GET_STATUS_DONE";
+                case 3:
+                    return "EVENT_OPEN_CHANNEL_DONE";
+                default:
+                    return "Unknown event";
+            }
+        }
+
+        private void checkGetCardStatusResponse(LookForVacantChannel result, IccIoResult responseApdu) {
+            if (responseApdu.sw1 == 106 && responseApdu.sw2 == 130) {
+                result.setTMMChannel(0);
+            } else if (!responseApdu.success()) {
+                result.setTMMChannel(0);
+            } else {
+                int len = responseApdu.payload.length;
+                if (len > 1) {
+                }
+                if (len > 0) {
+                    result.setTMMChannel(responseApdu.payload[0]);
+                } else {
+                    result.setTMMChannel(0);
+                }
+            }
+        }
+
+        private void checkGetStatusResponse(LookForVacantChannel result, IccIoResult responseApdu) {
+            if (responseApdu.sw1 == 104 && responseApdu.sw2 == 129) {
+                result.addVacant();
+            }
+        }
+
+        private void getTMMChannel(String AID, LookForVacantChannel result) {
+            IccCardProxy.this.mCi.iccExchangeAPDU(144, 242, 0, 0, 0, AID.length() / 2, AID, obtainMessage(1, result));
+        }
+
+        private void getChannelStatus(LookForVacantChannel result, int channel) {
+            int cla;
+            if (channel < 4) {
+                cla = channel + 128;
+            } else {
+                cla = (channel + 192) - 4;
+            }
+            IccCardProxy.this.mCi.iccExchangeAPDU(cla, 242, 0, 0, 0, 0, null, obtainMessage(2, result));
+        }
+
+        private void getOpenLogicalChannel(LookForVacantChannel result) {
+            IccCardProxy.this.mUiccApplication.openLogicalChannel(result.getAID(), obtainMessage(3, result));
+        }
+
+        private void sendSuccessMessage(Message message, AsyncResult ar) {
+            ar.userObj = message.obj;
+            message.obj = ar;
+            message.sendToTarget();
+        }
+
+        private void sendNonVacantChannelMessage(Message message) {
+            AsyncResult.forMessage(message, new int[]{0}, new CommandException(CommandException.Error.MISSING_RESOURCE));
+            message.sendToTarget();
+        }
+
+        private void sendFailureMessage(Message message, Throwable throwable) {
+            AsyncResult.forMessage(message, new int[]{0}, throwable);
+            message.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.IccCard
+    public void setPinPukRetryCount(int isPinPuk, int RetryCount) {
         synchronized (this.mLock) {
             if (this.mUiccCard == null) {
                 loge("Error in set pin puk retry count with mUiccCard is null");
-                return;
-            }
-            this.mUiccCard.setPinPukRetryCount(i, i2);
-        }
-    }
-
-    public void setVoiceRadioTech(int i) {
-        synchronized (this.mLock) {
-            log("Setting radio tech " + ServiceState.rilRadioTechnologyToString(i));
-            if (ServiceState.isGsm(i)) {
-                this.mCurrentAppType = 1;
             } else {
-                this.mCurrentAppType = 2;
-            }
-            updateQuietMode();
-            updateActiveRecord();
-        }
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void supplyDepersonalization(java.lang.String r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.supplyDepersonalization(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "CommandsInterface is not set.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.supplyDepersonalization(java.lang.String, java.lang.String, android.os.Message):void");
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void supplyPin(java.lang.String r4, android.os.Message r5) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.supplyPin(r4, r5);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r5 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r5);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r5.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.supplyPin(java.lang.String, android.os.Message):void");
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void supplyPin2(java.lang.String r4, android.os.Message r5) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.supplyPin2(r4, r5);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r5 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r5);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r5.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.supplyPin2(java.lang.String, android.os.Message):void");
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void supplyPuk(java.lang.String r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.supplyPuk(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.supplyPuk(java.lang.String, java.lang.String, android.os.Message):void");
-    }
-
-    /* JADX WARNING: Missing block: B:14:?, code skipped:
-            return;
-     */
-    public void supplyPuk2(java.lang.String r4, java.lang.String r5, android.os.Message r6) {
-        /*
-        r3 = this;
-        r1 = r3.mLock;
-        monitor-enter(r1);
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        if (r0 == 0) goto L_0x000e;
-    L_0x0007:
-        r0 = r3.mUiccApplication;	 Catch:{ all -> 0x0022 }
-        r0.supplyPuk2(r4, r5, r6);	 Catch:{ all -> 0x0022 }
-    L_0x000c:
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-    L_0x000d:
-        return;
-    L_0x000e:
-        if (r6 == 0) goto L_0x000c;
-    L_0x0010:
-        r0 = new java.lang.RuntimeException;	 Catch:{ all -> 0x0022 }
-        r2 = "ICC card is absent.";
-        r0.<init>(r2);	 Catch:{ all -> 0x0022 }
-        r2 = android.os.AsyncResult.forMessage(r6);	 Catch:{ all -> 0x0022 }
-        r2.exception = r0;	 Catch:{ all -> 0x0022 }
-        r6.sendToTarget();	 Catch:{ all -> 0x0022 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        goto L_0x000d;
-    L_0x0022:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0022 }
-        throw r0;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.uicc.IccCardProxy.supplyPuk2(java.lang.String, java.lang.String, android.os.Message):void");
-    }
-
-    public void unregisterForAbsent(Handler handler) {
-        synchronized (this.mLock) {
-            this.mAbsentRegistrants.remove(handler);
-        }
-    }
-
-    public void unregisterForLocked(Handler handler) {
-        synchronized (this.mLock) {
-            this.mPinLockedRegistrants.remove(handler);
-        }
-    }
-
-    public void unregisterForPersoLocked(Handler handler) {
-        synchronized (this.mLock) {
-            this.mPersoLockedRegistrants.remove(handler);
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void updateExternalStateSharp() {
-        if (this.mUiccCard != null) {
-            if (this.mUiccCard.getCardState() == CardState.CARDSTATE_ERROR) {
-                setExternalStateSharp(State.CARD_IO_ERROR);
-            } else if (this.mUiccCard.getCardState() == CardState.CARDSTATE_ABSENT) {
-                if (1 == SystemProperties.getInt(SIM_ABSENT_CHECK, 0)) {
-                    setExternalStateSharp(State.ABSENT);
-                } else {
-                    Rlog.d(LOG_TAG, "updateExternalStateSharp: waiting for the actual SIM state...");
-                }
-            } else if (this.mUiccApplication == null) {
-                setExternalStateSharp(State.UNKNOWN);
-            } else if (this.mUiccApplication.getPin1State() == PinState.PINSTATE_ENABLED_PERM_BLOCKED) {
-                setExternalStateSharp(State.FOREVER);
-            } else {
-                switch (this.mUiccApplication.getState()) {
-                    case APPSTATE_UNKNOWN:
-                    case APPSTATE_DETECTED:
-                        setExternalStateSharp(State.UNKNOWN);
-                        return;
-                    case APPSTATE_PIN:
-                        setExternalStateSharp(State.PIN_REQUIRED);
-                        return;
-                    case APPSTATE_PUK:
-                        setExternalStateSharp(State.PUK_REQUIRED);
-                        return;
-                    case APPSTATE_SUBSCRIPTION_PERSO:
-                        if (this.mUiccApplication.isPersoLocked()) {
-                            setExternalStateSharp(State.SIM_NETWORK_SUBSET_LOCKED);
-                            return;
-                        } else {
-                            setExternalStateSharp(State.UNKNOWN);
-                            return;
-                        }
-                    case APPSTATE_READY:
-                        setExternalStateSharp(State.READY);
-                        return;
-                    default:
-                        return;
-                }
+                this.mUiccCard.setPinPukRetryCount(isPinPuk, RetryCount);
             }
         }
     }

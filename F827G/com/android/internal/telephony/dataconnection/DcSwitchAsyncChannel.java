@@ -5,6 +5,7 @@ import android.os.Message;
 import android.telephony.Rlog;
 import com.android.internal.util.AsyncChannel;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DcSwitchAsyncChannel extends AsyncChannel {
     private static final int BASE = 278528;
     private static final int CMD_TO_STRING_COUNT = 12;
@@ -25,22 +26,7 @@ public class DcSwitchAsyncChannel extends AsyncChannel {
     private static final boolean VDBG = false;
     private static String[] sCmdToString = new String[12];
     private DcSwitchStateMachine mDcSwitchState;
-    private int tagId = 0;
-
-    public static class RequestInfo {
-        boolean executed;
-        int priority;
-        NetworkRequest request;
-
-        public RequestInfo(NetworkRequest networkRequest, int i) {
-            this.request = networkRequest;
-            this.priority = i;
-        }
-
-        public String toString() {
-            return "[ request=" + this.request + ", executed=" + this.executed + ", priority=" + this.priority + "]";
-        }
-    }
+    private int tagId;
 
     static {
         sCmdToString[0] = "REQ_CONNECT";
@@ -57,90 +43,79 @@ public class DcSwitchAsyncChannel extends AsyncChannel {
         sCmdToString[11] = "EVENT_DATA_DETACHED";
     }
 
-    public DcSwitchAsyncChannel(DcSwitchStateMachine dcSwitchStateMachine, int i) {
-        this.mDcSwitchState = dcSwitchStateMachine;
-        this.tagId = i;
-    }
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class RequestInfo {
+        boolean executed;
+        int priority;
+        NetworkRequest request;
 
-    protected static String cmdToString(int i) {
-        int i2 = i - 278528;
-        return (i2 < 0 || i2 >= sCmdToString.length) ? AsyncChannel.cmdToString(i2 + 278528) : sCmdToString[i2];
-    }
-
-    private void log(String str) {
-        Rlog.d(LOG_TAG, "[DcSwitchAsyncChannel-" + this.tagId + "]: " + str);
-    }
-
-    private int rspConnect(Message message) {
-        int i = message.arg1;
-        log("rspConnect=" + i);
-        return i;
-    }
-
-    private int rspDisconnect(Message message) {
-        int i = message.arg1;
-        log("rspDisconnect=" + i);
-        return i;
-    }
-
-    private int rspDisconnectAll(Message message) {
-        int i = message.arg1;
-        log("rspDisconnectAll=" + i);
-        return i;
-    }
-
-    private boolean rspIsIdle(Message message) {
-        boolean z = true;
-        if (message.arg1 != 1) {
-            z = false;
+        public RequestInfo(NetworkRequest request, int priority) {
+            this.request = request;
+            this.priority = priority;
         }
-        log("rspIsIdle=" + z);
-        return z;
+
+        public String toString() {
+            return "[ request=" + this.request + ", executed=" + this.executed + ", priority=" + this.priority + "]";
+        }
     }
 
-    public int connectSync(RequestInfo requestInfo) {
-        Message sendMessageSynchronously = sendMessageSynchronously(278528, requestInfo);
-        if (sendMessageSynchronously != null && sendMessageSynchronously.what == RSP_CONNECT) {
-            return rspConnect(sendMessageSynchronously);
+    protected static String cmdToString(int cmd) {
+        int cmd2 = cmd - 278528;
+        if (cmd2 < 0 || cmd2 >= sCmdToString.length) {
+            return AsyncChannel.cmdToString(cmd2 + 278528);
         }
-        log("rspConnect error response=" + sendMessageSynchronously);
+        return sCmdToString[cmd2];
+    }
+
+    public DcSwitchAsyncChannel(DcSwitchStateMachine dcSwitchState, int id) {
+        this.tagId = 0;
+        this.mDcSwitchState = dcSwitchState;
+        this.tagId = id;
+    }
+
+    private int rspConnect(Message response) {
+        int retVal = response.arg1;
+        log("rspConnect=" + retVal);
+        return retVal;
+    }
+
+    public int connectSync(RequestInfo apnRequest) {
+        Message response = sendMessageSynchronously(278528, apnRequest);
+        if (response != null && response.what == RSP_CONNECT) {
+            return rspConnect(response);
+        }
+        log("rspConnect error response=" + response);
         return 3;
+    }
+
+    private int rspDisconnect(Message response) {
+        int retVal = response.arg1;
+        log("rspDisconnect=" + retVal);
+        return retVal;
+    }
+
+    public int disconnectSync(RequestInfo apnRequest) {
+        Message response = sendMessageSynchronously(REQ_DISCONNECT, apnRequest);
+        if (response != null && response.what == RSP_DISCONNECT) {
+            return rspDisconnect(response);
+        }
+        log("rspDisconnect error response=" + response);
+        return 3;
+    }
+
+    private int rspDisconnectAll(Message response) {
+        int retVal = response.arg1;
+        log("rspDisconnectAll=" + retVal);
+        return retVal;
     }
 
     public int disconnectAllSync() {
-        Message sendMessageSynchronously = sendMessageSynchronously(REQ_DISCONNECT_ALL);
-        if (sendMessageSynchronously != null && sendMessageSynchronously.what == RSP_DISCONNECT_ALL) {
-            return rspDisconnectAll(sendMessageSynchronously);
+        Message response = sendMessageSynchronously(REQ_DISCONNECT_ALL);
+        if (response != null && response.what == RSP_DISCONNECT_ALL) {
+            return rspDisconnectAll(response);
         }
-        log("rspDisconnectAll error response=" + sendMessageSynchronously);
+        log("rspDisconnectAll error response=" + response);
         return 3;
-    }
-
-    public int disconnectSync(RequestInfo requestInfo) {
-        Message sendMessageSynchronously = sendMessageSynchronously(REQ_DISCONNECT, requestInfo);
-        if (sendMessageSynchronously != null && sendMessageSynchronously.what == RSP_DISCONNECT) {
-            return rspDisconnect(sendMessageSynchronously);
-        }
-        log("rspDisconnect error response=" + sendMessageSynchronously);
-        return 3;
-    }
-
-    public boolean isIdleOrDetachingSync() {
-        Message sendMessageSynchronously = sendMessageSynchronously(REQ_IS_IDLE_OR_DETACHING_STATE);
-        if (sendMessageSynchronously != null && sendMessageSynchronously.what == RSP_IS_IDLE_OR_DETACHING_STATE) {
-            return rspIsIdleOrDetaching(sendMessageSynchronously);
-        }
-        log("rspIsIdleOrDetaching error response=" + sendMessageSynchronously);
-        return false;
-    }
-
-    public boolean isIdleSync() {
-        Message sendMessageSynchronously = sendMessageSynchronously(REQ_IS_IDLE_STATE);
-        if (sendMessageSynchronously != null && sendMessageSynchronously.what == RSP_IS_IDLE_STATE) {
-            return rspIsIdle(sendMessageSynchronously);
-        }
-        log("rspIsIndle error response=" + sendMessageSynchronously);
-        return false;
     }
 
     public void notifyDataAttached() {
@@ -153,21 +128,52 @@ public class DcSwitchAsyncChannel extends AsyncChannel {
         log("EVENT_DATA_DETACHED");
     }
 
+    private boolean rspIsIdle(Message response) {
+        boolean retVal = true;
+        if (response.arg1 != 1) {
+            retVal = false;
+        }
+        log("rspIsIdle=" + retVal);
+        return retVal;
+    }
+
+    public boolean isIdleSync() {
+        Message response = sendMessageSynchronously(REQ_IS_IDLE_STATE);
+        if (response != null && response.what == RSP_IS_IDLE_STATE) {
+            return rspIsIdle(response);
+        }
+        log("rspIsIndle error response=" + response);
+        return false;
+    }
+
     public void reqIsIdleOrDetaching() {
         sendMessage(REQ_IS_IDLE_OR_DETACHING_STATE);
         log("reqIsIdleOrDetaching");
     }
 
-    public boolean rspIsIdleOrDetaching(Message message) {
-        boolean z = true;
-        if (message.arg1 != 1) {
-            z = false;
+    public boolean rspIsIdleOrDetaching(Message response) {
+        boolean retVal = true;
+        if (response.arg1 != 1) {
+            retVal = false;
         }
-        log("rspIsIdleOrDetaching=" + z);
-        return z;
+        log("rspIsIdleOrDetaching=" + retVal);
+        return retVal;
+    }
+
+    public boolean isIdleOrDetachingSync() {
+        Message response = sendMessageSynchronously(REQ_IS_IDLE_OR_DETACHING_STATE);
+        if (response != null && response.what == RSP_IS_IDLE_OR_DETACHING_STATE) {
+            return rspIsIdleOrDetaching(response);
+        }
+        log("rspIsIdleOrDetaching error response=" + response);
+        return false;
     }
 
     public String toString() {
         return this.mDcSwitchState.getName();
+    }
+
+    private void log(String s) {
+        Rlog.d(LOG_TAG, "[DcSwitchAsyncChannel-" + this.tagId + "]: " + s);
     }
 }

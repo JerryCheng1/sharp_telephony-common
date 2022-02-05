@@ -1,5 +1,6 @@
 package com.android.internal.telephony.uicc;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class IccCardStatus {
     public static final int CARD_MAX_APPS = 8;
     public IccCardApplicationStatus[] mApplications;
@@ -9,6 +10,7 @@ public class IccCardStatus {
     public int mImsSubscriptionAppIndex;
     public PinState mUniversalPinState;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum CardState {
         CARDSTATE_ABSENT,
         CARDSTATE_PRESENT,
@@ -19,6 +21,7 @@ public class IccCardStatus {
         }
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum PinState {
         PINSTATE_UNKNOWN,
         PINSTATE_ENABLED_NOT_VERIFIED,
@@ -27,24 +30,21 @@ public class IccCardStatus {
         PINSTATE_ENABLED_BLOCKED,
         PINSTATE_ENABLED_PERM_BLOCKED;
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean isPermBlocked() {
+        boolean isPermBlocked() {
             return this == PINSTATE_ENABLED_PERM_BLOCKED;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean isPinRequired() {
+        boolean isPinRequired() {
             return this == PINSTATE_ENABLED_NOT_VERIFIED;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean isPukRequired() {
+        boolean isPukRequired() {
             return this == PINSTATE_ENABLED_BLOCKED;
         }
     }
 
-    public void setCardState(int i) {
-        switch (i) {
+    public void setCardState(int state) {
+        switch (state) {
             case 0:
                 this.mCardState = CardState.CARDSTATE_ABSENT;
                 return;
@@ -55,12 +55,12 @@ public class IccCardStatus {
                 this.mCardState = CardState.CARDSTATE_ERROR;
                 return;
             default:
-                throw new RuntimeException("Unrecognized RIL_CardState: " + i);
+                throw new RuntimeException("Unrecognized RIL_CardState: " + state);
         }
     }
 
-    public void setUniversalPinState(int i) {
-        switch (i) {
+    public void setUniversalPinState(int state) {
+        switch (state) {
             case 0:
                 this.mUniversalPinState = PinState.PINSTATE_UNKNOWN;
                 return;
@@ -80,38 +80,37 @@ public class IccCardStatus {
                 this.mUniversalPinState = PinState.PINSTATE_ENABLED_PERM_BLOCKED;
                 return;
             default:
-                throw new RuntimeException("Unrecognized RIL_PinState: " + i);
+                throw new RuntimeException("Unrecognized RIL_PinState: " + state);
         }
     }
 
     public String toString() {
-        Object obj;
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("IccCardState {").append(this.mCardState).append(",").append(this.mUniversalPinState).append(",num_apps=").append(this.mApplications.length).append(",gsm_id=").append(this.mGsmUmtsSubscriptionAppIndex);
+        StringBuilder sb = new StringBuilder();
+        sb.append("IccCardState {").append(this.mCardState).append(",").append(this.mUniversalPinState).append(",num_apps=").append(this.mApplications.length).append(",gsm_id=").append(this.mGsmUmtsSubscriptionAppIndex);
         if (this.mGsmUmtsSubscriptionAppIndex >= 0 && this.mGsmUmtsSubscriptionAppIndex < 8) {
-            obj = this.mApplications[this.mGsmUmtsSubscriptionAppIndex];
+            Object obj = this.mApplications[this.mGsmUmtsSubscriptionAppIndex];
             if (obj == null) {
                 obj = "null";
             }
-            stringBuilder.append(obj);
+            sb.append(obj);
         }
-        stringBuilder.append(",cdma_id=").append(this.mCdmaSubscriptionAppIndex);
+        sb.append(",cdma_id=").append(this.mCdmaSubscriptionAppIndex);
         if (this.mCdmaSubscriptionAppIndex >= 0 && this.mCdmaSubscriptionAppIndex < 8) {
-            obj = this.mApplications[this.mCdmaSubscriptionAppIndex];
-            if (obj == null) {
-                obj = "null";
+            Object obj2 = this.mApplications[this.mCdmaSubscriptionAppIndex];
+            if (obj2 == null) {
+                obj2 = "null";
             }
-            stringBuilder.append(obj);
+            sb.append(obj2);
         }
-        stringBuilder.append(",ims_id=").append(this.mImsSubscriptionAppIndex);
+        sb.append(",ims_id=").append(this.mImsSubscriptionAppIndex);
         if (this.mImsSubscriptionAppIndex >= 0 && this.mImsSubscriptionAppIndex < 8) {
-            obj = this.mApplications[this.mImsSubscriptionAppIndex];
-            if (obj == null) {
-                obj = "null";
+            Object obj3 = this.mApplications[this.mImsSubscriptionAppIndex];
+            if (obj3 == null) {
+                obj3 = "null";
             }
-            stringBuilder.append(obj);
+            sb.append(obj3);
         }
-        stringBuilder.append("}");
-        return stringBuilder.toString();
+        sb.append("}");
+        return sb.toString();
     }
 }

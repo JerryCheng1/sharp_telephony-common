@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ApnSetting {
     static final String V2_FORMAT_REGEX = "^\\[ApnSettingV2\\]\\s*";
     static final String V3_FORMAT_REGEX = "^\\[ApnSettingV3\\]\\s*";
@@ -36,6 +37,7 @@ public class ApnSetting {
     public final String user;
     public final int waitTime;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum ApnProfileType {
         PROFILE_TYPE_APN(0),
         PROFILE_TYPE_CDMA(1),
@@ -43,7 +45,7 @@ public class ApnSetting {
         
         int id;
 
-        private ApnProfileType(int i) {
+        ApnProfileType(int i) {
             this.id = i;
         }
 
@@ -52,315 +54,175 @@ public class ApnSetting {
         }
     }
 
-    public ApnSetting(int i, String str, String str2, String str3, String str4, String str5, String str6, String str7, String str8, String str9, String str10, int i2, String[] strArr, String str11, String str12, boolean z, int i3, int i4, boolean z2, int i5, int i6, int i7, int i8, String str13, String str14) {
-        this.id = i;
-        this.numeric = str;
-        this.carrier = str2;
-        this.apn = str3;
-        this.proxy = str4;
-        this.port = str5;
-        this.mmsc = str6;
-        this.mmsProxy = str7;
-        this.mmsPort = str8;
-        this.user = str9;
-        this.password = str10;
-        this.authType = i2;
-        this.types = new String[strArr.length];
-        for (int i9 = 0; i9 < strArr.length; i9++) {
-            this.types[i9] = strArr[i9].toLowerCase(Locale.ROOT);
+    public ApnSetting(int id, String numeric, String carrier, String apn, String proxy, String port, String mmsc, String mmsProxy, String mmsPort, String user, String password, int authType, String[] types, String protocol, String roamingProtocol, boolean carrierEnabled, int bearer, int profileId, boolean modemCognitive, int maxConns, int waitTime, int maxConnsTime, int mtu, String mvnoType, String mvnoMatchData) {
+        this.id = id;
+        this.numeric = numeric;
+        this.carrier = carrier;
+        this.apn = apn;
+        this.proxy = proxy;
+        this.port = port;
+        this.mmsc = mmsc;
+        this.mmsProxy = mmsProxy;
+        this.mmsPort = mmsPort;
+        this.user = user;
+        this.password = password;
+        this.authType = authType;
+        this.types = new String[types.length];
+        for (int i = 0; i < types.length; i++) {
+            this.types[i] = types[i].toLowerCase(Locale.ROOT);
         }
-        this.protocol = str11;
-        this.roamingProtocol = str12;
-        this.carrierEnabled = z;
-        this.bearer = i3;
-        this.profileId = i4;
-        this.modemCognitive = z2;
-        this.maxConns = i5;
-        this.waitTime = i6;
-        this.maxConnsTime = i7;
-        this.mtu = i8;
-        this.mvnoType = str13;
-        this.mvnoMatchData = str14;
+        this.protocol = protocol;
+        this.roamingProtocol = roamingProtocol;
+        this.carrierEnabled = carrierEnabled;
+        this.bearer = bearer;
+        this.profileId = profileId;
+        this.modemCognitive = modemCognitive;
+        this.maxConns = maxConns;
+        this.waitTime = waitTime;
+        this.maxConnsTime = maxConnsTime;
+        this.mtu = mtu;
+        this.mvnoType = mvnoType;
+        this.mvnoMatchData = mvnoMatchData;
     }
 
-    public static List<ApnSetting> arrayFromString(String str) {
-        ArrayList arrayList = new ArrayList();
-        if (!TextUtils.isEmpty(str)) {
-            for (String fromString : str.split("\\s*;\\s*")) {
-                ApnSetting fromString2 = fromString(fromString);
-                if (fromString2 != null) {
-                    arrayList.add(fromString2);
+    public static ApnSetting fromString(String data) {
+        int version;
+        int authType;
+        String[] typeArray;
+        String protocol;
+        String roamingProtocol;
+        boolean carrierEnabled;
+        if (data == null) {
+            return null;
+        }
+        if (data.matches("^\\[ApnSettingV3\\]\\s*.*")) {
+            version = 3;
+            data = data.replaceFirst(V3_FORMAT_REGEX, "");
+        } else if (data.matches("^\\[ApnSettingV2\\]\\s*.*")) {
+            version = 2;
+            data = data.replaceFirst(V2_FORMAT_REGEX, "");
+        } else {
+            version = 1;
+        }
+        String[] a = data.split("\\s*,\\s*");
+        if (a.length < 14) {
+            return null;
+        }
+        try {
+            authType = Integer.parseInt(a[12]);
+        } catch (NumberFormatException e) {
+            authType = 0;
+        }
+        int bearer = 0;
+        int profileId = 0;
+        boolean modemCognitive = false;
+        int maxConns = 0;
+        int waitTime = 0;
+        int maxConnsTime = 0;
+        int mtu = 0;
+        String mvnoType = "";
+        String mvnoMatchData = "";
+        if (version == 1) {
+            typeArray = new String[a.length - 13];
+            System.arraycopy(a, 13, typeArray, 0, a.length - 13);
+            protocol = "IP";
+            roamingProtocol = "IP";
+            carrierEnabled = true;
+            bearer = 0;
+        } else if (a.length < 18) {
+            return null;
+        } else {
+            typeArray = a[13].split("\\s*\\|\\s*");
+            protocol = a[14];
+            roamingProtocol = a[15];
+            carrierEnabled = Boolean.parseBoolean(a[16]);
+            try {
+                bearer = Integer.parseInt(a[17]);
+            } catch (NumberFormatException e2) {
+            }
+            if (a.length > 22) {
+                modemCognitive = Boolean.parseBoolean(a[19]);
+                try {
+                    profileId = Integer.parseInt(a[18]);
+                    maxConns = Integer.parseInt(a[20]);
+                    waitTime = Integer.parseInt(a[21]);
+                    maxConnsTime = Integer.parseInt(a[22]);
+                } catch (NumberFormatException e3) {
+                }
+            }
+            if (a.length > 23) {
+                try {
+                    mtu = Integer.parseInt(a[23]);
+                } catch (NumberFormatException e4) {
+                }
+            }
+            if (a.length > 25) {
+                mvnoType = a[24];
+                mvnoMatchData = a[25];
+            }
+        }
+        return new ApnSetting(-1, a[10] + a[11], a[0], a[1], a[2], a[3], a[7], a[8], a[9], a[4], a[5], authType, typeArray, protocol, roamingProtocol, carrierEnabled, bearer, profileId, modemCognitive, maxConns, waitTime, maxConnsTime, mtu, mvnoType, mvnoMatchData);
+    }
+
+    public static List<ApnSetting> arrayFromString(String data) {
+        List<ApnSetting> retVal = new ArrayList<>();
+        if (!TextUtils.isEmpty(data)) {
+            for (String apnString : data.split("\\s*;\\s*")) {
+                ApnSetting apn = fromString(apnString);
+                if (apn != null) {
+                    retVal.add(apn);
                 }
             }
         }
-        return arrayList;
+        return retVal;
     }
 
-    /* JADX WARNING: Removed duplicated region for block: B:64:0x0168  */
-    /* JADX WARNING: Removed duplicated region for block: B:44:0x011d  */
-    /* JADX WARNING: Removed duplicated region for block: B:63:0x0158  */
-    /* JADX WARNING: Removed duplicated region for block: B:49:0x012a  */
-    /* JADX WARNING: Removed duplicated region for block: B:44:0x011d  */
-    /* JADX WARNING: Removed duplicated region for block: B:64:0x0168  */
-    /* JADX WARNING: Removed duplicated region for block: B:49:0x012a  */
-    /* JADX WARNING: Removed duplicated region for block: B:63:0x0158  */
-    /* JADX WARNING: Removed duplicated region for block: B:64:0x0168  */
-    /* JADX WARNING: Removed duplicated region for block: B:44:0x011d  */
-    /* JADX WARNING: Removed duplicated region for block: B:63:0x0158  */
-    /* JADX WARNING: Removed duplicated region for block: B:49:0x012a  */
-    /* JADX WARNING: Removed duplicated region for block: B:44:0x011d  */
-    /* JADX WARNING: Removed duplicated region for block: B:64:0x0168  */
-    /* JADX WARNING: Removed duplicated region for block: B:49:0x012a  */
-    /* JADX WARNING: Removed duplicated region for block: B:63:0x0158  */
-    public static com.android.internal.telephony.dataconnection.ApnSetting fromString(java.lang.String r28) {
-        /*
-        if (r28 != 0) goto L_0x0004;
-    L_0x0002:
-        r1 = 0;
-    L_0x0003:
-        return r1;
-    L_0x0004:
-        r1 = "^\\[ApnSettingV3\\]\\s*.*";
-        r0 = r28;
-        r1 = r0.matches(r1);
-        if (r1 == 0) goto L_0x0028;
-    L_0x000e:
-        r1 = 3;
-        r2 = "^\\[ApnSettingV3\\]\\s*";
-        r3 = "";
-        r0 = r28;
-        r28 = r0.replaceFirst(r2, r3);
-    L_0x0019:
-        r2 = "\\s*,\\s*";
-        r0 = r28;
-        r12 = r0.split(r2);
-        r2 = r12.length;
-        r3 = 14;
-        if (r2 >= r3) goto L_0x0040;
-    L_0x0026:
-        r1 = 0;
-        goto L_0x0003;
-    L_0x0028:
-        r1 = "^\\[ApnSettingV2\\]\\s*.*";
-        r0 = r28;
-        r1 = r0.matches(r1);
-        if (r1 == 0) goto L_0x003e;
-    L_0x0032:
-        r1 = 2;
-        r2 = "^\\[ApnSettingV2\\]\\s*";
-        r3 = "";
-        r0 = r28;
-        r28 = r0.replaceFirst(r2, r3);
-        goto L_0x0019;
-    L_0x003e:
-        r1 = 1;
-        goto L_0x0019;
-    L_0x0040:
-        r2 = 12;
-        r2 = r12[r2];	 Catch:{ NumberFormatException -> 0x00bb }
-        r13 = java.lang.Integer.parseInt(r2);	 Catch:{ NumberFormatException -> 0x00bb }
-    L_0x0048:
-        r2 = 0;
-        r7 = 0;
-        r11 = 0;
-        r19 = 0;
-        r3 = 0;
-        r20 = 0;
-        r6 = 0;
-        r10 = 0;
-        r21 = 0;
-        r5 = 0;
-        r9 = 0;
-        r22 = 0;
-        r4 = 0;
-        r23 = 0;
-        r8 = 0;
-        r24 = 0;
-        r25 = "";
-        r26 = "";
-        r14 = 1;
-        if (r1 != r14) goto L_0x00be;
-    L_0x0065:
-        r1 = r12.length;
-        r1 = r1 + -13;
-        r14 = new java.lang.String[r1];
-        r1 = 13;
-        r2 = 0;
-        r3 = r12.length;
-        r3 = r3 + -13;
-        java.lang.System.arraycopy(r12, r1, r14, r2, r3);
-        r15 = "IP";
-        r16 = "IP";
-        r17 = 1;
-        r1 = 0;
-        r18 = r1;
-    L_0x007c:
-        r1 = new com.android.internal.telephony.dataconnection.ApnSetting;
-        r2 = -1;
-        r3 = new java.lang.StringBuilder;
-        r3.<init>();
-        r4 = 10;
-        r4 = r12[r4];
-        r3 = r3.append(r4);
-        r4 = 11;
-        r4 = r12[r4];
-        r3 = r3.append(r4);
-        r3 = r3.toString();
-        r4 = 0;
-        r4 = r12[r4];
-        r5 = 1;
-        r5 = r12[r5];
-        r6 = 2;
-        r6 = r12[r6];
-        r7 = 3;
-        r7 = r12[r7];
-        r8 = 7;
-        r8 = r12[r8];
-        r9 = 8;
-        r9 = r12[r9];
-        r10 = 9;
-        r10 = r12[r10];
-        r11 = 4;
-        r11 = r12[r11];
-        r27 = 5;
-        r12 = r12[r27];
-        r1.<init>(r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26);
-        goto L_0x0003;
-    L_0x00bb:
-        r2 = move-exception;
-        r13 = 0;
-        goto L_0x0048;
-    L_0x00be:
-        r1 = r12.length;
-        r14 = 18;
-        if (r1 >= r14) goto L_0x00c6;
-    L_0x00c3:
-        r1 = 0;
-        goto L_0x0003;
-    L_0x00c6:
-        r1 = 13;
-        r1 = r12[r1];
-        r14 = "\\s*\\|\\s*";
-        r14 = r1.split(r14);
-        r1 = 14;
-        r15 = r12[r1];
-        r1 = 15;
-        r16 = r12[r1];
-        r1 = 16;
-        r1 = r12[r1];
-        r17 = java.lang.Boolean.parseBoolean(r1);
-        r1 = 17;
-        r1 = r12[r1];	 Catch:{ NumberFormatException -> 0x014b }
-        r1 = java.lang.Integer.parseInt(r1);	 Catch:{ NumberFormatException -> 0x014b }
-    L_0x00e8:
-        r2 = r12.length;
-        r18 = 22;
-        r0 = r18;
-        if (r2 <= r0) goto L_0x016a;
-    L_0x00ef:
-        r2 = 19;
-        r2 = r12[r2];
-        r2 = java.lang.Boolean.parseBoolean(r2);
-        r3 = 18;
-        r3 = r12[r3];	 Catch:{ NumberFormatException -> 0x0145 }
-        r7 = java.lang.Integer.parseInt(r3);	 Catch:{ NumberFormatException -> 0x0145 }
-        r3 = 20;
-        r3 = r12[r3];	 Catch:{ NumberFormatException -> 0x014e }
-        r6 = java.lang.Integer.parseInt(r3);	 Catch:{ NumberFormatException -> 0x014e }
-        r3 = 21;
-        r3 = r12[r3];	 Catch:{ NumberFormatException -> 0x0152 }
-        r5 = java.lang.Integer.parseInt(r3);	 Catch:{ NumberFormatException -> 0x0152 }
-        r3 = 22;
-        r3 = r12[r3];	 Catch:{ NumberFormatException -> 0x0155 }
-        r3 = java.lang.Integer.parseInt(r3);	 Catch:{ NumberFormatException -> 0x0155 }
-        r4 = r3;
-    L_0x0118:
-        r3 = r12.length;
-        r9 = 23;
-        if (r3 <= r9) goto L_0x0168;
-    L_0x011d:
-        r3 = 23;
-        r3 = r12[r3];	 Catch:{ NumberFormatException -> 0x0142 }
-        r3 = java.lang.Integer.parseInt(r3);	 Catch:{ NumberFormatException -> 0x0142 }
-    L_0x0125:
-        r8 = r12.length;
-        r9 = 25;
-        if (r8 <= r9) goto L_0x0158;
-    L_0x012a:
-        r8 = 24;
-        r25 = r12[r8];
-        r8 = 25;
-        r26 = r12[r8];
-        r20 = r2;
-        r18 = r1;
-        r19 = r7;
-        r21 = r6;
-        r22 = r5;
-        r23 = r4;
-        r24 = r3;
-        goto L_0x007c;
-    L_0x0142:
-        r3 = move-exception;
-        r3 = r8;
-        goto L_0x0125;
-    L_0x0145:
-        r3 = move-exception;
-        r3 = r9;
-        r6 = r10;
-        r7 = r11;
-    L_0x0149:
-        r5 = r3;
-        goto L_0x0118;
-    L_0x014b:
-        r1 = move-exception;
-        r1 = r2;
-        goto L_0x00e8;
-    L_0x014e:
-        r3 = move-exception;
-        r3 = r9;
-        r6 = r10;
-        goto L_0x0149;
-    L_0x0152:
-        r3 = move-exception;
-        r3 = r9;
-        goto L_0x0149;
-    L_0x0155:
-        r3 = move-exception;
-        r3 = r5;
-        goto L_0x0149;
-    L_0x0158:
-        r20 = r2;
-        r18 = r1;
-        r19 = r7;
-        r21 = r6;
-        r22 = r5;
-        r23 = r4;
-        r24 = r3;
-        goto L_0x007c;
-    L_0x0168:
-        r3 = r8;
-        goto L_0x0125;
-    L_0x016a:
-        r2 = r3;
-        goto L_0x0118;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.dataconnection.ApnSetting.fromString(java.lang.String):com.android.internal.telephony.dataconnection.ApnSetting");
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ApnSettingV3] ").append(this.carrier).append(", ").append(this.id).append(", ").append(this.numeric).append(", ").append(this.apn).append(", ").append(this.proxy).append(", ").append(this.mmsc).append(", ").append(this.mmsProxy).append(", ").append(this.mmsPort).append(", ").append(this.port).append(", ").append(this.authType).append(", ");
+        for (int i = 0; i < this.types.length; i++) {
+            sb.append(this.types[i]);
+            if (i < this.types.length - 1) {
+                sb.append(" | ");
+            }
+        }
+        sb.append(", ").append(this.protocol);
+        sb.append(", ").append(this.roamingProtocol);
+        sb.append(", ").append(this.carrierEnabled);
+        sb.append(", ").append(this.bearer);
+        sb.append(", ").append(this.profileId);
+        sb.append(", ").append(this.modemCognitive);
+        sb.append(", ").append(this.maxConns);
+        sb.append(", ").append(this.waitTime);
+        sb.append(", ").append(this.maxConnsTime);
+        sb.append(", ").append(this.mtu);
+        sb.append(", ").append(this.mvnoType);
+        sb.append(", ").append(this.mvnoMatchData);
+        return sb.toString();
     }
 
-    public boolean canHandleType(String str) {
+    public boolean hasMvnoParams() {
+        return !TextUtils.isEmpty(this.mvnoType) && !TextUtils.isEmpty(this.mvnoMatchData);
+    }
+
+    public boolean canHandleType(String type) {
         if (!this.carrierEnabled) {
             return false;
         }
-        for (String str2 : this.types) {
-            if (str2.equalsIgnoreCase(str) || str2.equalsIgnoreCase(CharacterSets.MIMENAME_ANY_CHARSET) || (str2.equalsIgnoreCase("default") && str.equalsIgnoreCase("hipri"))) {
+        String[] arr$ = this.types;
+        for (String t : arr$) {
+            if (t.equalsIgnoreCase(type) || t.equalsIgnoreCase(CharacterSets.MIMENAME_ANY_CHARSET) || (t.equalsIgnoreCase("default") && type.equalsIgnoreCase("hipri"))) {
                 return true;
             }
         }
         return false;
     }
 
-    public boolean equals(Object obj) {
-        return !(obj instanceof ApnSetting) ? false : toString().equals(obj.toString());
+    public boolean equals(Object o) {
+        if (!(o instanceof ApnSetting)) {
+            return false;
+        }
+        return toString().equals(o.toString());
     }
 
     public ApnProfileType getApnProfileType() {
@@ -371,39 +233,11 @@ public class ApnSetting {
         return this.profileId;
     }
 
-    public boolean hasMvnoParams() {
-        return (TextUtils.isEmpty(this.mvnoType) || TextUtils.isEmpty(this.mvnoMatchData)) ? false : true;
-    }
-
-    public String toHash() {
-        return toString();
-    }
-
     public String toShortString() {
         return "ApnSetting";
     }
 
-    public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("[ApnSettingV3] ").append(this.carrier).append(", ").append(this.id).append(", ").append(this.numeric).append(", ").append(this.apn).append(", ").append(this.proxy).append(", ").append(this.mmsc).append(", ").append(this.mmsProxy).append(", ").append(this.mmsPort).append(", ").append(this.port).append(", ").append(this.authType).append(", ");
-        for (int i = 0; i < this.types.length; i++) {
-            stringBuilder.append(this.types[i]);
-            if (i < this.types.length - 1) {
-                stringBuilder.append(" | ");
-            }
-        }
-        stringBuilder.append(", ").append(this.protocol);
-        stringBuilder.append(", ").append(this.roamingProtocol);
-        stringBuilder.append(", ").append(this.carrierEnabled);
-        stringBuilder.append(", ").append(this.bearer);
-        stringBuilder.append(", ").append(this.profileId);
-        stringBuilder.append(", ").append(this.modemCognitive);
-        stringBuilder.append(", ").append(this.maxConns);
-        stringBuilder.append(", ").append(this.waitTime);
-        stringBuilder.append(", ").append(this.maxConnsTime);
-        stringBuilder.append(", ").append(this.mtu);
-        stringBuilder.append(", ").append(this.mvnoType);
-        stringBuilder.append(", ").append(this.mvnoMatchData);
-        return stringBuilder.toString();
+    public String toHash() {
+        return toString();
     }
 }

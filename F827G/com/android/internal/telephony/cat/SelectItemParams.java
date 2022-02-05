@@ -1,31 +1,44 @@
 package com.android.internal.telephony.cat;
 
 import android.graphics.Bitmap;
+import java.util.Iterator;
 
+/* compiled from: CommandParams.java */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 class SelectItemParams extends CommandParams {
-    boolean mLoadTitleIcon = false;
-    Menu mMenu = null;
+    boolean mLoadTitleIcon;
+    Menu mMenu;
 
-    SelectItemParams(CommandDetails commandDetails, Menu menu, boolean z) {
-        super(commandDetails);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SelectItemParams(CommandDetails cmdDet, Menu menu, boolean loadTitleIcon) {
+        super(cmdDet);
+        this.mMenu = null;
+        this.mLoadTitleIcon = false;
         this.mMenu = menu;
-        this.mLoadTitleIcon = z;
+        this.mLoadTitleIcon = loadTitleIcon;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean setIcon(Bitmap bitmap) {
-        if (bitmap == null || this.mMenu == null) {
+    /* JADX INFO: Access modifiers changed from: package-private */
+    @Override // com.android.internal.telephony.cat.CommandParams
+    public boolean setIcon(Bitmap icon) {
+        if (icon == null || this.mMenu == null) {
             return false;
         }
         if (!this.mLoadTitleIcon || this.mMenu.titleIcon != null) {
-            for (Item item : this.mMenu.items) {
+            Iterator i$ = this.mMenu.items.iterator();
+            while (true) {
+                if (!i$.hasNext()) {
+                    break;
+                }
+                Item item = i$.next();
                 if (item.icon == null) {
-                    item.icon = bitmap;
+                    item.icon = icon;
                     break;
                 }
             }
+        } else {
+            this.mMenu.titleIcon = icon;
         }
-        this.mMenu.titleIcon = bitmap;
         return true;
     }
 }

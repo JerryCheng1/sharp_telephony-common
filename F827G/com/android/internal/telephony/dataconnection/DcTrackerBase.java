@@ -22,36 +22,36 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
-import android.provider.Settings.Global;
-import android.provider.Settings.SettingNotFoundException;
-import android.provider.Settings.System;
+import android.provider.Settings;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
-import android.telephony.SubscriptionManager.OnSubscriptionsChangedListener;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.EventLog;
-import com.android.internal.telephony.DctConstants.Activity;
-import com.android.internal.telephony.DctConstants.State;
+import com.android.internal.telephony.DctConstants;
 import com.android.internal.telephony.EventLogTags;
 import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.PhoneBase;
 import com.android.internal.telephony.PhoneConstants;
-import com.android.internal.telephony.PhoneConstants.DataState;
 import com.android.internal.telephony.PhoneFactory;
 import com.android.internal.telephony.TelBrand;
+import com.android.internal.telephony.cdma.sms.BearerData;
 import com.android.internal.telephony.uicc.IccRecords;
 import com.android.internal.telephony.uicc.UiccController;
 import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.AsyncChannel;
 import com.google.android.mms.pdu.CharacterSets;
+import com.google.android.mms.pdu.PduHeaders;
 import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map.Entry;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -60,6 +60,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import jp.co.sharp.android.internal.telephony.FastDormancy;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class DcTrackerBase extends Handler {
     protected static final String ACTION_DISCONNECT_BT_DUN = "jp.co.sharp.android.dun.action.ACTION_DISCONNECT_BT_DUN";
     protected static final int APN_DELAY_DEFAULT_MILLIS = 20000;
@@ -112,47 +113,85 @@ public abstract class DcTrackerBase extends Handler {
     protected static final String SECONDARY_DATA_RETRY_CONFIG = "max_retries=3, 5000, 5000, 5000";
     protected static final boolean VDBG = false;
     protected static final boolean VDBG_STALL = true;
-    static boolean mIsCleanupRequired = false;
-    protected static int sEnableFailFastRefCounter = 0;
-    protected static boolean sPolicyDataEnabled = true;
-    protected String RADIO_RESET_PROPERTY = "gsm.radioreset";
-    protected boolean SH_DBG = true;
     protected ApnSetting mActiveApn;
-    protected Activity mActivity = Activity.NONE;
     AlarmManager mAlarmManager;
-    protected ArrayList<ApnSetting> mAllApnSettings = new ArrayList();
-    public ApnSetting mApnCarNavi = null;
-    protected final ConcurrentHashMap<String, ApnContext> mApnContexts = new ConcurrentHashMap();
-    protected HashMap<String, Integer> mApnToDataConnectionId = new HashMap();
-    protected boolean mAutoAttachOnCreation = false;
-    protected boolean mAutoAttachOnCreationConfig = false;
+    protected boolean mAutoAttachOnCreation;
     protected int mCidActive;
     ConnectivityManager mCm;
-    protected int mCnt = 0;
-    protected boolean mConnectingApnCarNavi = false;
-    protected HashMap<Integer, DcAsyncChannel> mDataConnectionAcHashMap = new HashMap();
-    protected Handler mDataConnectionTracker = null;
-    protected HashMap<Integer, DataConnection> mDataConnections = new HashMap();
-    private boolean[] mDataEnabled = new boolean[10];
-    protected Object mDataEnabledLock = new Object();
     private DataRoamingSettingObserver mDataRoamingSettingObserver;
-    protected PendingIntent mDataStallAlarmIntent = null;
-    protected int mDataStallAlarmTag = ((int) SystemClock.elapsedRealtime());
-    protected volatile boolean mDataStallDetectionEnabled = true;
-    protected TxRxSum mDataStallTxRxSum = new TxRxSum(0, 0);
     protected DcTesterFailBringUpAll mDcTesterFailBringUpAll;
     protected DcController mDcc;
-    public boolean mDisConnectingApnCarNavi = false;
-    public String[] mDnsAddressCarNavi = new String[2];
-    public String[] mDnsesCarNavi = new String[2];
-    protected ApnSetting mEmergencyApn = null;
-    public boolean mEnableApnCarNavi = false;
+    public String mLocalAddressCarNavi;
+    protected int mNetStatPollPeriod;
+    protected PhoneBase mPhone;
+    protected ContentResolver mResolver;
+    protected long mRxPkts;
+    protected long mSentSinceLastRecv;
+    private SubscriptionManager mSubscriptionManager;
+    protected long mTxPkts;
+    protected boolean mUserDataEnabled;
+    static boolean mIsCleanupRequired = false;
+    protected static boolean sPolicyDataEnabled = true;
+    protected static int sEnableFailFastRefCounter = 0;
+    protected Object mDataEnabledLock = new Object();
+    protected boolean mInternalDataEnabled = true;
+    protected boolean mUserDataEnabledDun = true;
+    private boolean[] mDataEnabled = new boolean[10];
     private int mEnabledCount = 0;
+    protected ApnSetting mOemKddiDunApn = null;
+    protected boolean mConnectingApnCarNavi = false;
+    public String[] mDnsesCarNavi = new String[2];
+    public String[] mDnsAddressCarNavi = new String[2];
+    public ApnSetting mApnCarNavi = null;
+    public boolean mEnableApnCarNavi = false;
+    public boolean mDisConnectingApnCarNavi = false;
+    protected String mRequestedApnType = "default";
+    protected String RADIO_RESET_PROPERTY = "gsm.radioreset";
+    protected AtomicReference<IccRecords> mIccRecords = new AtomicReference<>();
+    protected AtomicReference<IccRecords> mSimRecords = new AtomicReference<>();
+    protected DctConstants.Activity mActivity = DctConstants.Activity.NONE;
+    protected DctConstants.State mState = DctConstants.State.IDLE;
+    protected Handler mDataConnectionTracker = null;
+    protected boolean mNetStatPollEnabled = false;
+    protected TxRxSum mDataStallTxRxSum = new TxRxSum(0, 0);
+    protected int mDataStallAlarmTag = (int) SystemClock.elapsedRealtime();
+    protected PendingIntent mDataStallAlarmIntent = null;
+    protected int mNoRecvPollCount = 0;
+    protected volatile boolean mDataStallDetectionEnabled = true;
     protected volatile boolean mFailFast = false;
-    protected AtomicReference<IccRecords> mIccRecords = new AtomicReference();
     protected boolean mInVoiceCall = false;
-    protected BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
+    protected boolean mIsWifiConnected = false;
+    protected PendingIntent mReconnectIntent = null;
+    protected boolean mAutoAttachOnCreationConfig = false;
+    protected boolean mIsScreenOn = true;
+    protected AtomicInteger mUniqueIdGenerator = new AtomicInteger(0);
+    protected HashMap<Integer, DataConnection> mDataConnections = new HashMap<>();
+    protected HashMap<Integer, DcAsyncChannel> mDataConnectionAcHashMap = new HashMap<>();
+    protected HashMap<String, Integer> mApnToDataConnectionId = new HashMap<>();
+    protected final ConcurrentHashMap<String, ApnContext> mApnContexts = new ConcurrentHashMap<>();
+    protected boolean mIsPhysicalLinkUp = false;
+    protected final PriorityQueue<ApnContext> mPrioritySortedApnContexts = new PriorityQueue<>(5, new Comparator<ApnContext>() { // from class: com.android.internal.telephony.dataconnection.DcTrackerBase.1
+        public int compare(ApnContext c1, ApnContext c2) {
+            return c2.priority - c1.priority;
+        }
+    });
+    protected ArrayList<ApnSetting> mAllApnSettings = new ArrayList<>();
+    protected ApnSetting mPreferredApn = null;
+    protected boolean mIsPsRestricted = false;
+    protected ApnSetting mEmergencyApn = null;
+    protected boolean mIsDisposed = false;
+    protected boolean SH_DBG = true;
+    protected boolean mIsProvisioning = false;
+    protected String mProvisioningUrl = null;
+    protected PendingIntent mProvisioningApnAlarmIntent = null;
+    protected int mProvisioningApnAlarmTag = (int) SystemClock.elapsedRealtime();
+    protected AsyncChannel mReplyAc = new AsyncChannel();
+    protected String mPdpType = "IP";
+    protected boolean mIsEpcPending = false;
+    protected BroadcastReceiver mIntentReceiver = new BroadcastReceiver() { // from class: com.android.internal.telephony.dataconnection.DcTrackerBase.2
+        @Override // android.content.BroadcastReceiver
         public void onReceive(Context context, Intent intent) {
+            boolean enabled;
             boolean z = true;
             String action = intent.getAction();
             DcTrackerBase.this.log("onReceive: action=" + action);
@@ -179,37 +218,43 @@ public abstract class DcTrackerBase extends Handler {
             } else if (action.equals("android.net.wifi.STATE_CHANGE")) {
                 NetworkInfo networkInfo = (NetworkInfo) intent.getParcelableExtra("networkInfo");
                 DcTrackerBase dcTrackerBase = DcTrackerBase.this;
-                boolean z2 = networkInfo != null && networkInfo.isConnected();
-                dcTrackerBase.mIsWifiConnected = z2;
+                if (networkInfo == null || !networkInfo.isConnected()) {
+                    z = false;
+                }
+                dcTrackerBase.mIsWifiConnected = z;
                 DcTrackerBase.this.log("NETWORK_STATE_CHANGED_ACTION: mIsWifiConnected=" + DcTrackerBase.this.mIsWifiConnected);
                 if (TelBrand.IS_DCM && !DcTrackerBase.this.mIsWifiConnected) {
                     DcTrackerBase.this.startNetStatPoll();
                 }
             } else if (action.equals("android.net.wifi.WIFI_STATE_CHANGED")) {
-                if (intent.getIntExtra("wifi_state", 4) != 3) {
-                    z = false;
+                if (intent.getIntExtra("wifi_state", 4) == 3) {
+                    enabled = true;
+                } else {
+                    enabled = false;
                 }
-                if (!z) {
+                if (!enabled) {
                     DcTrackerBase.this.mIsWifiConnected = false;
                 }
-                DcTrackerBase.this.log("WIFI_STATE_CHANGED_ACTION: enabled=" + z + " mIsWifiConnected=" + DcTrackerBase.this.mIsWifiConnected);
+                DcTrackerBase.this.log("WIFI_STATE_CHANGED_ACTION: enabled=" + enabled + " mIsWifiConnected=" + DcTrackerBase.this.mIsWifiConnected);
             }
         }
     };
-    protected boolean mInternalDataEnabled = true;
-    protected boolean mIsDisposed = false;
-    protected boolean mIsEpcPending = false;
-    protected boolean mIsPhysicalLinkUp = false;
-    protected boolean mIsProvisioning = false;
-    protected boolean mIsPsRestricted = false;
-    protected boolean mIsScreenOn = true;
-    protected boolean mIsWifiConnected = false;
-    public String mLocalAddressCarNavi;
-    protected boolean mNetStatPollEnabled = false;
-    protected int mNetStatPollPeriod;
-    protected int mNoRecvPollCount = 0;
-    protected ApnSetting mOemKddiDunApn = null;
-    private final OnSubscriptionsChangedListener mOnSubscriptionsChangedListener = new OnSubscriptionsChangedListener() {
+    private Runnable mPollNetStat = new Runnable() { // from class: com.android.internal.telephony.dataconnection.DcTrackerBase.3
+        @Override // java.lang.Runnable
+        public void run() {
+            DcTrackerBase.this.updateDataActivity();
+            if (DcTrackerBase.this.mIsScreenOn) {
+                DcTrackerBase.this.mNetStatPollPeriod = Settings.Global.getInt(DcTrackerBase.this.mResolver, "pdp_watchdog_poll_interval_ms", 1000);
+            } else {
+                DcTrackerBase.this.mNetStatPollPeriod = Settings.Global.getInt(DcTrackerBase.this.mResolver, "pdp_watchdog_long_poll_interval_ms", DcTrackerBase.POLL_NETSTAT_SCREEN_OFF_MILLIS);
+            }
+            if (DcTrackerBase.this.mNetStatPollEnabled) {
+                DcTrackerBase.this.mDataConnectionTracker.postDelayed(this, DcTrackerBase.this.mNetStatPollPeriod);
+            }
+        }
+    };
+    private final SubscriptionManager.OnSubscriptionsChangedListener mOnSubscriptionsChangedListener = new SubscriptionManager.OnSubscriptionsChangedListener() { // from class: com.android.internal.telephony.dataconnection.DcTrackerBase.4
+        @Override // android.telephony.SubscriptionManager.OnSubscriptionsChangedListener
         public void onSubscriptionsChanged() {
             DcTrackerBase.this.log("SubscriptionListener.onSubscriptionInfoChanged");
             if (SubscriptionManager.isValidSubscriptionId(DcTrackerBase.this.mPhone.getSubId())) {
@@ -221,140 +266,142 @@ public abstract class DcTrackerBase extends Handler {
             }
         }
     };
-    protected String mPdpType = "IP";
-    protected PhoneBase mPhone;
-    private Runnable mPollNetStat = new Runnable() {
-        public void run() {
-            DcTrackerBase.this.updateDataActivity();
-            if (DcTrackerBase.this.mIsScreenOn) {
-                DcTrackerBase.this.mNetStatPollPeriod = Global.getInt(DcTrackerBase.this.mResolver, "pdp_watchdog_poll_interval_ms", 1000);
-            } else {
-                DcTrackerBase.this.mNetStatPollPeriod = Global.getInt(DcTrackerBase.this.mResolver, "pdp_watchdog_long_poll_interval_ms", DcTrackerBase.POLL_NETSTAT_SCREEN_OFF_MILLIS);
-            }
-            if (DcTrackerBase.this.mNetStatPollEnabled) {
-                DcTrackerBase.this.mDataConnectionTracker.postDelayed(this, (long) DcTrackerBase.this.mNetStatPollPeriod);
-            }
-        }
-    };
-    protected ApnSetting mPreferredApn = null;
-    protected final PriorityQueue<ApnContext> mPrioritySortedApnContexts = new PriorityQueue(5, new Comparator<ApnContext>() {
-        public int compare(ApnContext apnContext, ApnContext apnContext2) {
-            return apnContext2.priority - apnContext.priority;
-        }
-    });
-    protected PendingIntent mProvisioningApnAlarmIntent = null;
-    protected int mProvisioningApnAlarmTag = ((int) SystemClock.elapsedRealtime());
-    protected String mProvisioningUrl = null;
-    protected PendingIntent mReconnectIntent = null;
-    protected AsyncChannel mReplyAc = new AsyncChannel();
-    protected String mRequestedApnType = "default";
-    protected ContentResolver mResolver;
-    protected long mRxPkts;
-    protected long mSentSinceLastRecv;
-    protected AtomicReference<IccRecords> mSimRecords = new AtomicReference();
-    protected State mState = State.IDLE;
-    private SubscriptionManager mSubscriptionManager;
-    protected long mTxPkts;
-    protected UiccController mUiccController;
-    protected AtomicInteger mUniqueIdGenerator = new AtomicInteger(0);
-    protected boolean mUserDataEnabled = true;
-    protected boolean mUserDataEnabledDun = true;
+    protected int mCnt = 0;
+    protected UiccController mUiccController = UiccController.getInstance();
 
-    /* renamed from: com.android.internal.telephony.dataconnection.DcTrackerBase$5 */
-    static /* synthetic */ class AnonymousClass5 {
-        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$DctConstants$State = new int[State.values().length];
+    protected abstract void completeConnection(ApnContext apnContext);
 
-        static {
-            try {
-                $SwitchMap$com$android$internal$telephony$DctConstants$State[State.IDLE.ordinal()] = 1;
-            } catch (NoSuchFieldError e) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$DctConstants$State[State.RETRYING.ordinal()] = 2;
-            } catch (NoSuchFieldError e2) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$DctConstants$State[State.CONNECTING.ordinal()] = 3;
-            } catch (NoSuchFieldError e3) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$DctConstants$State[State.SCANNING.ordinal()] = 4;
-            } catch (NoSuchFieldError e4) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$DctConstants$State[State.CONNECTED.ordinal()] = 5;
-            } catch (NoSuchFieldError e5) {
-            }
-            try {
-                $SwitchMap$com$android$internal$telephony$DctConstants$State[State.DISCONNECTING.ordinal()] = 6;
-            } catch (NoSuchFieldError e6) {
-            }
-        }
-    }
+    protected abstract DctConstants.State getOverallState();
 
-    private class DataRoamingSettingObserver extends ContentObserver {
+    public abstract String[] getPcscfAddress(String str);
+
+    public abstract DctConstants.State getState(String str);
+
+    protected abstract void gotoIdleAndNotifyDataConnection(String str);
+
+    protected abstract boolean isApnTypeAvailable(String str);
+
+    protected abstract boolean isDataAllowed();
+
+    public abstract boolean isDataPossible(String str);
+
+    public abstract boolean isDisconnected();
+
+    public abstract boolean isOnDemandDataPossible(String str);
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public abstract boolean isPermanentFail(DcFailCause dcFailCause);
+
+    protected abstract boolean isProvisioningApn(String str);
+
+    protected abstract void log(String str);
+
+    protected abstract void loge(String str);
+
+    protected abstract boolean mvnoMatches(IccRecords iccRecords, String str, String str2);
+
+    protected abstract void onCleanUpAllConnections(String str);
+
+    protected abstract void onCleanUpConnection(boolean z, int i, String str);
+
+    protected abstract void onDataSetupComplete(AsyncResult asyncResult);
+
+    protected abstract void onDataSetupCompleteError(AsyncResult asyncResult);
+
+    protected abstract void onDisconnectDcRetrying(int i, AsyncResult asyncResult);
+
+    protected abstract void onDisconnectDone(int i, AsyncResult asyncResult);
+
+    protected abstract void onRadioAvailable();
+
+    protected abstract void onRadioOffOrNotAvailable();
+
+    protected abstract void onRoamingOff();
+
+    protected abstract void onRoamingOn();
+
+    protected abstract boolean onTrySetupData(String str);
+
+    protected abstract boolean onUpdateIcc();
+
+    protected abstract void onVoiceCallEnded();
+
+    protected abstract void onVoiceCallStarted();
+
+    protected abstract void restartRadio();
+
+    public abstract void setDataAllowed(boolean z, Message message);
+
+    public abstract void setImsRegistrationState(boolean z);
+
+    protected abstract void setState(DctConstants.State state);
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public abstract void setupDataAfterDdsSwitchIfPossible();
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class DataRoamingSettingObserver extends ContentObserver {
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
         public DataRoamingSettingObserver(Handler handler, Context context) {
             super(handler);
-            DcTrackerBase.this.mResolver = context.getContentResolver();
+            DcTrackerBase.this = r2;
+            r2.mResolver = context.getContentResolver();
         }
 
-        public void onChange(boolean z) {
+        public void register() {
+            String key = "data_roaming";
+            if (TelephonyManager.getDefault().isMultiSimEnabled()) {
+                key = key + DcTrackerBase.this.mPhone.getPhoneId();
+            }
+            DcTrackerBase.this.mResolver.registerContentObserver(Settings.Global.getUriFor(key), false, this);
+        }
+
+        public void unregister() {
+            DcTrackerBase.this.mResolver.unregisterContentObserver(this);
+        }
+
+        @Override // android.database.ContentObserver
+        public void onChange(boolean selfChange) {
             DcTrackerBase.this.log(" handleDataOnRoamingChange: updateOemDataSettings call");
             DcTrackerBase.this.updateOemDataSettings();
             if (DcTrackerBase.this.mPhone.getServiceState().getDataRoaming()) {
                 DcTrackerBase.this.sendMessage(DcTrackerBase.this.obtainMessage(270347));
             }
         }
-
-        public void register() {
-            String str = "data_roaming";
-            if (TelephonyManager.getDefault().isMultiSimEnabled()) {
-                str = "data_roaming" + DcTrackerBase.this.mPhone.getPhoneId();
-            }
-            DcTrackerBase.this.mResolver.registerContentObserver(Global.getUriFor(str), false, this);
-        }
-
-        public void unregister() {
-            DcTrackerBase.this.mResolver.unregisterContentObserver(this);
-        }
     }
 
-    protected static class RecoveryAction {
-        public static final int CLEANUP = 1;
-        public static final int GET_DATA_CALL_LIST = 0;
-        public static final int RADIO_RESTART = 3;
-        public static final int RADIO_RESTART_WITH_PROP = 4;
-        public static final int REREGISTER = 2;
-
-        protected RecoveryAction() {
+    protected int getInitialMaxRetry() {
+        if (this.mFailFast) {
+            return 0;
         }
-
-        private static boolean isAggressiveRecovery(int i) {
-            return i == 1 || i == 2 || i == 3 || i == 4;
-        }
+        return Settings.Global.getInt(this.mResolver, "mdc_initial_max_retry", SystemProperties.getInt("mdc_initial_max_retry", 1));
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public class TxRxSum {
         public long rxPkts;
         public long txPkts;
 
         public TxRxSum() {
+            DcTrackerBase.this = r1;
             reset();
         }
 
-        public TxRxSum(long j, long j2) {
-            this.txPkts = j;
-            this.rxPkts = j2;
+        public TxRxSum(long txPkts, long rxPkts) {
+            DcTrackerBase.this = r1;
+            this.txPkts = txPkts;
+            this.rxPkts = rxPkts;
         }
 
-        public TxRxSum(TxRxSum txRxSum) {
-            this.txPkts = txRxSum.txPkts;
-            this.rxPkts = txRxSum.rxPkts;
+        public TxRxSum(TxRxSum sum) {
+            DcTrackerBase.this = r3;
+            this.txPkts = sum.txPkts;
+            this.rxPkts = sum.rxPkts;
         }
 
         public void reset() {
-            this.txPkts = -1;
-            this.rxPkts = -1;
+            this.txPkts = -1L;
+            this.rxPkts = -1L;
         }
 
         public String toString() {
@@ -367,23 +414,64 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    protected DcTrackerBase(PhoneBase phoneBase) {
-        this.mPhone = phoneBase;
+    protected void onActionIntentReconnectAlarm(Intent intent) {
+        String reason = intent.getStringExtra(INTENT_RECONNECT_ALARM_EXTRA_REASON);
+        String apnType = intent.getStringExtra(INTENT_RECONNECT_ALARM_EXTRA_TYPE);
+        log("onActionIntentReconnectAlarm: currSubId = " + intent.getIntExtra("subscription", -1) + " phoneSubId=" + this.mPhone.getSubId());
+        ApnContext apnContext = this.mApnContexts.get(apnType);
+        log("onActionIntentReconnectAlarm: mState=" + this.mState + " reason=" + reason + " apnType=" + apnType + " apnContext=" + apnContext + " mDataConnectionAsyncChannels=" + this.mDataConnectionAcHashMap);
+        if (apnContext != null && apnContext.isEnabled()) {
+            apnContext.setReason(reason);
+            DctConstants.State apnContextState = apnContext.getState();
+            log("onActionIntentReconnectAlarm: apnContext state=" + apnContextState);
+            if (apnContextState == DctConstants.State.FAILED || apnContextState == DctConstants.State.IDLE) {
+                log("onActionIntentReconnectAlarm: state is FAILED|IDLE, disassociate");
+                DcAsyncChannel dcac = apnContext.getDcAc();
+                if (dcac != null) {
+                    dcac.tearDown(apnContext, "", null);
+                }
+                apnContext.setDataConnectionAc(null);
+                apnContext.setState(DctConstants.State.IDLE);
+            } else {
+                log("onActionIntentReconnectAlarm: keep associated");
+            }
+            sendMessage(obtainMessage(270339, apnContext));
+            apnContext.setReconnectIntent(null);
+        }
+    }
+
+    protected void onActionIntentRestartTrySetupAlarm(Intent intent) {
+        String apnType = intent.getStringExtra(INTENT_RESTART_TRYSETUP_ALARM_EXTRA_TYPE);
+        ApnContext apnContext = this.mApnContexts.get(apnType);
+        log("onActionIntentRestartTrySetupAlarm: mState=" + this.mState + " apnType=" + apnType + " apnContext=" + apnContext + " mDataConnectionAsyncChannels=" + this.mDataConnectionAcHashMap);
+        sendMessage(obtainMessage(270339, apnContext));
+    }
+
+    protected void onActionIntentDataStallAlarm(Intent intent) {
+        log("onActionIntentDataStallAlarm: action=" + intent.getAction());
+        Message msg = obtainMessage(270353, intent.getAction());
+        msg.arg1 = intent.getIntExtra(DATA_STALL_ALARM_TAG_EXTRA, 0);
+        sendMessage(msg);
+    }
+
+    public DcTrackerBase(PhoneBase phone) {
+        this.mUserDataEnabled = true;
+        this.mAutoAttachOnCreation = false;
+        this.mPhone = phone;
         log("DCT.constructor");
         this.mResolver = this.mPhone.getContext().getContentResolver();
-        this.mUiccController = UiccController.getInstance();
         this.mUiccController.registerForIccChanged(this, 270369, null);
         this.mAlarmManager = (AlarmManager) this.mPhone.getContext().getSystemService("alarm");
         this.mCm = (ConnectivityManager) this.mPhone.getContext().getSystemService("connectivity");
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction("android.intent.action.SCREEN_ON");
-        intentFilter.addAction("android.intent.action.SCREEN_OFF");
-        intentFilter.addAction("android.net.wifi.STATE_CHANGE");
-        intentFilter.addAction("android.net.wifi.WIFI_STATE_CHANGED");
-        intentFilter.addAction(INTENT_DATA_STALL_ALARM);
-        intentFilter.addAction(INTENT_PROVISIONING_APN_ALARM);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("android.intent.action.SCREEN_ON");
+        filter.addAction("android.intent.action.SCREEN_OFF");
+        filter.addAction("android.net.wifi.STATE_CHANGE");
+        filter.addAction("android.net.wifi.WIFI_STATE_CHANGED");
+        filter.addAction(INTENT_DATA_STALL_ALARM);
+        filter.addAction(INTENT_PROVISIONING_APN_ALARM);
         this.mUserDataEnabled = getDataEnabled();
-        this.mPhone.getContext().registerReceiver(this.mIntentReceiver, intentFilter, null, this.mPhone);
+        this.mPhone.getContext().registerReceiver(this.mIntentReceiver, filter, null, this.mPhone);
         this.mDataEnabled[0] = SystemProperties.getBoolean(DEFALUT_DATA_ON_BOOT_PROP, true);
         if (this.mDataEnabled[0]) {
             this.mEnabledCount++;
@@ -391,204 +479,491 @@ public abstract class DcTrackerBase extends Handler {
         this.mAutoAttachOnCreation = PreferenceManager.getDefaultSharedPreferences(this.mPhone.getContext()).getBoolean(PhoneBase.DATA_DISABLED_ON_BOOT_KEY, false);
         this.mSubscriptionManager = SubscriptionManager.from(this.mPhone.getContext());
         this.mSubscriptionManager.addOnSubscriptionsChangedListener(this.mOnSubscriptionsChangedListener);
-        HandlerThread handlerThread = new HandlerThread("DcHandlerThread");
-        handlerThread.start();
-        Handler handler = new Handler(handlerThread.getLooper());
-        this.mDcc = DcController.makeDcc(this.mPhone, this, handler);
-        this.mDcTesterFailBringUpAll = new DcTesterFailBringUpAll(this.mPhone, handler);
-        FastDormancy fastDormancy = new FastDormancy(this.mPhone.mCi, this.mPhone.getContext());
+        HandlerThread dcHandlerThread = new HandlerThread("DcHandlerThread");
+        dcHandlerThread.start();
+        Handler dcHandler = new Handler(dcHandlerThread.getLooper());
+        this.mDcc = DcController.makeDcc(this.mPhone, this, dcHandler);
+        this.mDcTesterFailBringUpAll = new DcTesterFailBringUpAll(this.mPhone, dcHandler);
+        new FastDormancy(this.mPhone.mCi, this.mPhone.getContext());
     }
 
-    /* JADX WARNING: Removed duplicated region for block: B:31:0x0092 A:{SYNTHETIC, Splitter:B:31:0x0092} */
-    private java.lang.String getFixedParameter() {
-        /*
-        r10 = this;
-        r1 = 0;
-        r8 = 235; // 0xeb float:3.3E-43 double:1.16E-321;
-        r6 = 170; // 0xaa float:2.38E-43 double:8.4E-322;
-        r2 = 0;
-        r0 = "";
-        r3 = 13;
-        r5 = new int[r3];
-        r3 = 215; // 0xd7 float:3.01E-43 double:1.06E-321;
-        r5[r2] = r3;
-        r3 = 1;
-        r4 = 67;
-        r5[r3] = r4;
-        r3 = 2;
-        r4 = 46;
-        r5[r3] = r4;
-        r3 = 3;
-        r4 = 69;
-        r5[r3] = r4;
-        r3 = 4;
-        r4 = 21;
-        r5[r3] = r4;
-        r3 = 5;
-        r4 = 74;
-        r5[r3] = r4;
-        r3 = 6;
-        r4 = 36;
-        r5[r3] = r4;
-        r3 = 7;
-        r4 = 236; // 0xec float:3.31E-43 double:1.166E-321;
-        r5[r3] = r4;
-        r3 = 8;
-        r5[r3] = r6;
-        r3 = 9;
-        r4 = 247; // 0xf7 float:3.46E-43 double:1.22E-321;
-        r5[r3] = r4;
-        r3 = 10;
-        r4 = 70;
-        r5[r3] = r4;
-        r3 = 11;
-        r5[r3] = r6;
-        r3 = 12;
-        r4 = 85;
-        r5[r3] = r4;
-        r3 = new java.io.FileInputStream;	 Catch:{ IOException -> 0x009c, all -> 0x008e }
-        r4 = "/etc/Tsx5UPfM";
-        r3.<init>(r4);	 Catch:{ IOException -> 0x009c, all -> 0x008e }
-        r1 = 235; // 0xeb float:3.3E-43 double:1.16E-321;
-        r6 = new byte[r1];	 Catch:{ IOException -> 0x0080, all -> 0x009a }
-        r7 = r3.read(r6);	 Catch:{ IOException -> 0x0080, all -> 0x009a }
-        if (r7 != r8) goto L_0x007a;
-    L_0x005e:
-        r4 = r2;
-        r1 = r2;
-    L_0x0060:
-        if (r4 >= r7) goto L_0x0073;
-    L_0x0062:
-        r8 = r6[r4];
-        r9 = r5[r1];
-        r8 = r8 ^ r9;
-        r8 = (byte) r8;
-        r6[r4] = r8;
-        r1 = r1 + 1;
-        r8 = r5.length;	 Catch:{ IOException -> 0x0080, all -> 0x009a }
-        if (r1 < r8) goto L_0x0070;
-    L_0x006f:
-        r1 = r2;
-    L_0x0070:
-        r4 = r4 + 1;
-        goto L_0x0060;
-    L_0x0073:
-        r1 = new java.lang.String;	 Catch:{ IOException -> 0x0080, all -> 0x009a }
-        r2 = 0;
-        r1.<init>(r6, r2, r7);	 Catch:{ IOException -> 0x0080, all -> 0x009a }
-        r0 = r1;
-    L_0x007a:
-        if (r3 == 0) goto L_0x007f;
-    L_0x007c:
-        r3.close();	 Catch:{ IOException -> 0x0096 }
-    L_0x007f:
-        return r0;
-    L_0x0080:
-        r1 = move-exception;
-        r1 = r3;
-    L_0x0082:
-        if (r1 == 0) goto L_0x007f;
-    L_0x0084:
-        r1.close();	 Catch:{ IOException -> 0x008a }
-        r0 = "";
-        goto L_0x007f;
-    L_0x008a:
-        r0 = move-exception;
-        r0 = "";
-        goto L_0x007f;
-    L_0x008e:
-        r0 = move-exception;
-        r3 = r1;
-    L_0x0090:
-        if (r3 == 0) goto L_0x0095;
-    L_0x0092:
-        r3.close();	 Catch:{ IOException -> 0x0098 }
-    L_0x0095:
-        throw r0;
-    L_0x0096:
-        r1 = move-exception;
-        goto L_0x007f;
-    L_0x0098:
-        r1 = move-exception;
-        goto L_0x0095;
-    L_0x009a:
-        r0 = move-exception;
-        goto L_0x0090;
-    L_0x009c:
-        r2 = move-exception;
-        goto L_0x0082;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.dataconnection.DcTrackerBase.getFixedParameter():java.lang.String");
+    public void dispose() {
+        log("DCT.dispose");
+        for (DcAsyncChannel dcac : this.mDataConnectionAcHashMap.values()) {
+            dcac.disconnect();
+        }
+        this.mDataConnectionAcHashMap.clear();
+        this.mIsDisposed = true;
+        this.mPhone.getContext().unregisterReceiver(this.mIntentReceiver);
+        this.mUiccController.unregisterForIccChanged(this);
+        if (this.mDataRoamingSettingObserver != null) {
+            this.mDataRoamingSettingObserver.unregister();
+        }
+        this.mSubscriptionManager.removeOnSubscriptionsChangedListener(this.mOnSubscriptionsChangedListener);
+        this.mDcc.dispose();
+        this.mDcTesterFailBringUpAll.dispose();
     }
 
-    public static boolean isNetworkRoaming() {
-        return "true".equals(SystemProperties.get("gsm.operator.isroaming"));
+    public long getSubId() {
+        return this.mPhone.getSubId();
     }
 
-    private boolean isPhoneStateIdle() {
-        int i = 0;
-        while (i < TelephonyManager.getDefault().getPhoneCount()) {
-            Phone phone = PhoneFactory.getPhone(i);
-            if (phone == null || phone.getState() == PhoneConstants.State.IDLE) {
-                i++;
+    public DctConstants.Activity getActivity() {
+        return this.mActivity;
+    }
+
+    void setActivity(DctConstants.Activity activity) {
+        log("setActivity = " + activity);
+        this.mActivity = activity;
+        this.mPhone.notifyDataActivity();
+    }
+
+    public void incApnRefCount(String name) {
+    }
+
+    public void decApnRefCount(String name) {
+    }
+
+    public boolean isApnSupported(String name) {
+        return false;
+    }
+
+    public int getApnPriority(String name) {
+        return -1;
+    }
+
+    public boolean isApnTypeActive(String type) {
+        ApnSetting dunApn;
+        return (!"dun".equals(type) || (dunApn = fetchDunApn()) == null) ? this.mActiveApn != null && this.mActiveApn.canHandleType(type) : this.mActiveApn != null && dunApn.toString().equals(this.mActiveApn.toString());
+    }
+
+    public ApnSetting fetchDunApn() {
+        if (SystemProperties.getBoolean("net.tethering.noprovisioning", false)) {
+            log("fetchDunApn: net.tethering.noprovisioning=true ret: null");
+            return null;
+        } else if (TelBrand.IS_KDDI) {
+            log("fetchDunApn() Start");
+            if (isNetworkRoaming()) {
+                return null;
+            }
+            return this.mOemKddiDunApn;
+        } else {
+            int bearer = -1;
+            ApnSetting retDunSetting = null;
+            Context c = this.mPhone.getContext();
+            List<ApnSetting> dunSettings = ApnSetting.arrayFromString(Settings.Global.getString(c.getContentResolver(), "tether_dun_apn"));
+            IccRecords r = this.mIccRecords.get();
+            for (ApnSetting dunSetting : dunSettings) {
+                String operator = r != null ? r.getOperatorNumeric() : "";
+                if (dunSetting.bearer != 0) {
+                    if (bearer == -1) {
+                        bearer = this.mPhone.getServiceState().getRilDataRadioTechnology();
+                    }
+                    if (dunSetting.bearer != bearer) {
+                        continue;
+                    }
+                }
+                if (!dunSetting.numeric.equals(operator)) {
+                    continue;
+                } else if (!dunSetting.hasMvnoParams()) {
+                    return dunSetting;
+                } else {
+                    if (r != null && mvnoMatches(r, dunSetting.mvnoType, dunSetting.mvnoMatchData)) {
+                        return dunSetting;
+                    }
+                }
+            }
+            String[] apnArrayData = c.getResources().getStringArray(17235993);
+            if (apnArrayData == null) {
+                return null;
+            }
+            for (String apn : apnArrayData) {
+                ApnSetting dunSetting2 = ApnSetting.fromString(apn);
+                if (dunSetting2 != null) {
+                    if (dunSetting2.bearer != 0) {
+                        if (bearer == -1) {
+                            bearer = this.mPhone.getServiceState().getRilDataRadioTechnology();
+                        }
+                        if (dunSetting2.bearer != bearer) {
+                            continue;
+                        }
+                    }
+                    if (!dunSetting2.hasMvnoParams()) {
+                        retDunSetting = dunSetting2;
+                    } else if (r != null && mvnoMatches(r, dunSetting2.mvnoType, dunSetting2.mvnoMatchData)) {
+                        return dunSetting2;
+                    }
+                }
+            }
+            return retDunSetting;
+        }
+    }
+
+    public boolean hasMatchedTetherApnSetting() {
+        ApnSetting matched = fetchDunApn();
+        log("hasMatchedTetherApnSetting: APN=" + matched);
+        return matched != null;
+    }
+
+    public String[] getActiveApnTypes() {
+        return this.mActiveApn != null ? this.mActiveApn.types : new String[]{"default"};
+    }
+
+    public String getActiveApnString(String apnType) {
+        if (this.mActiveApn != null) {
+            return this.mActiveApn.apn;
+        }
+        return null;
+    }
+
+    public void sendOemKddiFailCauseBroadcast(DcFailCause dcFailCause, ApnContext apnCtx) {
+        int rilFailCause;
+        if (this.mEnableApnCarNavi) {
+            if (dcFailCause == DcFailCause.USER_AUTHENTICATION) {
+                rilFailCause = -3;
+            } else if (dcFailCause == DcFailCause.SIGNAL_LOST || dcFailCause == DcFailCause.RADIO_POWER_OFF) {
+                rilFailCause = -2;
             } else {
-                log("isPhoneStateIdle: Voice call active on sub: " + i);
+                rilFailCause = -4;
+            }
+            Intent intent = new Intent(CONNECTIVITY_ACTION_CARNAVI);
+            intent.putExtra(EXTRA_CONNECTIVITY_STATUS_CARNAVI, 4);
+            intent.putExtra(EXTRA_ERRONO_CARNAVI, rilFailCause);
+            this.mPhone.getContext().sendBroadcast(intent);
+            log("DataConnection Sent intent CONNECTIVITY_ACTION for CarNavi error : " + rilFailCause);
+        } else if (dcFailCause != DcFailCause.SIGNAL_LOST) {
+            Intent intent2 = new Intent(INTENT_CDMA_FAILCAUSE);
+            intent2.putExtra(INTENT_CDMA_FAILCAUSE_CAUSE, Integer.toString(dcFailCause.getErrorCode()));
+            intent2.putExtra(INTENT_CDMA_FAILCAUSE_EXTRA, apnCtx.getApnType());
+            this.mPhone.getContext().sendBroadcast(intent2);
+            log("sendOemKddiFailCauseBroadcast: send INTENT_CDMA_FAILCAUSE type= " + apnCtx.getApnType() + " cause= " + Integer.toString(dcFailCause.getErrorCode()));
+        }
+    }
+
+    public void setDataOnRoamingEnabled(boolean enabled) {
+        int i;
+        int i2 = 1;
+        if (getDataOnRoamingEnabled() != enabled) {
+            ContentResolver resolver = this.mPhone.getContext().getContentResolver();
+            if (!TelephonyManager.getDefault().isMultiSimEnabled()) {
+                if (enabled) {
+                    i = 1;
+                } else {
+                    i = 0;
+                }
+                Settings.Global.putInt(resolver, "data_roaming", i);
+            }
+            String str = "data_roaming" + this.mPhone.getPhoneId();
+            if (!enabled) {
+                i2 = 0;
+            }
+            Settings.Global.putInt(resolver, str, i2);
+        }
+    }
+
+    public boolean getDataOnRoamingEnabled() {
+        boolean enabled;
+        int i = 1;
+        try {
+            ContentResolver resolver = this.mPhone.getContext().getContentResolver();
+            String key = "data_roaming";
+            if (TelephonyManager.getDefault().isMultiSimEnabled()) {
+                key = key + this.mPhone.getPhoneId();
+            }
+            return Settings.Global.getInt(resolver, key) != 0;
+        } catch (Settings.SettingNotFoundException e) {
+            try {
+                ContentResolver resolver2 = this.mPhone.getContext().getContentResolver();
+                if (Settings.Global.getInt(resolver2, "data_roaming") != 0) {
+                    enabled = true;
+                } else {
+                    enabled = false;
+                }
+                String str = "data_roaming" + this.mPhone.getPhoneId();
+                if (!enabled) {
+                    i = 0;
+                }
+                Settings.Global.putInt(resolver2, str, i);
+                return enabled;
+            } catch (Settings.SettingNotFoundException e2) {
                 return false;
             }
         }
-        return true;
     }
 
-    private void notifyApnIdDisconnected(String str, int i) {
-        this.mPhone.notifyDataConnection(str, apnIdToType(i), DataState.DISCONNECTED);
+    public void setDataEnabled(boolean enable) {
+        Message msg = obtainMessage(270366);
+        msg.arg1 = enable ? 1 : 0;
+        sendMessage(msg);
     }
 
-    private void notifyApnIdUpToCurrent(String str, int i) {
-        switch (AnonymousClass5.$SwitchMap$com$android$internal$telephony$DctConstants$State[this.mState.ordinal()]) {
-            case 2:
-            case 3:
-            case 4:
-                this.mPhone.notifyDataConnection(str, apnIdToType(i), DataState.CONNECTING);
-                return;
-            case 5:
-            case 6:
-                this.mPhone.notifyDataConnection(str, apnIdToType(i), DataState.CONNECTING);
-                this.mPhone.notifyDataConnection(str, apnIdToType(i), DataState.CONNECTED);
-                return;
-            default:
-                return;
-        }
-    }
-
-    private void updateDataStallInfo() {
-        TxRxSum txRxSum = new TxRxSum(this.mDataStallTxRxSum);
-        this.mDataStallTxRxSum.updateTxRxSum();
-        log("updateDataStallInfo: mDataStallTxRxSum=" + this.mDataStallTxRxSum + " preTxRxSum=" + txRxSum);
-        long j = this.mDataStallTxRxSum.txPkts - txRxSum.txPkts;
-        long j2 = this.mDataStallTxRxSum.rxPkts - txRxSum.rxPkts;
-        if (j > 0 && j2 > 0) {
-            log("updateDataStallInfo: IN/OUT");
-            this.mSentSinceLastRecv = 0;
-            putRecoveryAction(0);
-        } else if (j > 0 && j2 == 0) {
-            if (isPhoneStateIdle()) {
-                this.mSentSinceLastRecv += j;
-            } else {
-                this.mSentSinceLastRecv = 0;
+    public boolean getDataEnabled() {
+        int i = 0;
+        try {
+            return Settings.Global.getInt(this.mPhone.getContext().getContentResolver(), new StringBuilder().append("mobile_data").append(this.mPhone.getPhoneId()).toString()) != 0;
+        } catch (Settings.SettingNotFoundException e) {
+            try {
+                ContentResolver resolver = this.mPhone.getContext().getContentResolver();
+                boolean enabled = Settings.Global.getInt(resolver, "mobile_data") != 0;
+                String str = "mobile_data" + this.mPhone.getPhoneId();
+                if (enabled) {
+                    i = 1;
+                }
+                Settings.Global.putInt(resolver, str, i);
+                return enabled;
+            } catch (Settings.SettingNotFoundException e2) {
+                return true;
             }
-            log("updateDataStallInfo: OUT sent=" + j + " mSentSinceLastRecv=" + this.mSentSinceLastRecv);
-        } else if (j != 0 || j2 <= 0) {
-            log("updateDataStallInfo: NONE");
-        } else {
-            log("updateDataStallInfo: IN");
-            this.mSentSinceLastRecv = 0;
-            putRecoveryAction(0);
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public String apnIdToType(int i) {
-        switch (i) {
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        boolean isProvApn;
+        String apnType;
+        switch (msg.what) {
+            case 69636:
+                log("DISCONNECTED_CONNECTED: msg=" + msg);
+                DcAsyncChannel dcac = (DcAsyncChannel) msg.obj;
+                this.mDataConnectionAcHashMap.remove(Integer.valueOf(dcac.getDataConnectionIdSync()));
+                dcac.disconnected();
+                return;
+            case 270336:
+                this.mCidActive = msg.arg1;
+                onDataSetupComplete((AsyncResult) msg.obj);
+                return;
+            case 270337:
+                onRadioAvailable();
+                return;
+            case 270339:
+                String reason = null;
+                if (msg.obj instanceof String) {
+                    reason = (String) msg.obj;
+                }
+                onTrySetupData(reason);
+                return;
+            case 270342:
+                onRadioOffOrNotAvailable();
+                return;
+            case 270343:
+                onVoiceCallStarted();
+                return;
+            case 270344:
+                onVoiceCallEnded();
+                return;
+            case 270347:
+                onRoamingOn();
+                return;
+            case 270348:
+                onRoamingOff();
+                return;
+            case 270349:
+                onEnableApn(msg.arg1, msg.arg2);
+                return;
+            case 270351:
+                log("DataConnectionTracker.handleMessage: EVENT_DISCONNECT_DONE msg=" + msg);
+                onDisconnectDone(msg.arg1, (AsyncResult) msg.obj);
+                onUpdateOemDataSettingsAsync();
+                return;
+            case 270353:
+                onDataStallAlarm(msg.arg1);
+                return;
+            case 270360:
+                onCleanUpConnection(msg.arg1 != 0, msg.arg2, (String) msg.obj);
+                return;
+            case 270362:
+                restartRadio();
+                return;
+            case 270363:
+                onSetInternalDataEnabled(msg.arg1 == 1);
+                return;
+            case 270364:
+                log("EVENT_RESET_DONE");
+                onResetDone((AsyncResult) msg.obj);
+                return;
+            case 270365:
+                onCleanUpAllConnections((String) msg.obj);
+                return;
+            case 270366:
+                boolean enabled = msg.arg1 == 1;
+                log("CMD_SET_USER_DATA_ENABLE enabled=" + enabled);
+                onSetUserDataEnabled(enabled);
+                return;
+            case 270367:
+                boolean met = msg.arg1 == 1;
+                log("CMD_SET_DEPENDENCY_MET met=" + met);
+                Bundle bundle = msg.getData();
+                if (bundle != null && (apnType = (String) bundle.get("apnType")) != null) {
+                    onSetDependencyMet(apnType, met);
+                    return;
+                }
+                return;
+            case 270368:
+                onSetPolicyDataEnabled(msg.arg1 == 1);
+                return;
+            case 270369:
+                onUpdateIcc();
+                return;
+            case 270370:
+                log("DataConnectionTracker.handleMessage: EVENT_DISCONNECT_DC_RETRYING msg=" + msg);
+                onDisconnectDcRetrying(msg.arg1, (AsyncResult) msg.obj);
+                return;
+            case 270371:
+                onDataSetupCompleteError((AsyncResult) msg.obj);
+                return;
+            case 270372:
+                sEnableFailFastRefCounter = (msg.arg1 == 1 ? 1 : -1) + sEnableFailFastRefCounter;
+                log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA:  sEnableFailFastRefCounter=" + sEnableFailFastRefCounter);
+                if (sEnableFailFastRefCounter < 0) {
+                    loge("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: sEnableFailFastRefCounter:" + sEnableFailFastRefCounter + " < 0");
+                    sEnableFailFastRefCounter = 0;
+                }
+                boolean enabled2 = sEnableFailFastRefCounter > 0;
+                log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: enabled=" + enabled2 + " sEnableFailFastRefCounter=" + sEnableFailFastRefCounter);
+                if (this.mFailFast != enabled2) {
+                    this.mFailFast = enabled2;
+                    this.mDataStallDetectionEnabled = !enabled2;
+                    if (!this.mDataStallDetectionEnabled || getOverallState() != DctConstants.State.CONNECTED || (this.mInVoiceCall && !this.mPhone.getServiceStateTracker().isConcurrentVoiceAndDataAllowed())) {
+                        log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: stop data stall");
+                        stopDataStallAlarm();
+                        return;
+                    }
+                    log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: start data stall");
+                    stopDataStallAlarm();
+                    startDataStallAlarm(false);
+                    return;
+                }
+                return;
+            case 270373:
+                Bundle bundle2 = msg.getData();
+                if (bundle2 != null) {
+                    try {
+                        this.mProvisioningUrl = (String) bundle2.get("provisioningUrl");
+                    } catch (ClassCastException e) {
+                        loge("CMD_ENABLE_MOBILE_PROVISIONING: provisioning url not a string" + e);
+                        this.mProvisioningUrl = null;
+                    }
+                }
+                if (TextUtils.isEmpty(this.mProvisioningUrl)) {
+                    loge("CMD_ENABLE_MOBILE_PROVISIONING: provisioning url is empty, ignoring");
+                    this.mIsProvisioning = false;
+                    this.mProvisioningUrl = null;
+                    return;
+                }
+                loge("CMD_ENABLE_MOBILE_PROVISIONING: provisioningUrl=" + this.mProvisioningUrl);
+                this.mIsProvisioning = true;
+                startProvisioningApnAlarm();
+                return;
+            case 270374:
+                log("CMD_IS_PROVISIONING_APN");
+                String apnType2 = null;
+                try {
+                    Bundle bundle3 = msg.getData();
+                    if (bundle3 != null) {
+                        apnType2 = (String) bundle3.get("apnType");
+                    }
+                    if (TextUtils.isEmpty(apnType2)) {
+                        loge("CMD_IS_PROVISIONING_APN: apnType is empty");
+                        isProvApn = false;
+                    } else {
+                        isProvApn = isProvisioningApn(apnType2);
+                    }
+                } catch (ClassCastException e2) {
+                    loge("CMD_IS_PROVISIONING_APN: NO provisioning url ignoring");
+                    isProvApn = false;
+                }
+                log("CMD_IS_PROVISIONING_APN: ret=" + isProvApn);
+                this.mReplyAc.replyToMessage(msg, 270374, isProvApn ? 1 : 0);
+                return;
+            case 270375:
+                log("EVENT_PROVISIONING_APN_ALARM");
+                ApnContext apnCtx = this.mApnContexts.get("default");
+                if (!apnCtx.isProvisioningApn() || !apnCtx.isConnectedOrConnecting()) {
+                    log("EVENT_PROVISIONING_APN_ALARM: Not connected ignore");
+                    return;
+                } else if (this.mProvisioningApnAlarmTag == msg.arg1) {
+                    log("EVENT_PROVISIONING_APN_ALARM: Disconnecting");
+                    this.mIsProvisioning = false;
+                    this.mProvisioningUrl = null;
+                    stopProvisioningApnAlarm();
+                    sendCleanUpConnection(true, apnCtx);
+                    return;
+                } else {
+                    log("EVENT_PROVISIONING_APN_ALARM: ignore stale tag, mProvisioningApnAlarmTag:" + this.mProvisioningApnAlarmTag + " != arg1:" + msg.arg1);
+                    return;
+                }
+            case 270376:
+                if (msg.arg1 == 1) {
+                    handleStartNetStatPoll((DctConstants.Activity) msg.obj);
+                    return;
+                } else if (msg.arg1 == 0) {
+                    handleStopNetStatPoll((DctConstants.Activity) msg.obj);
+                    return;
+                } else {
+                    return;
+                }
+            default:
+                Rlog.e("DATA", "Unidentified event msg=" + msg);
+                return;
+        }
+    }
+
+    public boolean getAnyDataEnabled() {
+        boolean result;
+        synchronized (this.mDataEnabledLock) {
+            result = this.mInternalDataEnabled && this.mUserDataEnabled && sPolicyDataEnabled && this.mUserDataEnabledDun && this.mEnabledCount != 0;
+        }
+        if (!result) {
+            log("getAnyDataEnabled " + result);
+        }
+        return result;
+    }
+
+    protected boolean isEmergency() {
+        boolean result;
+        synchronized (this.mDataEnabledLock) {
+            result = this.mPhone.isInEcm() || this.mPhone.isInEmergencyCall();
+        }
+        log("isEmergency: result=" + result);
+        return result;
+    }
+
+    public int apnTypeToId(String type) {
+        if (TextUtils.equals(type, "default")) {
+            return 0;
+        }
+        if (TextUtils.equals(type, "mms")) {
+            return 1;
+        }
+        if (TextUtils.equals(type, "supl")) {
+            return 2;
+        }
+        if (TextUtils.equals(type, "dun")) {
+            return 3;
+        }
+        if (TextUtils.equals(type, "hipri")) {
+            return 4;
+        }
+        if (TextUtils.equals(type, "ims")) {
+            return 5;
+        }
+        if (TextUtils.equals(type, "fota")) {
+            return 6;
+        }
+        if (TextUtils.equals(type, "cbs")) {
+            return 7;
+        }
+        if (TextUtils.equals(type, "ia")) {
+            return 8;
+        }
+        if (TextUtils.equals(type, "emergency")) {
+            return 9;
+        }
+        return -1;
+    }
+
+    protected String apnIdToType(int id) {
+        switch (id) {
             case 0:
                 return "default";
             case 1:
@@ -610,1309 +985,143 @@ public abstract class DcTrackerBase extends Handler {
             case 9:
                 return "emergency";
             default:
-                log("Unknown id (" + i + ") in apnIdToType");
+                log("Unknown id (" + id + ") in apnIdToType");
                 return "default";
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public int apnTypeToId(String str) {
-        return TextUtils.equals(str, "default") ? 0 : TextUtils.equals(str, "mms") ? 1 : TextUtils.equals(str, "supl") ? 2 : TextUtils.equals(str, "dun") ? 3 : TextUtils.equals(str, "hipri") ? 4 : TextUtils.equals(str, "ims") ? 5 : TextUtils.equals(str, "fota") ? 6 : TextUtils.equals(str, "cbs") ? 7 : TextUtils.equals(str, "ia") ? 8 : TextUtils.equals(str, "emergency") ? 9 : -1;
+    public LinkProperties getLinkProperties(String apnType) {
+        return isApnIdEnabled(apnTypeToId(apnType)) ? this.mDataConnectionAcHashMap.get(0).getLinkPropertiesSync() : new LinkProperties();
     }
 
-    /* Access modifiers changed, original: protected */
-    public void broadcastDisconnectDun() {
-        this.mPhone.getContext().sendBroadcast(new Intent(ACTION_DISCONNECT_BT_DUN));
+    public NetworkCapabilities getNetworkCapabilities(String apnType) {
+        return isApnIdEnabled(apnTypeToId(apnType)) ? this.mDataConnectionAcHashMap.get(0).getNetworkCapabilitiesSync() : new NetworkCapabilities();
     }
 
-    /* JADX WARNING: Missing block: B:32:0x01d2, code skipped:
-            if (isApnTypeEnabled("hipri") != false) goto L_0x01d4;
-     */
-    public int changeMode(boolean r29, java.lang.String r30, java.lang.String r31, java.lang.String r32, int r33, java.lang.String r34, java.lang.String r35, java.lang.String r36, java.lang.String r37) {
-        /*
-        r28 = this;
-        r2 = com.android.internal.telephony.TelBrand.IS_KDDI;
-        if (r2 == 0) goto L_0x0278;
-    L_0x0004:
-        r0 = r28;
-        r2 = r0.mState;
-        r3 = com.android.internal.telephony.DctConstants.State.IDLE;
-        if (r2 == r3) goto L_0x0014;
-    L_0x000c:
-        r0 = r28;
-        r2 = r0.mState;
-        r3 = com.android.internal.telephony.DctConstants.State.FAILED;
-        if (r2 == r3) goto L_0x0014;
-    L_0x0014:
-        r2 = "default";
-        r0 = r28;
-        r3 = r0.apnTypeToId(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] mode[";
-        r2 = r2.append(r4);
-        r0 = r29;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] apn[";
-        r2 = r2.append(r4);
-        r0 = r30;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] userId[";
-        r2 = r2.append(r4);
-        r0 = r31;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] password[";
-        r2 = r2.append(r4);
-        r0 = r32;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] authType[";
-        r2 = r2.append(r4);
-        r0 = r33;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] dns1[";
-        r2 = r2.append(r4);
-        r0 = r34;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] dns2[";
-        r2 = r2.append(r4);
-        r0 = r35;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] proxyHost[";
-        r2 = r2.append(r4);
-        r0 = r36;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r4 = "[CarNavi] proxyPort[";
-        r2 = r2.append(r4);
-        r0 = r37;
-        r2 = r2.append(r0);
-        r4 = "]";
-        r2 = r2.append(r4);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r0 = r28;
-        r2 = r0.mUserDataEnabled;
-        if (r2 != 0) goto L_0x0160;
-    L_0x0142:
-        r2 = new java.lang.StringBuilder;
-        r2.<init>();
-        r3 = "CpaManager.UNKNOWN_ERROR. mUserDataEnabled : ";
-        r2 = r2.append(r3);
-        r0 = r28;
-        r3 = r0.mUserDataEnabled;
-        r2 = r2.append(r3);
-        r2 = r2.toString();
-        r0 = r28;
-        r0.log(r2);
-        r2 = -4;
-    L_0x015f:
-        return r2;
-    L_0x0160:
-        r2 = isNetworkRoaming();
-        if (r2 == 0) goto L_0x0171;
-    L_0x0166:
-        if (r29 == 0) goto L_0x0171;
-    L_0x0168:
-        r2 = "CpaManager.RADIO_NOT_AVAILABLE. isNetworkRoaming()";
-        r0 = r28;
-        r0.log(r2);
-        r2 = -2;
-        goto L_0x015f;
-    L_0x0171:
-        r0 = r28;
-        r2 = r0.mPhone;
-        r2 = r2.getServiceState();
-        r2 = r2.getRadioTechnology();
-        if (r2 != 0) goto L_0x0188;
-    L_0x017f:
-        r2 = "CpaManager.RADIO_NOT_AVAILABLE. RADIO_TECHNOLOGY_UNKNOWN";
-        r0 = r28;
-        r0.log(r2);
-        r2 = -2;
-        goto L_0x015f;
-    L_0x0188:
-        r0 = r28;
-        r2 = r0.mEnableApnCarNavi;
-        r0 = r29;
-        if (r0 == r2) goto L_0x01e0;
-    L_0x0190:
-        if (r29 == 0) goto L_0x0262;
-    L_0x0192:
-        r0 = r28;
-        r2 = r0.mEnableApnCarNavi;
-        if (r2 != 0) goto L_0x0262;
-    L_0x0198:
-        r2 = "default";
-        r0 = r28;
-        r2 = r0.isApnTypeEnabled(r2);
-        if (r2 != 0) goto L_0x01d4;
-    L_0x01a2:
-        r2 = "default";
-        r0 = r28;
-        r2 = r0.isApnTypeEnabled(r2);
-        if (r2 != 0) goto L_0x0262;
-    L_0x01ac:
-        r2 = "mms";
-        r0 = r28;
-        r2 = r0.isApnTypeEnabled(r2);
-        if (r2 != 0) goto L_0x01d4;
-    L_0x01b6:
-        r2 = "supl";
-        r0 = r28;
-        r2 = r0.isApnTypeEnabled(r2);
-        if (r2 != 0) goto L_0x01d4;
-    L_0x01c0:
-        r2 = "dun";
-        r0 = r28;
-        r2 = r0.isApnTypeEnabled(r2);
-        if (r2 != 0) goto L_0x01d4;
-    L_0x01ca:
-        r2 = "hipri";
-        r0 = r28;
-        r2 = r0.isApnTypeEnabled(r2);
-        if (r2 == 0) goto L_0x0262;
-    L_0x01d4:
-        r2 = "mConnectingApnCarNavi = true";
-        r0 = r28;
-        r0.log(r2);
-        r2 = 1;
-        r0 = r28;
-        r0.mConnectingApnCarNavi = r2;
-    L_0x01e0:
-        r0 = r28;
-        r2 = r0.mPhone;
-        r2 = r2.getServiceState();
-        r19 = r2.getRadioTechnology();
-        r2 = new com.android.internal.telephony.dataconnection.ApnSetting;
-        r4 = "";
-        r5 = "";
-        r9 = "";
-        r10 = "";
-        r11 = "";
-        r6 = 5;
-        r15 = new java.lang.String[r6];
-        r6 = 0;
-        r7 = "default";
-        r15[r6] = r7;
-        r6 = 1;
-        r7 = "mms";
-        r15[r6] = r7;
-        r6 = 2;
-        r7 = "supl";
-        r15[r6] = r7;
-        r6 = 3;
-        r7 = "hipri";
-        r15[r6] = r7;
-        r6 = 4;
-        r7 = "dun";
-        r15[r6] = r7;
-        r16 = "";
-        r17 = "";
-        r18 = 1;
-        r20 = 0;
-        r21 = 0;
-        r22 = 0;
-        r23 = 0;
-        r24 = 0;
-        r25 = 0;
-        r26 = "";
-        r27 = "";
-        r6 = r30;
-        r7 = r36;
-        r8 = r37;
-        r12 = r31;
-        r13 = r32;
-        r14 = r33;
-        r2.<init>(r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27);
-        r0 = r28;
-        r0.mApnCarNavi = r2;
-        r0 = r29;
-        r1 = r28;
-        r1.mEnableApnCarNavi = r0;
-        r0 = r28;
-        r2 = r0.mDnsesCarNavi;
-        r3 = 0;
-        r2[r3] = r34;
-        r0 = r28;
-        r2 = r0.mDnsesCarNavi;
-        r3 = 1;
-        r2[r3] = r35;
-        r2 = 270355; // 0x42013 float:3.78848E-40 double:1.33573E-318;
-        r0 = r28;
-        r2 = r0.obtainMessage(r2);
-        r0 = r28;
-        r0.sendMessage(r2);
-        r2 = 0;
-        goto L_0x015f;
-    L_0x0262:
-        if (r29 != 0) goto L_0x01e0;
-    L_0x0264:
-        r0 = r28;
-        r2 = r0.mEnableApnCarNavi;
-        if (r2 == 0) goto L_0x01e0;
-    L_0x026a:
-        r2 = "mDisConnectingApnCarNavi = true";
-        r0 = r28;
-        r0.log(r2);
-        r2 = 1;
-        r0 = r28;
-        r0.mDisConnectingApnCarNavi = r2;
-        goto L_0x01e0;
-    L_0x0278:
-        r2 = -1;
-        goto L_0x015f;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.dataconnection.DcTrackerBase.changeMode(boolean, java.lang.String, java.lang.String, java.lang.String, int, java.lang.String, java.lang.String, java.lang.String, java.lang.String):int");
-    }
-
-    public int changeOemKddiCpaMode(boolean z, String str, String str2, String str3, int i, String str4, String str5, String str6, String str7) {
-        return changeMode(z, str, str2, str3, i, str4, str5, str6, str7);
-    }
-
-    public void cleanUpAllConnections(String str) {
-        Message obtainMessage = obtainMessage(270365);
-        obtainMessage.obj = str;
-        sendMessage(obtainMessage);
-    }
-
-    public abstract void completeConnection(ApnContext apnContext);
-
-    public void decApnRefCount(String str) {
-    }
-
-    public void dispose() {
-        log("DCT.dispose");
-        for (DcAsyncChannel disconnect : this.mDataConnectionAcHashMap.values()) {
-            disconnect.disconnect();
-        }
-        this.mDataConnectionAcHashMap.clear();
-        this.mIsDisposed = true;
-        this.mPhone.getContext().unregisterReceiver(this.mIntentReceiver);
-        this.mUiccController.unregisterForIccChanged(this);
-        if (this.mDataRoamingSettingObserver != null) {
-            this.mDataRoamingSettingObserver.unregister();
-        }
-        this.mSubscriptionManager.removeOnSubscriptionsChangedListener(this.mOnSubscriptionsChangedListener);
-        this.mDcc.dispose();
-        this.mDcTesterFailBringUpAll.dispose();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void doRecovery() {
-        if (getOverallState() == State.CONNECTED) {
-            int recoveryAction = getRecoveryAction();
-            switch (recoveryAction) {
-                case 0:
-                    EventLog.writeEvent(EventLogTags.DATA_STALL_RECOVERY_GET_DATA_CALL_LIST, this.mSentSinceLastRecv);
-                    log("doRecovery() get data call list");
-                    this.mPhone.mCi.getDataCallList(obtainMessage(270340));
-                    putRecoveryAction(1);
-                    break;
-                case 1:
-                    EventLog.writeEvent(EventLogTags.DATA_STALL_RECOVERY_CLEANUP, this.mSentSinceLastRecv);
-                    log("doRecovery() cleanup all connections");
-                    cleanUpAllConnections(Phone.REASON_PDP_RESET);
-                    putRecoveryAction(2);
-                    break;
-                case 2:
-                    EventLog.writeEvent(EventLogTags.DATA_STALL_RECOVERY_REREGISTER, this.mSentSinceLastRecv);
-                    log("doRecovery() re-register");
-                    this.mPhone.getServiceStateTracker().reRegisterNetwork(null);
-                    putRecoveryAction(3);
-                    break;
-                case 3:
-                    EventLog.writeEvent(EventLogTags.DATA_STALL_RECOVERY_RADIO_RESTART, this.mSentSinceLastRecv);
-                    log("restarting radio");
-                    putRecoveryAction(4);
-                    restartRadio();
-                    break;
-                case 4:
-                    EventLog.writeEvent(EventLogTags.DATA_STALL_RECOVERY_RADIO_RESTART_WITH_PROP, -1);
-                    log("restarting radio with gsm.radioreset to true");
-                    SystemProperties.set(this.RADIO_RESET_PROPERTY, "true");
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                    }
-                    restartRadio();
-                    putRecoveryAction(0);
-                    break;
-                default:
-                    throw new RuntimeException("doRecovery: Invalid recoveryAction=" + recoveryAction);
+    protected void notifyDataConnection(String reason) {
+        for (int id = 0; id < 10; id++) {
+            if (this.mDataEnabled[id]) {
+                this.mPhone.notifyDataConnection(reason, apnIdToType(id));
             }
-            this.mSentSinceLastRecv = 0;
         }
+        notifyOffApnsOfAvailability(reason);
     }
 
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        int i;
-        Set<Entry> entrySet;
-        printWriter.println("DcTrackerBase:");
-        printWriter.println(" RADIO_TESTS=false");
-        printWriter.println(" mInternalDataEnabled=" + this.mInternalDataEnabled);
-        printWriter.println(" mUserDataEnabled=" + this.mUserDataEnabled);
-        printWriter.println(" sPolicyDataEnabed=" + sPolicyDataEnabled);
-        printWriter.println(" mDataEnabled:");
-        for (i = 0; i < this.mDataEnabled.length; i++) {
-            printWriter.printf("  mDataEnabled[%d]=%b\n", new Object[]{Integer.valueOf(i), Boolean.valueOf(this.mDataEnabled[i])});
-        }
-        printWriter.flush();
-        printWriter.println(" mEnabledCount=" + this.mEnabledCount);
-        printWriter.println(" mRequestedApnType=" + this.mRequestedApnType);
-        printWriter.println(" mPhone=" + this.mPhone.getPhoneName());
-        printWriter.println(" mPhoneId=" + this.mPhone.getPhoneId());
-        printWriter.println(" mActivity=" + this.mActivity);
-        printWriter.println(" mState=" + this.mState);
-        printWriter.println(" mTxPkts=" + this.mTxPkts);
-        printWriter.println(" mRxPkts=" + this.mRxPkts);
-        printWriter.println(" mNetStatPollPeriod=" + this.mNetStatPollPeriod);
-        printWriter.println(" mNetStatPollEnabled=" + this.mNetStatPollEnabled);
-        printWriter.println(" mDataStallTxRxSum=" + this.mDataStallTxRxSum);
-        printWriter.println(" mDataStallAlarmTag=" + this.mDataStallAlarmTag);
-        printWriter.println(" mDataStallDetectionEanbled=" + this.mDataStallDetectionEnabled);
-        printWriter.println(" mSentSinceLastRecv=" + this.mSentSinceLastRecv);
-        printWriter.println(" mNoRecvPollCount=" + this.mNoRecvPollCount);
-        printWriter.println(" mResolver=" + this.mResolver);
-        printWriter.println(" mIsWifiConnected=" + this.mIsWifiConnected);
-        printWriter.println(" mReconnectIntent=" + this.mReconnectIntent);
-        printWriter.println(" mCidActive=" + this.mCidActive);
-        printWriter.println(" mAutoAttachOnCreation=" + this.mAutoAttachOnCreation);
-        printWriter.println(" mIsScreenOn=" + this.mIsScreenOn);
-        printWriter.println(" mUniqueIdGenerator=" + this.mUniqueIdGenerator);
-        printWriter.flush();
-        printWriter.println(" ***************************************");
-        DcController dcController = this.mDcc;
-        if (dcController != null) {
-            dcController.dump(fileDescriptor, printWriter, strArr);
-        } else {
-            printWriter.println(" mDcc=null");
-        }
-        printWriter.println(" ***************************************");
-        if (this.mDataConnections != null) {
-            entrySet = this.mDataConnections.entrySet();
-            printWriter.println(" mDataConnections: count=" + entrySet.size());
-            for (Entry key : entrySet) {
-                printWriter.printf(" *** mDataConnection[%d] \n", new Object[]{key.getKey()});
-                ((DataConnection) key.getValue()).dump(fileDescriptor, printWriter, strArr);
-            }
-        } else {
-            printWriter.println("mDataConnections=null");
-        }
-        printWriter.println(" ***************************************");
-        printWriter.flush();
-        HashMap hashMap = this.mApnToDataConnectionId;
-        if (hashMap != null) {
-            entrySet = hashMap.entrySet();
-            printWriter.println(" mApnToDataConnectonId size=" + entrySet.size());
-            for (Entry key2 : entrySet) {
-                printWriter.printf(" mApnToDataConnectonId[%s]=%d\n", new Object[]{key2.getKey(), key2.getValue()});
-            }
-        } else {
-            printWriter.println("mApnToDataConnectionId=null");
-        }
-        printWriter.println(" ***************************************");
-        printWriter.flush();
-        ConcurrentHashMap concurrentHashMap = this.mApnContexts;
-        if (concurrentHashMap != null) {
-            entrySet = concurrentHashMap.entrySet();
-            printWriter.println(" mApnContexts size=" + entrySet.size());
-            for (Entry key22 : entrySet) {
-                ((ApnContext) key22.getValue()).dump(fileDescriptor, printWriter, strArr);
-            }
-            printWriter.println(" ***************************************");
-        } else {
-            printWriter.println(" mApnContexts=null");
-        }
-        printWriter.flush();
-        printWriter.println(" mActiveApn=" + this.mActiveApn);
-        ArrayList arrayList = this.mAllApnSettings;
-        if (arrayList != null) {
-            printWriter.println(" mAllApnSettings size=" + arrayList.size());
-            for (i = 0; i < arrayList.size(); i++) {
-                printWriter.printf(" mAllApnSettings[%d]: %s\n", new Object[]{Integer.valueOf(i), arrayList.get(i)});
-            }
-            printWriter.flush();
-        } else {
-            printWriter.println(" mAllApnSettings=null");
-        }
-        printWriter.println(" mPreferredApn=" + this.mPreferredApn);
-        printWriter.println(" mIsPsRestricted=" + this.mIsPsRestricted);
-        printWriter.println(" mIsDisposed=" + this.mIsDisposed);
-        printWriter.println(" mIntentReceiver=" + this.mIntentReceiver);
-        printWriter.println(" mDataRoamingSettingObserver=" + this.mDataRoamingSettingObserver);
-        printWriter.flush();
-    }
+    /* renamed from: com.android.internal.telephony.dataconnection.DcTrackerBase$5 */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static /* synthetic */ class AnonymousClass5 {
+        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$DctConstants$State = new int[DctConstants.State.values().length];
 
-    /* Access modifiers changed, original: protected */
-    public ApnSetting fetchDunApn() {
-        ApnSetting apnSetting;
-        int i = 0;
-        if (SystemProperties.getBoolean("net.tethering.noprovisioning", false)) {
-            log("fetchDunApn: net.tethering.noprovisioning=true ret: null");
-            apnSetting = null;
-        } else if (TelBrand.IS_KDDI) {
-            log("fetchDunApn() Start");
-            return !isNetworkRoaming() ? this.mOemKddiDunApn : null;
-        } else {
-            Context context = this.mPhone.getContext();
-            IccRecords iccRecords = (IccRecords) this.mIccRecords.get();
-            int i2 = -1;
-            for (ApnSetting apnSetting2 : ApnSetting.arrayFromString(Global.getString(context.getContentResolver(), "tether_dun_apn"))) {
-                Object operatorNumeric = iccRecords != null ? iccRecords.getOperatorNumeric() : "";
-                if (apnSetting2.bearer != 0) {
-                    if (i2 == -1) {
-                        i2 = this.mPhone.getServiceState().getRilDataRadioTechnology();
-                    }
-                    if (apnSetting2.bearer != i2) {
-                        continue;
-                    }
-                }
-                if (!apnSetting2.numeric.equals(operatorNumeric)) {
-                    continue;
-                } else if (apnSetting2.hasMvnoParams()) {
-                    if (iccRecords != null && mvnoMatches(iccRecords, apnSetting2.mvnoType, apnSetting2.mvnoMatchData)) {
-                        return apnSetting2;
-                    }
-                }
-            }
-            String[] stringArray = context.getResources().getStringArray(17235993);
-            if (stringArray == null) {
-                return null;
-            }
-            int length = stringArray.length;
-            int i3 = i2;
-            ApnSetting apnSetting3 = null;
-            while (i < length) {
-                ApnSetting fromString = ApnSetting.fromString(stringArray[i]);
-                if (fromString != null) {
-                    if (fromString.bearer != 0) {
-                        if (i3 == -1) {
-                            i3 = this.mPhone.getServiceState().getRilDataRadioTechnology();
-                        }
-                        if (fromString.bearer != i3) {
-                            continue;
-                        }
-                    }
-                    if (!fromString.hasMvnoParams()) {
-                        apnSetting3 = fromString;
-                    } else if (iccRecords != null && mvnoMatches(iccRecords, fromString.mvnoType, fromString.mvnoMatchData)) {
-                        return fromString;
-                    }
-                }
-                i++;
-            }
-            return apnSetting3;
-        }
-        return apnSetting2;
-    }
-
-    public String getActiveApnString(String str) {
-        return this.mActiveApn != null ? this.mActiveApn.apn : null;
-    }
-
-    public String[] getActiveApnTypes() {
-        if (this.mActiveApn != null) {
-            return this.mActiveApn.types;
-        }
-        return new String[]{"default"};
-    }
-
-    public Activity getActivity() {
-        return this.mActivity;
-    }
-
-    public boolean getAnyDataEnabled() {
-        boolean z;
-        synchronized (this.mDataEnabledLock) {
-            z = this.mInternalDataEnabled && this.mUserDataEnabled && sPolicyDataEnabled && this.mUserDataEnabledDun && this.mEnabledCount != 0;
-        }
-        if (!z) {
-            log("getAnyDataEnabled " + z);
-        }
-        return z;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public boolean getAnyDataEnabledEx() {
-        boolean z;
-        synchronized (this.mDataEnabledLock) {
-            z = this.mInternalDataEnabled && this.mUserDataEnabled && sPolicyDataEnabled && this.mUserDataEnabledDun && this.mEnabledCount != 0;
-        }
-        if (!z) {
-            log("getAnyDataEnabledEx " + z);
-        }
-        return z;
-    }
-
-    public ApnSetting getApnParameter(boolean z, boolean z2, int i, int i2, String str, String str2) {
-        String[] strArr;
-        String[] strArr2;
-        String str3 = null;
-        String str4 = null;
-        String str5 = null;
-        int i3 = 2;
-        String[] strArr3 = new String[]{"default", "mms", "supl", "hipri", "dun"};
-        String str6 = "IP";
-        if (!(z || isNetworkRoaming())) {
-            strArr3 = z2 ? new String[]{"default", "mms", "supl", "hipri"} : new String[]{"dun"};
-        }
-        String[] split = getFixedParameter().split(",");
-        if (i == 1002) {
-            str3 = this.mApnCarNavi.apn;
-            str4 = this.mApnCarNavi.user;
-            str5 = this.mApnCarNavi.password;
-            i3 = this.mApnCarNavi.authType;
-            strArr = new String[]{CharacterSets.MIMENAME_ANY_CHARSET};
-            strArr2 = this.mDnsesCarNavi;
-        } else {
-            if (i == 1001) {
-                if (z) {
-                    if (split.length >= 3) {
-                        str4 = split[1];
-                        str5 = split[2];
-                        strArr = strArr3;
-                        strArr2 = null;
-                    }
-                } else if (z2) {
-                    if (split.length >= 6) {
-                        str3 = split[3];
-                        str4 = split[4];
-                        str5 = split[5];
-                        strArr = strArr3;
-                        strArr2 = null;
-                    }
-                } else if (split.length >= 9) {
-                    str3 = split[6];
-                    str4 = split[7];
-                    str5 = split[8];
-                    strArr = strArr3;
-                    strArr2 = null;
-                }
-            } else if (!z) {
-                if (z2) {
-                    if (split.length >= 12) {
-                        str3 = split[9];
-                        str4 = split[10];
-                        str5 = split[11];
-                        strArr = strArr3;
-                        strArr2 = null;
-                    }
-                } else if (split.length >= 15) {
-                    str3 = split[12];
-                    str4 = split[13];
-                    str5 = split[14];
-                    strArr = strArr3;
-                    strArr2 = null;
-                }
-            }
-            strArr = strArr3;
-            strArr2 = null;
-        }
-        if (!z) {
-            str6 = "IPV4V6";
-        }
-        ApnSetting apnSetting = new ApnSetting(i2, str, str2, str3, "", "", "", "", "", str4, str5, i3, strArr, str6, "IP", true, 0, 0, false, 0, 0, 0, 0, "", "");
-        apnSetting.oemDnses = strArr2;
-        return apnSetting;
-    }
-
-    public int getApnPriority(String str) {
-        return -1;
-    }
-
-    public boolean getDataEnabled() {
-        int i = 0;
-        try {
-            return Global.getInt(this.mPhone.getContext().getContentResolver(), new StringBuilder().append("mobile_data").append(this.mPhone.getPhoneId()).toString()) != 0;
-        } catch (SettingNotFoundException e) {
+        static {
             try {
-                ContentResolver contentResolver = this.mPhone.getContext().getContentResolver();
-                boolean z = Global.getInt(contentResolver, "mobile_data") != 0;
-                String str = "mobile_data" + this.mPhone.getPhoneId();
-                if (z) {
-                    i = 1;
-                }
-                Global.putInt(contentResolver, str, i);
-                return z;
-            } catch (SettingNotFoundException e2) {
-                return true;
+                $SwitchMap$com$android$internal$telephony$DctConstants$State[DctConstants.State.IDLE.ordinal()] = 1;
+            } catch (NoSuchFieldError e) {
             }
-        }
-    }
-
-    public boolean getDataOnRoamingEnabled() {
-        int i = 1;
-        ContentResolver contentResolver;
-        try {
-            contentResolver = this.mPhone.getContext().getContentResolver();
-            String str = "data_roaming";
-            if (TelephonyManager.getDefault().isMultiSimEnabled()) {
-                str = "data_roaming" + this.mPhone.getPhoneId();
-            }
-            return Global.getInt(contentResolver, str) != 0;
-        } catch (SettingNotFoundException e) {
             try {
-                contentResolver = this.mPhone.getContext().getContentResolver();
-                boolean z = Global.getInt(contentResolver, "data_roaming") != 0;
-                String str2 = "data_roaming" + this.mPhone.getPhoneId();
-                if (!z) {
-                    i = 0;
-                }
-                Global.putInt(contentResolver, str2, i);
-                return z;
-            } catch (SettingNotFoundException e2) {
-                return false;
+                $SwitchMap$com$android$internal$telephony$DctConstants$State[DctConstants.State.RETRYING.ordinal()] = 2;
+            } catch (NoSuchFieldError e2) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$DctConstants$State[DctConstants.State.CONNECTING.ordinal()] = 3;
+            } catch (NoSuchFieldError e3) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$DctConstants$State[DctConstants.State.SCANNING.ordinal()] = 4;
+            } catch (NoSuchFieldError e4) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$DctConstants$State[DctConstants.State.CONNECTED.ordinal()] = 5;
+            } catch (NoSuchFieldError e5) {
+            }
+            try {
+                $SwitchMap$com$android$internal$telephony$DctConstants$State[DctConstants.State.DISCONNECTING.ordinal()] = 6;
+            } catch (NoSuchFieldError e6) {
             }
         }
     }
 
-    public String getHigherPriorityApnType() {
-        int i = 0;
-        String str = "default";
-        if (TelBrand.IS_KDDI) {
-            ApnContext[] apnContextArr = (ApnContext[]) this.mPrioritySortedApnContexts.toArray(new ApnContext[0]);
-            int length = apnContextArr.length;
-            while (i < length) {
-                ApnContext apnContext = apnContextArr[i];
-                if (apnContext.isEnabled()) {
-                    String apnType = apnContext.getApnType();
-                    log("higherPrioApnType : " + apnType);
-                    return apnType;
-                }
-                i++;
-            }
-        }
-        return str;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public int getInitialMaxRetry() {
-        if (this.mFailFast) {
-            return 0;
-        }
-        return Global.getInt(this.mResolver, "mdc_initial_max_retry", SystemProperties.getInt("mdc_initial_max_retry", 1));
-    }
-
-    public LinkProperties getLinkProperties(String str) {
-        return isApnIdEnabled(apnTypeToId(str)) ? ((DcAsyncChannel) this.mDataConnectionAcHashMap.get(Integer.valueOf(0))).getLinkPropertiesSync() : new LinkProperties();
-    }
-
-    public NetworkCapabilities getNetworkCapabilities(String str) {
-        return isApnIdEnabled(apnTypeToId(str)) ? ((DcAsyncChannel) this.mDataConnectionAcHashMap.get(Integer.valueOf(0))).getNetworkCapabilitiesSync() : new NetworkCapabilities();
-    }
-
-    public String[] getOemKddiCpaConnInfo() {
-        String[] strArr = new String[3];
-        if (this.mEnableApnCarNavi) {
-            strArr[0] = new String(this.mLocalAddressCarNavi);
-            strArr[1] = new String(this.mDnsAddressCarNavi[0]);
-            strArr[2] = new String(this.mDnsAddressCarNavi[1]);
-            log("getAddress[0] : " + strArr[0] + " / " + this.mLocalAddressCarNavi);
-            log("getAddress[1] : " + strArr[1] + " / " + this.mDnsAddressCarNavi[0]);
-            log("getAddress[2] : " + strArr[2] + " / " + this.mDnsAddressCarNavi[1]);
-        }
-        return strArr;
-    }
-
-    public int getOemKddiCpaConnStatus() {
-        String higherPriorityApnType = getHigherPriorityApnType();
-        log("getConnStatus() higherPrioApnType : " + higherPriorityApnType);
-        if ((!this.mEnableApnCarNavi && (this.mEnableApnCarNavi || !this.mDisConnectingApnCarNavi)) || !isApnTypeActive(higherPriorityApnType)) {
-            return 6;
-        }
-        State state = getState(higherPriorityApnType);
-        if (state == State.IDLE) {
-            return 0;
-        }
-        if (state == State.CONNECTING) {
-            return 2;
-        }
-        if (state == State.SCANNING) {
-            return 3;
-        }
-        if (state == State.CONNECTED) {
-            return 4;
-        }
-        if (state == State.DISCONNECTING) {
-            return 5;
-        }
-        if (state == State.FAILED || state == State.RETRYING) {
-        }
-        return 6;
-    }
-
-    public abstract State getOverallState();
-
-    public abstract String[] getPcscfAddress(String str);
-
-    public int getRecoveryAction() {
-        int i = System.getInt(this.mPhone.getContext().getContentResolver(), "radio.data.stall.recovery.action", 0);
-        log("getRecoveryAction: " + i);
-        return i;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public String getReryConfig(boolean z) {
-        int networkType = this.mPhone.getServiceState().getNetworkType();
-        return (networkType == 4 || networkType == 7 || networkType == 5 || networkType == 6 || networkType == 12 || networkType == 14) ? SystemProperties.get("ro.cdma.data_retry_config") : z ? SystemProperties.get("ro.gsm.data_retry_config") : SystemProperties.get("ro.gsm.2nd_data_retry_config");
-    }
-
-    public abstract State getState(String str);
-
-    public long getSubId() {
-        return (long) this.mPhone.getSubId();
-    }
-
-    public abstract void gotoIdleAndNotifyDataConnection(String str);
-
-    public void handleMessage(Message message) {
-        int i = 1;
-        boolean z;
-        Bundle data;
-        boolean z2;
-        switch (message.what) {
-            case 69636:
-                log("DISCONNECTED_CONNECTED: msg=" + message);
-                DcAsyncChannel dcAsyncChannel = (DcAsyncChannel) message.obj;
-                this.mDataConnectionAcHashMap.remove(Integer.valueOf(dcAsyncChannel.getDataConnectionIdSync()));
-                dcAsyncChannel.disconnected();
-                return;
-            case 270336:
-                this.mCidActive = message.arg1;
-                onDataSetupComplete((AsyncResult) message.obj);
-                return;
-            case 270337:
-                onRadioAvailable();
-                return;
-            case 270339:
-                onTrySetupData(message.obj instanceof String ? (String) message.obj : null);
-                return;
-            case 270342:
-                onRadioOffOrNotAvailable();
-                return;
-            case 270343:
-                onVoiceCallStarted();
-                return;
-            case 270344:
-                onVoiceCallEnded();
-                return;
-            case 270347:
-                onRoamingOn();
-                return;
-            case 270348:
-                onRoamingOff();
-                return;
-            case 270349:
-                onEnableApn(message.arg1, message.arg2);
-                return;
-            case 270351:
-                log("DataConnectionTracker.handleMessage: EVENT_DISCONNECT_DONE msg=" + message);
-                onDisconnectDone(message.arg1, (AsyncResult) message.obj);
-                onUpdateOemDataSettingsAsync();
-                return;
-            case 270353:
-                onDataStallAlarm(message.arg1);
-                return;
-            case 270360:
-                onCleanUpConnection(message.arg1 != 0, message.arg2, (String) message.obj);
-                return;
-            case 270362:
-                restartRadio();
-                return;
-            case 270363:
-                if (message.arg1 != 1) {
-                    z = false;
-                }
-                onSetInternalDataEnabled(z);
-                return;
-            case 270364:
-                log("EVENT_RESET_DONE");
-                onResetDone((AsyncResult) message.obj);
-                return;
-            case 270365:
-                onCleanUpAllConnections((String) message.obj);
-                return;
-            case 270366:
-                if (message.arg1 != 1) {
-                    z = false;
-                }
-                log("CMD_SET_USER_DATA_ENABLE enabled=" + z);
-                onSetUserDataEnabled(z);
-                return;
-            case 270367:
-                if (message.arg1 != 1) {
-                    z = false;
-                }
-                log("CMD_SET_DEPENDENCY_MET met=" + z);
-                data = message.getData();
-                if (data != null) {
-                    String str = (String) data.get("apnType");
-                    if (str != null) {
-                        onSetDependencyMet(str, z);
-                        return;
-                    }
-                    return;
-                }
-                return;
-            case 270368:
-                if (message.arg1 != 1) {
-                    z = false;
-                }
-                onSetPolicyDataEnabled(z);
-                return;
-            case 270369:
-                onUpdateIcc();
-                return;
-            case 270370:
-                log("DataConnectionTracker.handleMessage: EVENT_DISCONNECT_DC_RETRYING msg=" + message);
-                onDisconnectDcRetrying(message.arg1, (AsyncResult) message.obj);
-                return;
-            case 270371:
-                onDataSetupCompleteError((AsyncResult) message.obj);
-                return;
-            case 270372:
-                sEnableFailFastRefCounter = (message.arg1 == 1 ? 1 : -1) + sEnableFailFastRefCounter;
-                log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA:  sEnableFailFastRefCounter=" + sEnableFailFastRefCounter);
-                if (sEnableFailFastRefCounter < 0) {
-                    loge("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: sEnableFailFastRefCounter:" + sEnableFailFastRefCounter + " < 0");
-                    sEnableFailFastRefCounter = 0;
-                }
-                z2 = sEnableFailFastRefCounter > 0;
-                log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: enabled=" + z2 + " sEnableFailFastRefCounter=" + sEnableFailFastRefCounter);
-                if (this.mFailFast != z2) {
-                    this.mFailFast = z2;
-                    if (z2) {
-                        z = false;
-                    }
-                    this.mDataStallDetectionEnabled = z;
-                    if (this.mDataStallDetectionEnabled && getOverallState() == State.CONNECTED && (!this.mInVoiceCall || this.mPhone.getServiceStateTracker().isConcurrentVoiceAndDataAllowed())) {
-                        log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: start data stall");
-                        stopDataStallAlarm();
-                        startDataStallAlarm(false);
-                        return;
-                    }
-                    log("CMD_SET_ENABLE_FAIL_FAST_MOBILE_DATA: stop data stall");
-                    stopDataStallAlarm();
-                    return;
-                }
-                return;
-            case 270373:
-                data = message.getData();
-                if (data != null) {
-                    try {
-                        this.mProvisioningUrl = (String) data.get("provisioningUrl");
-                    } catch (ClassCastException e) {
-                        loge("CMD_ENABLE_MOBILE_PROVISIONING: provisioning url not a string" + e);
-                        this.mProvisioningUrl = null;
-                    }
-                }
-                if (TextUtils.isEmpty(this.mProvisioningUrl)) {
-                    loge("CMD_ENABLE_MOBILE_PROVISIONING: provisioning url is empty, ignoring");
-                    this.mIsProvisioning = false;
-                    this.mProvisioningUrl = null;
-                    return;
-                }
-                loge("CMD_ENABLE_MOBILE_PROVISIONING: provisioningUrl=" + this.mProvisioningUrl);
-                this.mIsProvisioning = true;
-                startProvisioningApnAlarm();
-                return;
-            case 270374:
-                log("CMD_IS_PROVISIONING_APN");
-                try {
-                    data = message.getData();
-                    CharSequence charSequence = data != null ? (String) data.get("apnType") : null;
-                    if (TextUtils.isEmpty(charSequence)) {
-                        loge("CMD_IS_PROVISIONING_APN: apnType is empty");
-                        z2 = false;
-                    } else {
-                        z2 = isProvisioningApn(charSequence);
-                    }
-                } catch (ClassCastException e2) {
-                    loge("CMD_IS_PROVISIONING_APN: NO provisioning url ignoring");
-                    z2 = false;
-                }
-                log("CMD_IS_PROVISIONING_APN: ret=" + z2);
-                AsyncChannel asyncChannel = this.mReplyAc;
-                if (!z2) {
-                    i = 0;
-                }
-                asyncChannel.replyToMessage(message, 270374, i);
-                return;
-            case 270375:
-                log("EVENT_PROVISIONING_APN_ALARM");
-                ApnContext apnContext = (ApnContext) this.mApnContexts.get("default");
-                if (!apnContext.isProvisioningApn() || !apnContext.isConnectedOrConnecting()) {
-                    log("EVENT_PROVISIONING_APN_ALARM: Not connected ignore");
-                    return;
-                } else if (this.mProvisioningApnAlarmTag == message.arg1) {
-                    log("EVENT_PROVISIONING_APN_ALARM: Disconnecting");
-                    this.mIsProvisioning = false;
-                    this.mProvisioningUrl = null;
-                    stopProvisioningApnAlarm();
-                    sendCleanUpConnection(true, apnContext);
-                    return;
-                } else {
-                    log("EVENT_PROVISIONING_APN_ALARM: ignore stale tag, mProvisioningApnAlarmTag:" + this.mProvisioningApnAlarmTag + " != arg1:" + message.arg1);
-                    return;
-                }
-            case 270376:
-                if (message.arg1 == 1) {
-                    handleStartNetStatPoll((Activity) message.obj);
-                    return;
-                } else if (message.arg1 == 0) {
-                    handleStopNetStatPoll((Activity) message.obj);
-                    return;
-                } else {
-                    return;
-                }
+    private void notifyApnIdUpToCurrent(String reason, int apnId) {
+        switch (AnonymousClass5.$SwitchMap$com$android$internal$telephony$DctConstants$State[this.mState.ordinal()]) {
+            case 1:
             default:
-                Rlog.e("DATA", "Unidentified event msg=" + message);
+                return;
+            case 2:
+            case 3:
+            case 4:
+                this.mPhone.notifyDataConnection(reason, apnIdToType(apnId), PhoneConstants.DataState.CONNECTING);
+                return;
+            case 5:
+            case 6:
+                this.mPhone.notifyDataConnection(reason, apnIdToType(apnId), PhoneConstants.DataState.CONNECTING);
+                this.mPhone.notifyDataConnection(reason, apnIdToType(apnId), PhoneConstants.DataState.CONNECTED);
                 return;
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void handleStartNetStatPoll(Activity activity) {
-        this.mIsPhysicalLinkUp = true;
-        startNetStatPoll();
-        startDataStallAlarm(false);
-        setActivity(activity);
+    private void notifyApnIdDisconnected(String reason, int apnId) {
+        this.mPhone.notifyDataConnection(reason, apnIdToType(apnId), PhoneConstants.DataState.DISCONNECTED);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void handleStopNetStatPoll(Activity activity) {
-        this.mIsPhysicalLinkUp = false;
-        stopNetStatPoll();
-        stopDataStallAlarm();
-        setActivity(activity);
-    }
-
-    public boolean hasMatchedTetherApnSetting() {
-        ApnSetting fetchDunApn = fetchDunApn();
-        log("hasMatchedTetherApnSetting: APN=" + fetchDunApn);
-        return fetchDunApn != null;
-    }
-
-    public void incApnRefCount(String str) {
-    }
-
-    /* Access modifiers changed, original: protected */
-    public boolean isApnIdEnabled(int i) {
-        boolean z;
-        synchronized (this) {
-            z = i != -1 ? this.mDataEnabled[i] : false;
-        }
-        return z;
-    }
-
-    public boolean isApnSupported(String str) {
-        return false;
-    }
-
-    public boolean isApnTypeActive(String str) {
-        if ("dun".equals(str)) {
-            ApnSetting fetchDunApn = fetchDunApn();
-            if (fetchDunApn != null) {
-                if (this.mActiveApn == null || !fetchDunApn.toString().equals(this.mActiveApn.toString())) {
-                    return false;
-                }
-                return true;
+    protected void notifyOffApnsOfAvailability(String reason) {
+        log("notifyOffApnsOfAvailability - reason= " + reason);
+        for (int id = 0; id < 10; id++) {
+            if (!isApnIdEnabled(id)) {
+                notifyApnIdDisconnected(reason, id);
             }
         }
-        if (this.mActiveApn == null || !this.mActiveApn.canHandleType(str)) {
+    }
+
+    public boolean isApnTypeEnabled(String apnType) {
+        if (apnType == null) {
             return false;
         }
-        return true;
+        return isApnIdEnabled(apnTypeToId(apnType));
     }
 
-    public abstract boolean isApnTypeAvailable(String str);
-
-    public boolean isApnTypeEnabled(String str) {
-        return str == null ? false : isApnIdEnabled(apnTypeToId(str));
+    protected synchronized boolean isApnIdEnabled(int id) {
+        return id != -1 ? this.mDataEnabled[id] : false;
     }
 
-    /* Access modifiers changed, original: protected */
-    public boolean isConnected() {
-        return false;
+    public void setEnabled(int id, boolean enable) {
+        log("setEnabled(" + id + ", " + enable + ") with old state = " + this.mDataEnabled[id] + " and enabledCount = " + this.mEnabledCount);
+        Message msg = obtainMessage(270349);
+        msg.arg1 = id;
+        msg.arg2 = enable ? 1 : 0;
+        sendMessage(msg);
     }
 
-    public abstract boolean isDataAllowed();
-
-    public abstract boolean isDataPossible(String str);
-
-    public abstract boolean isDisconnected();
-
-    /* Access modifiers changed, original: protected */
-    public boolean isEmergency() {
-        boolean z;
-        synchronized (this.mDataEnabledLock) {
-            z = this.mPhone.isInEcm() || this.mPhone.isInEmergencyCall();
-        }
-        log("isEmergency: result=" + z);
-        return z;
-    }
-
-    public abstract boolean isOnDemandDataPossible(String str);
-
-    public abstract boolean isPermanentFail(DcFailCause dcFailCause);
-
-    public abstract boolean isProvisioningApn(String str);
-
-    public abstract void log(String str);
-
-    public abstract void loge(String str);
-
-    public abstract boolean mvnoMatches(IccRecords iccRecords, String str, String str2);
-
-    /* Access modifiers changed, original: protected */
-    public void notifyDataConnection(String str) {
-        for (int i = 0; i < 10; i++) {
-            if (this.mDataEnabled[i]) {
-                this.mPhone.notifyDataConnection(str, apnIdToType(i));
-            }
-        }
-        notifyOffApnsOfAvailability(str);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void notifyDataConnectionCarNavi(State state) {
-        int i = 4;
-        if (TelBrand.IS_KDDI) {
-            log("notifyDataConnectionCarNavi() mEnableApnCarNavi :" + this.mEnableApnCarNavi + " mRequestedApnType : " + this.mRequestedApnType + " state : " + state);
-            if (this.mEnableApnCarNavi && this.mConnectingApnCarNavi && state == State.CONNECTING) {
-                log("notifyDataConnectionCarNavi() mConnectingApnCarNavi=true state change. [" + this.mState + "]-->[" + state + "]");
-            } else if (this.mState == state) {
-                log("notifyDataConnectionCarNavi() ignored same state");
-                return;
-            } else if (this.mEnableApnCarNavi && !((this.mState != State.RETRYING && this.mState != State.CONNECTING && state != State.SCANNING) || state == State.FAILED || state == State.CONNECTED)) {
-                log("notifyDataConnectionCarNavi() ignored invalid state change. [" + this.mState + "]-->[" + state + "]");
-                return;
-            }
-            this.mState = state;
-            if (this.mEnableApnCarNavi || (!this.mEnableApnCarNavi && this.mDisConnectingApnCarNavi)) {
-                if (this.mConnectingApnCarNavi) {
-                    if (!(state == State.RETRYING || state == State.CONNECTING)) {
-                        log("notifyDataConnectionCarNavi() ignored. mConnectingApnCarNavi : " + this.mConnectingApnCarNavi + " state : " + state);
-                        return;
-                    }
-                } else if (!this.mEnableApnCarNavi && this.mDisConnectingApnCarNavi) {
-                    if (state != State.IDLE && state != State.FAILED && state != State.DISCONNECTING) {
-                        log("notifyDataConnectionCarNavi() ignored. mDisConnectingApnCarNavi : " + this.mDisConnectingApnCarNavi + " state : " + state);
-                        return;
-                    } else if (state == State.IDLE || state == State.FAILED) {
-                        log("mDisConnectingApnCarNavi = false");
-                        this.mDisConnectingApnCarNavi = false;
-                    }
-                }
-                if (state == State.RETRYING || state == State.CONNECTING || state == State.SCANNING) {
-                    i = 1;
-                    if (this.mConnectingApnCarNavi) {
-                        log("mConnectingApnCarNavi = false");
-                        this.mConnectingApnCarNavi = false;
-                    }
-                } else if (state == State.CONNECTED) {
-                    i = 2;
-                } else if (state == State.DISCONNECTING) {
-                    i = 3;
-                } else if (state == State.FAILED || state == State.IDLE) {
-                }
-                Intent intent = new Intent(CONNECTIVITY_ACTION_CARNAVI);
-                intent.putExtra(EXTRA_CONNECTIVITY_STATUS_CARNAVI, i);
-                intent.putExtra(EXTRA_ERRONO_CARNAVI, 0);
-                this.mPhone.getContext().sendStickyBroadcast(intent);
-                log("Sent intent CONNECTIVITY_ACTION for CarNavi : " + state + " / " + i);
-            }
-            if (this.mEnableApnCarNavi && this.mState == State.IDLE) {
-                changeMode(false, "", "", "", 0, "", "", "", "");
-                this.mEnableApnCarNavi = false;
-                this.mDisConnectingApnCarNavi = false;
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void notifyOffApnsOfAvailability(String str) {
-        log("notifyOffApnsOfAvailability - reason= " + str);
-        for (int i = 0; i < 10; i++) {
-            if (!isApnIdEnabled(i)) {
-                notifyApnIdDisconnected(str, i);
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void onActionIntentDataStallAlarm(Intent intent) {
-        log("onActionIntentDataStallAlarm: action=" + intent.getAction());
-        Message obtainMessage = obtainMessage(270353, intent.getAction());
-        obtainMessage.arg1 = intent.getIntExtra(DATA_STALL_ALARM_TAG_EXTRA, 0);
-        sendMessage(obtainMessage);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void onActionIntentProvisioningApnAlarm(Intent intent) {
-        log("onActionIntentProvisioningApnAlarm: action=" + intent.getAction());
-        Message obtainMessage = obtainMessage(270375, intent.getAction());
-        obtainMessage.arg1 = intent.getIntExtra(PROVISIONING_APN_ALARM_TAG_EXTRA, 0);
-        sendMessage(obtainMessage);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void onActionIntentReconnectAlarm(Intent intent) {
-        String stringExtra = intent.getStringExtra(INTENT_RECONNECT_ALARM_EXTRA_REASON);
-        String stringExtra2 = intent.getStringExtra(INTENT_RECONNECT_ALARM_EXTRA_TYPE);
-        log("onActionIntentReconnectAlarm: currSubId = " + intent.getIntExtra("subscription", -1) + " phoneSubId=" + this.mPhone.getSubId());
-        ApnContext apnContext = (ApnContext) this.mApnContexts.get(stringExtra2);
-        log("onActionIntentReconnectAlarm: mState=" + this.mState + " reason=" + stringExtra + " apnType=" + stringExtra2 + " apnContext=" + apnContext + " mDataConnectionAsyncChannels=" + this.mDataConnectionAcHashMap);
-        if (apnContext != null && apnContext.isEnabled()) {
-            apnContext.setReason(stringExtra);
-            State state = apnContext.getState();
-            log("onActionIntentReconnectAlarm: apnContext state=" + state);
-            if (state == State.FAILED || state == State.IDLE) {
-                log("onActionIntentReconnectAlarm: state is FAILED|IDLE, disassociate");
-                DcAsyncChannel dcAc = apnContext.getDcAc();
-                if (dcAc != null) {
-                    dcAc.tearDown(apnContext, "", null);
-                }
-                apnContext.setDataConnectionAc(null);
-                apnContext.setState(State.IDLE);
-            } else {
-                log("onActionIntentReconnectAlarm: keep associated");
-            }
-            sendMessage(obtainMessage(270339, apnContext));
-            apnContext.setReconnectIntent(null);
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void onActionIntentRestartTrySetupAlarm(Intent intent) {
-        String stringExtra = intent.getStringExtra(INTENT_RESTART_TRYSETUP_ALARM_EXTRA_TYPE);
-        ApnContext apnContext = (ApnContext) this.mApnContexts.get(stringExtra);
-        log("onActionIntentRestartTrySetupAlarm: mState=" + this.mState + " apnType=" + stringExtra + " apnContext=" + apnContext + " mDataConnectionAsyncChannels=" + this.mDataConnectionAcHashMap);
-        sendMessage(obtainMessage(270339, apnContext));
-    }
-
-    public abstract void onCleanUpAllConnections(String str);
-
-    public abstract void onCleanUpConnection(boolean z, int i, String str);
-
-    public abstract void onDataSetupComplete(AsyncResult asyncResult);
-
-    public abstract void onDataSetupCompleteError(AsyncResult asyncResult);
-
-    /* Access modifiers changed, original: protected */
-    public void onDataStallAlarm(int i) {
-        if (this.mDataStallAlarmTag != i) {
-            log("onDataStallAlarm: ignore, tag=" + i + " expecting " + this.mDataStallAlarmTag);
-            return;
-        }
-        updateDataStallInfo();
-        int i2 = Global.getInt(this.mResolver, "pdp_watchdog_trigger_packet_count", 10);
-        boolean z = false;
-        if (this.mSentSinceLastRecv >= ((long) i2)) {
-            log("onDataStallAlarm: tag=" + i + " do recovery action=" + getRecoveryAction());
-            z = true;
-            sendMessage(obtainMessage(270354));
-        } else {
-            log("onDataStallAlarm: tag=" + i + " Sent " + String.valueOf(this.mSentSinceLastRecv) + " pkts since last received, < watchdogTrigger=" + i2);
-        }
-        startDataStallAlarm(z);
-    }
-
-    public abstract void onDisconnectDcRetrying(int i, AsyncResult asyncResult);
-
-    public abstract void onDisconnectDone(int i, AsyncResult asyncResult);
-
-    /* Access modifiers changed, original: protected */
-    public void onEnableApn(int i, int i2) {
-        log("EVENT_APN_ENABLE_REQUEST apnId=" + i + ", apnType=" + apnIdToType(i) + ", enabled=" + i2 + ", dataEnabled = " + this.mDataEnabled[i] + ", enabledCount = " + this.mEnabledCount + ", isApnTypeActive = " + isApnTypeActive(apnIdToType(i)));
-        if (i2 == 1) {
+    protected void onEnableApn(int apnId, int enabled) {
+        log("EVENT_APN_ENABLE_REQUEST apnId=" + apnId + ", apnType=" + apnIdToType(apnId) + ", enabled=" + enabled + ", dataEnabled = " + this.mDataEnabled[apnId] + ", enabledCount = " + this.mEnabledCount + ", isApnTypeActive = " + isApnTypeActive(apnIdToType(apnId)));
+        if (enabled == 1) {
             synchronized (this) {
-                if (!this.mDataEnabled[i]) {
-                    this.mDataEnabled[i] = true;
+                if (!this.mDataEnabled[apnId]) {
+                    this.mDataEnabled[apnId] = true;
                     this.mEnabledCount++;
                 }
             }
-            String apnIdToType = apnIdToType(i);
-            if (isApnTypeActive(apnIdToType)) {
-                notifyApnIdUpToCurrent(Phone.REASON_APN_SWITCHED, i);
+            String type = apnIdToType(apnId);
+            if (!isApnTypeActive(type)) {
+                this.mRequestedApnType = type;
+                onEnableNewApn();
                 return;
             }
-            this.mRequestedApnType = apnIdToType;
-            onEnableNewApn();
+            notifyApnIdUpToCurrent(Phone.REASON_APN_SWITCHED, apnId);
             return;
         }
-        boolean z;
+        boolean didDisable = false;
         synchronized (this) {
-            if (this.mDataEnabled[i]) {
-                this.mDataEnabled[i] = false;
+            if (this.mDataEnabled[apnId]) {
+                this.mDataEnabled[apnId] = false;
                 this.mEnabledCount--;
-                z = true;
-            } else {
-                z = false;
+                didDisable = true;
             }
         }
-        if (z) {
-            if ((this.mEnabledCount == 0 || i == 3) && (!TelBrand.IS_KDDI || this.mEnabledCount == 0)) {
+        if (didDisable) {
+            if ((this.mEnabledCount == 0 || apnId == 3) && (!TelBrand.IS_KDDI || this.mEnabledCount == 0)) {
                 this.mRequestedApnType = "default";
-                onCleanUpConnection(true, i, Phone.REASON_DATA_DISABLED);
+                onCleanUpConnection(true, apnId, Phone.REASON_DATA_DISABLED);
             }
-            notifyApnIdDisconnected(Phone.REASON_DATA_DISABLED, i);
+            notifyApnIdDisconnected(Phone.REASON_DATA_DISABLED, apnId);
             if (this.mDataEnabled[0] && !isApnTypeActive("default")) {
                 this.mRequestedApnType = "default";
                 onEnableNewApn();
@@ -1920,37 +1129,36 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void onEnableNewApn() {
+    protected void onEnableNewApn() {
     }
 
-    public abstract void onRadioAvailable();
-
-    public abstract void onRadioOffOrNotAvailable();
-
-    /* Access modifiers changed, original: protected */
-    public void onResetDone(AsyncResult asyncResult) {
+    protected void onResetDone(AsyncResult ar) {
         log("EVENT_RESET_DONE");
-        String str = null;
-        if (asyncResult.userObj instanceof String) {
-            str = (String) asyncResult.userObj;
+        String reason = null;
+        if (ar.userObj instanceof String) {
+            reason = (String) ar.userObj;
         }
-        gotoIdleAndNotifyDataConnection(str);
+        gotoIdleAndNotifyDataConnection(reason);
     }
 
-    public abstract void onRoamingOff();
-
-    public abstract void onRoamingOn();
-
-    /* Access modifiers changed, original: protected */
-    public void onSetDependencyMet(String str, boolean z) {
+    public boolean setInternalDataEnabled(boolean enable) {
+        int i;
+        log("setInternalDataEnabled(" + enable + ")");
+        Message msg = obtainMessage(270363);
+        if (enable) {
+            i = 1;
+        } else {
+            i = 0;
+        }
+        msg.arg1 = i;
+        sendMessage(msg);
+        return true;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void onSetInternalDataEnabled(boolean z) {
+    protected void onSetInternalDataEnabled(boolean enabled) {
         synchronized (this.mDataEnabledLock) {
-            this.mInternalDataEnabled = z;
-            if (z) {
+            this.mInternalDataEnabled = enabled;
+            if (enabled) {
                 log("onSetInternalDataEnabled: changed to enabled, try to setup data call");
                 if (TelBrand.IS_KDDI) {
                     updateOemDataSettings();
@@ -1963,48 +1171,38 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void onSetPolicyDataEnabled(boolean z) {
-        synchronized (this.mDataEnabledLock) {
-            if (sPolicyDataEnabled != z) {
-                sPolicyDataEnabled = z;
-                updateOemDataSettings();
-                if (z) {
-                    onTrySetupData(Phone.REASON_DATA_ENABLED);
-                } else {
-                    onCleanUpAllConnections(Phone.REASON_DATA_SPECIFIC_DISABLED);
-                }
-            }
-        }
+    public void cleanUpAllConnections(String cause) {
+        Message msg = obtainMessage(270365);
+        msg.obj = cause;
+        sendMessage(msg);
     }
 
-    /* Access modifiers changed, original: protected */
-    public void onSetUserDataEnabled(boolean z) {
-        boolean z2 = false;
+    protected void onSetUserDataEnabled(boolean enabled) {
+        boolean z = true;
         synchronized (this.mDataEnabledLock) {
-            if (this.mUserDataEnabled != z) {
-                this.mUserDataEnabled = z;
-                Global.putInt(this.mPhone.getContext().getContentResolver(), "mobile_data" + this.mPhone.getPhoneId(), z ? 1 : 0);
+            if (this.mUserDataEnabled != enabled) {
+                this.mUserDataEnabled = enabled;
+                Settings.Global.putInt(this.mPhone.getContext().getContentResolver(), "mobile_data" + this.mPhone.getPhoneId(), enabled ? 1 : 0);
                 if (TelBrand.IS_DCM || TelBrand.IS_SBM) {
-                    Global.putInt(this.mPhone.getContext().getContentResolver(), "mobile_data", z ? 1 : 0);
+                    Settings.Global.putInt(this.mPhone.getContext().getContentResolver(), "mobile_data", enabled ? 1 : 0);
                 }
                 if (!getDataOnRoamingEnabled() && this.mPhone.getServiceState().getDataRoaming()) {
-                    if (z) {
+                    if (enabled) {
                         notifyOffApnsOfAvailability(Phone.REASON_ROAMING_ON);
                     } else {
                         notifyOffApnsOfAvailability(Phone.REASON_DATA_DISABLED);
                     }
                 }
                 if (TelBrand.IS_DCM || TelBrand.IS_SBM) {
-                    if (!z) {
-                        z2 = true;
+                    if (enabled) {
+                        z = false;
                     }
-                    updateOemDataSettingsAsync(z2);
+                    updateOemDataSettingsAsync(z);
                 }
                 if (TelBrand.IS_KDDI) {
                     updateOemDataSettings();
                 }
-                if (z) {
+                if (enabled) {
                     onTrySetupData(Phone.REASON_DATA_ENABLED);
                 } else {
                     onCleanUpAllConnections(Phone.REASON_DATA_SPECIFIC_DISABLED);
@@ -2013,311 +1211,54 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    public abstract boolean onTrySetupData(String str);
-
-    public abstract boolean onUpdateIcc();
-
-    /* Access modifiers changed, original: protected */
-    public void onUpdateOemDataSettingsAsync() {
-        log("onUpdateOemDataSettingsAsync");
-        if (this.mCnt == 0) {
-            log("updateLetApn is not required");
-        } else if (isDisconnected()) {
+    void updateOemDataSettingsAsync(boolean async) {
+        if (!async) {
+            log("updateOemDataSettingsAsync sync");
             updateOemDataSettings();
             this.mCnt = 0;
+            return;
+        }
+        this.mCnt++;
+        log("updateOemDataSettingsAsync mCnt=" + this.mCnt);
+        onUpdateOemDataSettingsAsync();
+    }
+
+    protected void onSetDependencyMet(String apnType, boolean met) {
+    }
+
+    protected void onSetPolicyDataEnabled(boolean enabled) {
+        synchronized (this.mDataEnabledLock) {
+            if (sPolicyDataEnabled != enabled) {
+                sPolicyDataEnabled = enabled;
+                updateOemDataSettings();
+                if (enabled) {
+                    onTrySetupData(Phone.REASON_DATA_ENABLED);
+                } else {
+                    onCleanUpAllConnections(Phone.REASON_DATA_SPECIFIC_DISABLED);
+                }
+            }
         }
     }
 
-    public abstract void onVoiceCallEnded();
-
-    public abstract void onVoiceCallStarted();
-
-    public void putRecoveryAction(int i) {
-        System.putInt(this.mPhone.getContext().getContentResolver(), "radio.data.stall.recovery.action", i);
-        log("putRecoveryAction: " + i);
+    protected String getReryConfig(boolean forDefault) {
+        int nt = this.mPhone.getServiceState().getNetworkType();
+        if (nt == 4 || nt == 7 || nt == 5 || nt == 6 || nt == 12 || nt == 14) {
+            return SystemProperties.get("ro.cdma.data_retry_config");
+        }
+        if (forDefault) {
+            return SystemProperties.get("ro.gsm.data_retry_config");
+        }
+        return SystemProperties.get("ro.gsm.2nd_data_retry_config");
     }
 
-    public void resetDunProfiles() {
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void resetPollStats() {
-        this.mTxPkts = -1;
-        this.mRxPkts = -1;
+    protected void resetPollStats() {
+        this.mTxPkts = -1L;
+        this.mRxPkts = -1L;
         this.mNetStatPollPeriod = 1000;
     }
 
-    /* Access modifiers changed, original: protected */
-    public void restartDataStallAlarm() {
-        if (!isConnected()) {
-            return;
-        }
-        if (RecoveryAction.isAggressiveRecovery(getRecoveryAction())) {
-            log("restartDataStallAlarm: action is pending. not resetting the alarm.");
-            return;
-        }
-        log("restartDataStallAlarm: stop then start.");
-        stopDataStallAlarm();
-        startDataStallAlarm(false);
-    }
-
-    public abstract void restartRadio();
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendCleanUpConnection(boolean z, ApnContext apnContext) {
-        log("sendCleanUpConnection: tearDown=" + z + " apnContext=" + apnContext);
-        Message obtainMessage = obtainMessage(270360);
-        obtainMessage.arg1 = z ? 1 : 0;
-        obtainMessage.arg2 = 0;
-        obtainMessage.obj = apnContext;
-        sendMessage(obtainMessage);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void sendOemKddiFailCauseBroadcast(DcFailCause dcFailCause, ApnContext apnContext) {
-        if (this.mEnableApnCarNavi) {
-            int i = dcFailCause == DcFailCause.USER_AUTHENTICATION ? -3 : (dcFailCause == DcFailCause.SIGNAL_LOST || dcFailCause == DcFailCause.RADIO_POWER_OFF) ? -2 : -4;
-            Intent intent = new Intent(CONNECTIVITY_ACTION_CARNAVI);
-            intent.putExtra(EXTRA_CONNECTIVITY_STATUS_CARNAVI, 4);
-            intent.putExtra(EXTRA_ERRONO_CARNAVI, i);
-            this.mPhone.getContext().sendBroadcast(intent);
-            log("DataConnection Sent intent CONNECTIVITY_ACTION for CarNavi error : " + i);
-        } else if (dcFailCause != DcFailCause.SIGNAL_LOST) {
-            Intent intent2 = new Intent(INTENT_CDMA_FAILCAUSE);
-            intent2.putExtra(INTENT_CDMA_FAILCAUSE_CAUSE, Integer.toString(dcFailCause.getErrorCode()));
-            intent2.putExtra(INTENT_CDMA_FAILCAUSE_EXTRA, apnContext.getApnType());
-            this.mPhone.getContext().sendBroadcast(intent2);
-            log("sendOemKddiFailCauseBroadcast: send INTENT_CDMA_FAILCAUSE type= " + apnContext.getApnType() + " cause= " + Integer.toString(dcFailCause.getErrorCode()));
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void sendRestartRadio() {
-        log("sendRestartRadio:");
-        sendMessage(obtainMessage(270362));
-    }
-
-    public void sendStartNetStatPoll(Activity activity) {
-        Message obtainMessage = obtainMessage(270376);
-        obtainMessage.arg1 = 1;
-        obtainMessage.obj = activity;
-        sendMessage(obtainMessage);
-    }
-
-    public void sendStopNetStatPoll(Activity activity) {
-        Message obtainMessage = obtainMessage(270376);
-        obtainMessage.arg1 = 0;
-        obtainMessage.obj = activity;
-        sendMessage(obtainMessage);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void setActivity(Activity activity) {
-        log("setActivity = " + activity);
-        this.mActivity = activity;
-        this.mPhone.notifyDataActivity();
-    }
-
-    public abstract void setDataAllowed(boolean z, Message message);
-
-    public void setDataEnabled(boolean z) {
-        Message obtainMessage = obtainMessage(270366);
-        obtainMessage.arg1 = z ? 1 : 0;
-        sendMessage(obtainMessage);
-    }
-
-    public void setDataOnRoamingEnabled(boolean z) {
-        int i = 1;
-        if (getDataOnRoamingEnabled() != z) {
-            ContentResolver contentResolver = this.mPhone.getContext().getContentResolver();
-            if (!TelephonyManager.getDefault().isMultiSimEnabled()) {
-                Global.putInt(contentResolver, "data_roaming", z ? 1 : 0);
-            }
-            String str = "data_roaming" + this.mPhone.getPhoneId();
-            if (!z) {
-                i = 0;
-            }
-            Global.putInt(contentResolver, str, i);
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setDataProfilesAsNeeded() {
-        log("setDataProfilesAsNeeded");
-        if (this.mAllApnSettings != null && !this.mAllApnSettings.isEmpty()) {
-            ArrayList arrayList = new ArrayList();
-            Iterator it = this.mAllApnSettings.iterator();
-            while (it.hasNext()) {
-                ApnSetting apnSetting = (ApnSetting) it.next();
-                if (apnSetting.modemCognitive) {
-                    int i;
-                    DataProfile dataProfile = new DataProfile(apnSetting, this.mPhone.getServiceState().getDataRoaming());
-                    Iterator it2 = arrayList.iterator();
-                    while (it2.hasNext()) {
-                        if (dataProfile.equals((DataProfile) it2.next())) {
-                            i = 1;
-                            break;
-                        }
-                    }
-                    i = 0;
-                    if (i == 0) {
-                        arrayList.add(dataProfile);
-                    }
-                }
-            }
-            if (arrayList.size() > 0) {
-                this.mPhone.mCi.setDataProfile((DataProfile[]) arrayList.toArray(new DataProfile[0]), null);
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setEnabled(int i, boolean z) {
-        log("setEnabled(" + i + ", " + z + ") with old state = " + this.mDataEnabled[i] + " and enabledCount = " + this.mEnabledCount);
-        Message obtainMessage = obtainMessage(270349);
-        obtainMessage.arg1 = i;
-        obtainMessage.arg2 = z ? 1 : 0;
-        sendMessage(obtainMessage);
-    }
-
-    public abstract void setImsRegistrationState(boolean z);
-
-    /* Access modifiers changed, original: protected */
-    public void setInitialAttachApn() {
-        setInitialAttachApn(this.mAllApnSettings, (IccRecords) this.mIccRecords.get());
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void setInitialAttachApn(ArrayList<ApnSetting> arrayList, IccRecords iccRecords) {
-        ApnSetting apnSetting;
-        ApnSetting apnSetting2;
-        Message message;
-        Object obj;
-        String operatorNumeric = iccRecords != null ? iccRecords.getOperatorNumeric() : "";
-        log("setInitialApn: E mPreferredApn=" + this.mPreferredApn);
-        if (arrayList == null || arrayList.isEmpty()) {
-            apnSetting = null;
-            apnSetting2 = null;
-            message = null;
-        } else {
-            apnSetting2 = (ApnSetting) arrayList.get(0);
-            log("setInitialApn: firstApnSetting=" + apnSetting2);
-            Iterator it = arrayList.iterator();
-            message = null;
-            while (it.hasNext()) {
-                apnSetting = (ApnSetting) it.next();
-                if (ArrayUtils.contains(apnSetting.types, "ia") && apnSetting.carrierEnabled) {
-                    log("setInitialApn: iaApnSetting=" + apnSetting);
-                    break;
-                } else if (message == null && apnSetting.canHandleType("default")) {
-                    log("setInitialApn: defaultApnSetting=" + apnSetting);
-                    message = apnSetting;
-                }
-            }
-            apnSetting = null;
-        }
-        ApnSetting obj2;
-        if (apnSetting != null) {
-            log("setInitialAttachApn: using iaApnSetting");
-            obj2 = apnSetting;
-        } else if (this.mPreferredApn == null || !Objects.equals(this.mPreferredApn.numeric, operatorNumeric)) {
-            if (message != null) {
-                if (!TelBrand.IS_DCM) {
-                    log("setInitialAttachApn: using defaultApnSetting");
-                    Message obj22 = message;
-                }
-            } else if (!(apnSetting2 == null || TelBrand.IS_DCM)) {
-                log("setInitialAttachApn: using firstApnSetting");
-                obj22 = apnSetting2;
-            }
-            obj22 = null;
-        } else {
-            log("setInitialAttachApn: using mPreferredApn");
-            obj22 = this.mPreferredApn;
-        }
-        if (obj22 == null) {
-            log("setInitialAttachApn: X There in no available apn");
-            if (!(operatorNumeric == null || operatorNumeric.equals(""))) {
-                this.mPhone.mCi.setInitialAttachApn("", "", 0, "", "", null);
-            }
-        } else {
-            log("setInitialAttachApn: X selected Apn=" + obj22);
-            this.mPhone.mCi.setInitialAttachApn(obj22.apn, obj22.protocol, obj22.authType, obj22.user, obj22.password, null);
-        }
-        updateOemDataSettings();
-    }
-
-    public boolean setInternalDataEnabled(boolean z) {
-        log("setInternalDataEnabled(" + z + ")");
-        Message obtainMessage = obtainMessage(270363);
-        obtainMessage.arg1 = z ? 1 : 0;
-        sendMessage(obtainMessage);
-        return true;
-    }
-
-    public void setMobileDataEnabledDun(boolean z) {
-        boolean z2 = true;
-        if (TelBrand.IS_SBM) {
-            synchronized (this.mDataEnabledLock) {
-                this.mUserDataEnabledDun = z;
-                if (z) {
-                    z2 = false;
-                    onTrySetupData(Phone.REASON_DATA_ENABLED);
-                } else {
-                    onCleanUpAllConnections(Phone.REASON_DATA_DISABLED);
-                }
-                updateOemDataSettingsAsync(z2);
-            }
-        } else if (TelBrand.IS_DCM) {
-            synchronized (this.mDataEnabledLock) {
-                z2 = getAnyDataEnabledEx();
-                State overallState = getOverallState();
-                if (overallState == State.IDLE || overallState == State.FAILED) {
-                }
-                this.mUserDataEnabledDun = z;
-                if (z2 != getAnyDataEnabledEx()) {
-                    if (z2) {
-                        updateDunProfileName(1, "IP", "dcmtrg.ne.jp");
-                        onCleanUpAllConnections(Phone.REASON_DATA_DISABLED);
-                    } else {
-                        if (this.mPhone.getState() != PhoneConstants.State.IDLE) {
-                            this.mIsEpcPending = true;
-                        } else {
-                            updateOemDataSettings();
-                        }
-                        onTrySetupData(Phone.REASON_DATA_ENABLED);
-                    }
-                }
-            }
-        }
-    }
-
-    public void setProfilePdpType(int i, String str) {
-        if (TelBrand.IS_DCM) {
-            this.mPdpType = str;
-            log("setNotifyPdpType: current CID = " + i + ", and correspoding pdpType = " + this.mPdpType);
-        }
-    }
-
-    public abstract void setState(State state);
-
-    public void setStateCarNavi(ApnContext apnContext) {
-        if (TelBrand.IS_KDDI) {
-            if (apnContext.getApnType().equals(getHigherPriorityApnType())) {
-                notifyDataConnectionCarNavi(apnContext.getState());
-            }
-        }
-    }
-
-    public abstract void setupDataAfterDdsSwitchIfPossible();
-
-    /* Access modifiers changed, original: protected */
-    public void startDataStallAlarm(boolean z) {
-    }
-
-    /* Access modifiers changed, original: 0000 */
     public void startNetStatPoll() {
-        if (getOverallState() == State.CONNECTED && !this.mNetStatPollEnabled) {
+        if (getOverallState() == DctConstants.State.CONNECTED && !this.mNetStatPollEnabled) {
             log("startNetStatPoll");
             resetPollStats();
             this.mNetStatPollEnabled = true;
@@ -2333,30 +1274,7 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void startProvisioningApnAlarm() {
-        int i = Global.getInt(this.mResolver, "provisioning_apn_alarm_delay_in_ms", PROVISIONING_APN_ALARM_DELAY_IN_MS_DEFAULT);
-        if (Build.IS_DEBUGGABLE) {
-            try {
-                i = Integer.parseInt(System.getProperty(DEBUG_PROV_APN_ALARM, Integer.toString(i)));
-            } catch (NumberFormatException e) {
-                loge("startProvisioningApnAlarm: e=" + e);
-            }
-        }
-        this.mProvisioningApnAlarmTag++;
-        log("startProvisioningApnAlarm: tag=" + this.mProvisioningApnAlarmTag + " delay=" + (i / 1000) + "s");
-        Intent intent = new Intent(INTENT_PROVISIONING_APN_ALARM);
-        intent.putExtra(PROVISIONING_APN_ALARM_TAG_EXTRA, this.mProvisioningApnAlarmTag);
-        this.mProvisioningApnAlarmIntent = PendingIntent.getBroadcast(this.mPhone.getContext(), 0, intent, 134217728);
-        this.mAlarmManager.set(2, SystemClock.elapsedRealtime() + ((long) i), this.mProvisioningApnAlarmIntent);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void stopDataStallAlarm() {
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void stopNetStatPoll() {
+    void stopNetStatPoll() {
         this.mNetStatPollEnabled = false;
         removeCallbacks(this.mPollNetStat);
         log("stopNetStatPoll");
@@ -2365,8 +1283,327 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    /* Access modifiers changed, original: protected */
-    public void stopProvisioningApnAlarm() {
+    public void sendStartNetStatPoll(DctConstants.Activity activity) {
+        Message msg = obtainMessage(270376);
+        msg.arg1 = 1;
+        msg.obj = activity;
+        sendMessage(msg);
+    }
+
+    protected void handleStartNetStatPoll(DctConstants.Activity activity) {
+        this.mIsPhysicalLinkUp = true;
+        startNetStatPoll();
+        startDataStallAlarm(false);
+        setActivity(activity);
+    }
+
+    public void sendStopNetStatPoll(DctConstants.Activity activity) {
+        Message msg = obtainMessage(270376);
+        msg.arg1 = 0;
+        msg.obj = activity;
+        sendMessage(msg);
+    }
+
+    protected void handleStopNetStatPoll(DctConstants.Activity activity) {
+        this.mIsPhysicalLinkUp = false;
+        stopNetStatPoll();
+        stopDataStallAlarm();
+        setActivity(activity);
+    }
+
+    public void updateDataActivity() {
+        DctConstants.Activity newActivity;
+        TxRxSum preTxRxSum = new TxRxSum(this.mTxPkts, this.mRxPkts);
+        TxRxSum curTxRxSum = new TxRxSum();
+        curTxRxSum.updateTxRxSum();
+        this.mTxPkts = curTxRxSum.txPkts;
+        this.mRxPkts = curTxRxSum.rxPkts;
+        if (!this.mNetStatPollEnabled) {
+            return;
+        }
+        if (preTxRxSum.txPkts > 0 || preTxRxSum.rxPkts > 0) {
+            long sent = this.mTxPkts - preTxRxSum.txPkts;
+            long received = this.mRxPkts - preTxRxSum.rxPkts;
+            if (sent > 0 && received > 0) {
+                newActivity = DctConstants.Activity.DATAINANDOUT;
+            } else if (sent > 0 && received == 0) {
+                newActivity = DctConstants.Activity.DATAOUT;
+            } else if (sent != 0 || received <= 0) {
+                newActivity = this.mActivity == DctConstants.Activity.DORMANT ? this.mActivity : DctConstants.Activity.NONE;
+            } else {
+                newActivity = DctConstants.Activity.DATAIN;
+            }
+            if (this.mActivity != newActivity && this.mIsScreenOn) {
+                this.mActivity = newActivity;
+                this.mPhone.notifyDataActivity();
+            }
+        }
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class RecoveryAction {
+        public static final int CLEANUP = 1;
+        public static final int GET_DATA_CALL_LIST = 0;
+        public static final int RADIO_RESTART = 3;
+        public static final int RADIO_RESTART_WITH_PROP = 4;
+        public static final int REREGISTER = 2;
+
+        protected RecoveryAction() {
+        }
+
+        public static boolean isAggressiveRecovery(int value) {
+            return value == 1 || value == 2 || value == 3 || value == 4;
+        }
+    }
+
+    public int getRecoveryAction() {
+        int action = Settings.System.getInt(this.mPhone.getContext().getContentResolver(), "radio.data.stall.recovery.action", 0);
+        log("getRecoveryAction: " + action);
+        return action;
+    }
+
+    public void putRecoveryAction(int action) {
+        Settings.System.putInt(this.mPhone.getContext().getContentResolver(), "radio.data.stall.recovery.action", action);
+        log("putRecoveryAction: " + action);
+    }
+
+    protected boolean isConnected() {
+        return false;
+    }
+
+    protected void doRecovery() {
+        if (getOverallState() == DctConstants.State.CONNECTED) {
+            int recoveryAction = getRecoveryAction();
+            switch (recoveryAction) {
+                case 0:
+                    EventLog.writeEvent((int) EventLogTags.DATA_STALL_RECOVERY_GET_DATA_CALL_LIST, this.mSentSinceLastRecv);
+                    log("doRecovery() get data call list");
+                    this.mPhone.mCi.getDataCallList(obtainMessage(270340));
+                    putRecoveryAction(1);
+                    break;
+                case 1:
+                    EventLog.writeEvent((int) EventLogTags.DATA_STALL_RECOVERY_CLEANUP, this.mSentSinceLastRecv);
+                    log("doRecovery() cleanup all connections");
+                    cleanUpAllConnections(Phone.REASON_PDP_RESET);
+                    putRecoveryAction(2);
+                    break;
+                case 2:
+                    EventLog.writeEvent((int) EventLogTags.DATA_STALL_RECOVERY_REREGISTER, this.mSentSinceLastRecv);
+                    log("doRecovery() re-register");
+                    this.mPhone.getServiceStateTracker().reRegisterNetwork(null);
+                    putRecoveryAction(3);
+                    break;
+                case 3:
+                    EventLog.writeEvent((int) EventLogTags.DATA_STALL_RECOVERY_RADIO_RESTART, this.mSentSinceLastRecv);
+                    log("restarting radio");
+                    putRecoveryAction(4);
+                    restartRadio();
+                    break;
+                case 4:
+                    EventLog.writeEvent((int) EventLogTags.DATA_STALL_RECOVERY_RADIO_RESTART_WITH_PROP, -1);
+                    log("restarting radio with gsm.radioreset to true");
+                    SystemProperties.set(this.RADIO_RESET_PROPERTY, "true");
+                    try {
+                        Thread.sleep(1000L);
+                    } catch (InterruptedException e) {
+                    }
+                    restartRadio();
+                    putRecoveryAction(0);
+                    break;
+                default:
+                    throw new RuntimeException("doRecovery: Invalid recoveryAction=" + recoveryAction);
+            }
+            this.mSentSinceLastRecv = 0L;
+        }
+    }
+
+    private void updateDataStallInfo() {
+        TxRxSum preTxRxSum = new TxRxSum(this.mDataStallTxRxSum);
+        this.mDataStallTxRxSum.updateTxRxSum();
+        log("updateDataStallInfo: mDataStallTxRxSum=" + this.mDataStallTxRxSum + " preTxRxSum=" + preTxRxSum);
+        long sent = this.mDataStallTxRxSum.txPkts - preTxRxSum.txPkts;
+        long received = this.mDataStallTxRxSum.rxPkts - preTxRxSum.rxPkts;
+        if (sent > 0 && received > 0) {
+            log("updateDataStallInfo: IN/OUT");
+            this.mSentSinceLastRecv = 0L;
+            putRecoveryAction(0);
+        } else if (sent > 0 && received == 0) {
+            if (isPhoneStateIdle()) {
+                this.mSentSinceLastRecv += sent;
+            } else {
+                this.mSentSinceLastRecv = 0L;
+            }
+            log("updateDataStallInfo: OUT sent=" + sent + " mSentSinceLastRecv=" + this.mSentSinceLastRecv);
+        } else if (sent != 0 || received <= 0) {
+            log("updateDataStallInfo: NONE");
+        } else {
+            log("updateDataStallInfo: IN");
+            this.mSentSinceLastRecv = 0L;
+            putRecoveryAction(0);
+        }
+    }
+
+    private boolean isPhoneStateIdle() {
+        for (int i = 0; i < TelephonyManager.getDefault().getPhoneCount(); i++) {
+            Phone phone = PhoneFactory.getPhone(i);
+            if (phone != null && phone.getState() != PhoneConstants.State.IDLE) {
+                log("isPhoneStateIdle: Voice call active on sub: " + i);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    protected void onDataStallAlarm(int tag) {
+        if (this.mDataStallAlarmTag != tag) {
+            log("onDataStallAlarm: ignore, tag=" + tag + " expecting " + this.mDataStallAlarmTag);
+            return;
+        }
+        updateDataStallInfo();
+        int hangWatchdogTrigger = Settings.Global.getInt(this.mResolver, "pdp_watchdog_trigger_packet_count", 10);
+        boolean suspectedStall = false;
+        if (this.mSentSinceLastRecv >= hangWatchdogTrigger) {
+            log("onDataStallAlarm: tag=" + tag + " do recovery action=" + getRecoveryAction());
+            suspectedStall = true;
+            sendMessage(obtainMessage(270354));
+        } else {
+            log("onDataStallAlarm: tag=" + tag + " Sent " + String.valueOf(this.mSentSinceLastRecv) + " pkts since last received, < watchdogTrigger=" + hangWatchdogTrigger);
+        }
+        startDataStallAlarm(suspectedStall);
+    }
+
+    protected void startDataStallAlarm(boolean suspectedStall) {
+    }
+
+    protected void stopDataStallAlarm() {
+    }
+
+    protected void restartDataStallAlarm() {
+        if (isConnected()) {
+            if (RecoveryAction.isAggressiveRecovery(getRecoveryAction())) {
+                log("restartDataStallAlarm: action is pending. not resetting the alarm.");
+                return;
+            }
+            log("restartDataStallAlarm: stop then start.");
+            stopDataStallAlarm();
+            startDataStallAlarm(false);
+        }
+    }
+
+    protected void setInitialAttachApn(ArrayList<ApnSetting> apnList, IccRecords r) {
+        ApnSetting iaApnSetting = null;
+        ApnSetting defaultApnSetting = null;
+        ApnSetting firstApnSetting = null;
+        String operator = r != null ? r.getOperatorNumeric() : "";
+        log("setInitialApn: E mPreferredApn=" + this.mPreferredApn);
+        if (apnList != null && !apnList.isEmpty()) {
+            firstApnSetting = apnList.get(0);
+            log("setInitialApn: firstApnSetting=" + firstApnSetting);
+            Iterator i$ = apnList.iterator();
+            while (true) {
+                if (!i$.hasNext()) {
+                    break;
+                }
+                ApnSetting apn = i$.next();
+                if (ArrayUtils.contains(apn.types, "ia") && apn.carrierEnabled) {
+                    log("setInitialApn: iaApnSetting=" + apn);
+                    iaApnSetting = apn;
+                    break;
+                } else if (defaultApnSetting == null && apn.canHandleType("default")) {
+                    log("setInitialApn: defaultApnSetting=" + apn);
+                    defaultApnSetting = apn;
+                }
+            }
+        }
+        ApnSetting initialAttachApnSetting = null;
+        if (iaApnSetting != null) {
+            log("setInitialAttachApn: using iaApnSetting");
+            initialAttachApnSetting = iaApnSetting;
+        } else if (this.mPreferredApn != null && Objects.equals(this.mPreferredApn.numeric, operator)) {
+            log("setInitialAttachApn: using mPreferredApn");
+            initialAttachApnSetting = this.mPreferredApn;
+        } else if (defaultApnSetting != null) {
+            if (!TelBrand.IS_DCM) {
+                log("setInitialAttachApn: using defaultApnSetting");
+                initialAttachApnSetting = defaultApnSetting;
+            }
+        } else if (firstApnSetting != null && !TelBrand.IS_DCM) {
+            log("setInitialAttachApn: using firstApnSetting");
+            initialAttachApnSetting = firstApnSetting;
+        }
+        if (initialAttachApnSetting == null) {
+            log("setInitialAttachApn: X There in no available apn");
+            if (operator != null && !operator.equals("")) {
+                this.mPhone.mCi.setInitialAttachApn("", "", 0, "", "", null);
+            }
+        } else {
+            log("setInitialAttachApn: X selected Apn=" + initialAttachApnSetting);
+            this.mPhone.mCi.setInitialAttachApn(initialAttachApnSetting.apn, initialAttachApnSetting.protocol, initialAttachApnSetting.authType, initialAttachApnSetting.user, initialAttachApnSetting.password, null);
+        }
+        updateOemDataSettings();
+    }
+
+    protected void setInitialAttachApn() {
+        setInitialAttachApn(this.mAllApnSettings, this.mIccRecords.get());
+    }
+
+    protected void setDataProfilesAsNeeded() {
+        log("setDataProfilesAsNeeded");
+        if (this.mAllApnSettings != null && !this.mAllApnSettings.isEmpty()) {
+            ArrayList<DataProfile> dps = new ArrayList<>();
+            Iterator<ApnSetting> it = this.mAllApnSettings.iterator();
+            while (it.hasNext()) {
+                ApnSetting apn = it.next();
+                if (apn.modemCognitive) {
+                    DataProfile dp = new DataProfile(apn, this.mPhone.getServiceState().getDataRoaming());
+                    boolean isDup = false;
+                    Iterator i$ = dps.iterator();
+                    while (true) {
+                        if (i$.hasNext()) {
+                            if (dp.equals(i$.next())) {
+                                isDup = true;
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    if (!isDup) {
+                        dps.add(dp);
+                    }
+                }
+            }
+            if (dps.size() > 0) {
+                this.mPhone.mCi.setDataProfile((DataProfile[]) dps.toArray(new DataProfile[0]), null);
+            }
+        }
+    }
+
+    protected void onActionIntentProvisioningApnAlarm(Intent intent) {
+        log("onActionIntentProvisioningApnAlarm: action=" + intent.getAction());
+        Message msg = obtainMessage(270375, intent.getAction());
+        msg.arg1 = intent.getIntExtra(PROVISIONING_APN_ALARM_TAG_EXTRA, 0);
+        sendMessage(msg);
+    }
+
+    protected void startProvisioningApnAlarm() {
+        int delayInMs = Settings.Global.getInt(this.mResolver, "provisioning_apn_alarm_delay_in_ms", PROVISIONING_APN_ALARM_DELAY_IN_MS_DEFAULT);
+        if (Build.IS_DEBUGGABLE) {
+            try {
+                delayInMs = Integer.parseInt(System.getProperty(DEBUG_PROV_APN_ALARM, Integer.toString(delayInMs)));
+            } catch (NumberFormatException e) {
+                loge("startProvisioningApnAlarm: e=" + e);
+            }
+        }
+        this.mProvisioningApnAlarmTag++;
+        log("startProvisioningApnAlarm: tag=" + this.mProvisioningApnAlarmTag + " delay=" + (delayInMs / 1000) + "s");
+        Intent intent = new Intent(INTENT_PROVISIONING_APN_ALARM);
+        intent.putExtra(PROVISIONING_APN_ALARM_TAG_EXTRA, this.mProvisioningApnAlarmTag);
+        this.mProvisioningApnAlarmIntent = PendingIntent.getBroadcast(this.mPhone.getContext(), 0, intent, 134217728);
+        this.mAlarmManager.set(2, SystemClock.elapsedRealtime() + delayInMs, this.mProvisioningApnAlarmIntent);
+    }
+
+    protected void stopProvisioningApnAlarm() {
         log("stopProvisioningApnAlarm: current tag=" + this.mProvisioningApnAlarmTag + " mProvsioningApnAlarmIntent=" + this.mProvisioningApnAlarmIntent);
         this.mProvisioningApnAlarmTag++;
         if (this.mProvisioningApnAlarmIntent != null) {
@@ -2375,55 +1612,490 @@ public abstract class DcTrackerBase extends Handler {
         }
     }
 
-    public void updateDataActivity() {
-        TxRxSum txRxSum = new TxRxSum(this.mTxPkts, this.mRxPkts);
-        TxRxSum txRxSum2 = new TxRxSum();
-        txRxSum2.updateTxRxSum();
-        this.mTxPkts = txRxSum2.txPkts;
-        this.mRxPkts = txRxSum2.rxPkts;
-        if (!this.mNetStatPollEnabled) {
-            return;
+    public void sendCleanUpConnection(boolean tearDown, ApnContext apnContext) {
+        log("sendCleanUpConnection: tearDown=" + tearDown + " apnContext=" + apnContext);
+        Message msg = obtainMessage(270360);
+        msg.arg1 = tearDown ? 1 : 0;
+        msg.arg2 = 0;
+        msg.obj = apnContext;
+        sendMessage(msg);
+    }
+
+    public void sendRestartRadio() {
+        log("sendRestartRadio:");
+        sendMessage(obtainMessage(270362));
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("DcTrackerBase:");
+        pw.println(" RADIO_TESTS=false");
+        pw.println(" mInternalDataEnabled=" + this.mInternalDataEnabled);
+        pw.println(" mUserDataEnabled=" + this.mUserDataEnabled);
+        pw.println(" sPolicyDataEnabed=" + sPolicyDataEnabled);
+        pw.println(" mDataEnabled:");
+        for (int i = 0; i < this.mDataEnabled.length; i++) {
+            pw.printf("  mDataEnabled[%d]=%b\n", Integer.valueOf(i), Boolean.valueOf(this.mDataEnabled[i]));
         }
-        if (txRxSum.txPkts > 0 || txRxSum.rxPkts > 0) {
-            long j = this.mTxPkts - txRxSum.txPkts;
-            long j2 = this.mRxPkts - txRxSum.rxPkts;
-            Activity activity = (j <= 0 || j2 <= 0) ? (j <= 0 || j2 != 0) ? (j != 0 || j2 <= 0) ? this.mActivity == Activity.DORMANT ? this.mActivity : Activity.NONE : Activity.DATAIN : Activity.DATAOUT : Activity.DATAINANDOUT;
-            if (this.mActivity != activity && this.mIsScreenOn) {
-                this.mActivity = activity;
-                this.mPhone.notifyDataActivity();
+        pw.flush();
+        pw.println(" mEnabledCount=" + this.mEnabledCount);
+        pw.println(" mRequestedApnType=" + this.mRequestedApnType);
+        pw.println(" mPhone=" + this.mPhone.getPhoneName());
+        pw.println(" mPhoneId=" + this.mPhone.getPhoneId());
+        pw.println(" mActivity=" + this.mActivity);
+        pw.println(" mState=" + this.mState);
+        pw.println(" mTxPkts=" + this.mTxPkts);
+        pw.println(" mRxPkts=" + this.mRxPkts);
+        pw.println(" mNetStatPollPeriod=" + this.mNetStatPollPeriod);
+        pw.println(" mNetStatPollEnabled=" + this.mNetStatPollEnabled);
+        pw.println(" mDataStallTxRxSum=" + this.mDataStallTxRxSum);
+        pw.println(" mDataStallAlarmTag=" + this.mDataStallAlarmTag);
+        pw.println(" mDataStallDetectionEanbled=" + this.mDataStallDetectionEnabled);
+        pw.println(" mSentSinceLastRecv=" + this.mSentSinceLastRecv);
+        pw.println(" mNoRecvPollCount=" + this.mNoRecvPollCount);
+        pw.println(" mResolver=" + this.mResolver);
+        pw.println(" mIsWifiConnected=" + this.mIsWifiConnected);
+        pw.println(" mReconnectIntent=" + this.mReconnectIntent);
+        pw.println(" mCidActive=" + this.mCidActive);
+        pw.println(" mAutoAttachOnCreation=" + this.mAutoAttachOnCreation);
+        pw.println(" mIsScreenOn=" + this.mIsScreenOn);
+        pw.println(" mUniqueIdGenerator=" + this.mUniqueIdGenerator);
+        pw.flush();
+        pw.println(" ***************************************");
+        DcController dcc = this.mDcc;
+        if (dcc != null) {
+            dcc.dump(fd, pw, args);
+        } else {
+            pw.println(" mDcc=null");
+        }
+        pw.println(" ***************************************");
+        if (this.mDataConnections != null) {
+            Set<Map.Entry<Integer, DataConnection>> mDcSet = this.mDataConnections.entrySet();
+            pw.println(" mDataConnections: count=" + mDcSet.size());
+            for (Map.Entry<Integer, DataConnection> entry : mDcSet) {
+                pw.printf(" *** mDataConnection[%d] \n", entry.getKey());
+                entry.getValue().dump(fd, pw, args);
             }
+        } else {
+            pw.println("mDataConnections=null");
         }
+        pw.println(" ***************************************");
+        pw.flush();
+        HashMap<String, Integer> apnToDcId = this.mApnToDataConnectionId;
+        if (apnToDcId != null) {
+            Set<Map.Entry<String, Integer>> apnToDcIdSet = apnToDcId.entrySet();
+            pw.println(" mApnToDataConnectonId size=" + apnToDcIdSet.size());
+            for (Map.Entry<String, Integer> entry2 : apnToDcIdSet) {
+                pw.printf(" mApnToDataConnectonId[%s]=%d\n", entry2.getKey(), entry2.getValue());
+            }
+        } else {
+            pw.println("mApnToDataConnectionId=null");
+        }
+        pw.println(" ***************************************");
+        pw.flush();
+        ConcurrentHashMap<String, ApnContext> apnCtxs = this.mApnContexts;
+        if (apnCtxs != null) {
+            Set<Map.Entry<String, ApnContext>> apnCtxsSet = apnCtxs.entrySet();
+            pw.println(" mApnContexts size=" + apnCtxsSet.size());
+            for (Map.Entry<String, ApnContext> entry3 : apnCtxsSet) {
+                entry3.getValue().dump(fd, pw, args);
+            }
+            pw.println(" ***************************************");
+        } else {
+            pw.println(" mApnContexts=null");
+        }
+        pw.flush();
+        pw.println(" mActiveApn=" + this.mActiveApn);
+        ArrayList<ApnSetting> apnSettings = this.mAllApnSettings;
+        if (apnSettings != null) {
+            pw.println(" mAllApnSettings size=" + apnSettings.size());
+            for (int i2 = 0; i2 < apnSettings.size(); i2++) {
+                pw.printf(" mAllApnSettings[%d]: %s\n", Integer.valueOf(i2), apnSettings.get(i2));
+            }
+            pw.flush();
+        } else {
+            pw.println(" mAllApnSettings=null");
+        }
+        pw.println(" mPreferredApn=" + this.mPreferredApn);
+        pw.println(" mIsPsRestricted=" + this.mIsPsRestricted);
+        pw.println(" mIsDisposed=" + this.mIsDisposed);
+        pw.println(" mIntentReceiver=" + this.mIntentReceiver);
+        pw.println(" mDataRoamingSettingObserver=" + this.mDataRoamingSettingObserver);
+        pw.flush();
     }
 
-    public void updateDunProfileName(int i, String str, String str2) {
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void updateOemDataSettings() {
-        boolean z = true;
-        boolean anyDataEnabledEx = getAnyDataEnabledEx();
-        boolean dataOnRoamingEnabled = getDataOnRoamingEnabled();
+    protected void updateOemDataSettings() {
+        boolean enabled = getAnyDataEnabledEx();
+        boolean dataRoaming = getDataOnRoamingEnabled();
+        boolean epcCapability = true;
         if (TelBrand.IS_DCM) {
             if (this.mUserDataEnabledDun) {
+                epcCapability = true;
                 this.mPdpType = "IP";
             } else if (this.mPdpType.equals("PPP")) {
-                z = false;
+                epcCapability = false;
                 this.mPdpType = "IP";
+            } else {
+                epcCapability = true;
             }
         }
-        this.mPhone.mCi.updateOemDataSettings(anyDataEnabledEx, dataOnRoamingEnabled, z, null);
+        this.mPhone.mCi.updateOemDataSettings(enabled, dataRoaming, epcCapability, null);
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void updateOemDataSettingsAsync(boolean z) {
-        if (z) {
-            this.mCnt++;
-            log("updateOemDataSettingsAsync mCnt=" + this.mCnt);
-            onUpdateOemDataSettingsAsync();
-            return;
+    protected boolean getAnyDataEnabledEx() {
+        boolean result;
+        synchronized (this.mDataEnabledLock) {
+            result = this.mInternalDataEnabled && this.mUserDataEnabled && sPolicyDataEnabled && this.mUserDataEnabledDun && this.mEnabledCount != 0;
         }
-        log("updateOemDataSettingsAsync sync");
-        updateOemDataSettings();
-        this.mCnt = 0;
+        if (!result) {
+            log("getAnyDataEnabledEx " + result);
+        }
+        return result;
+    }
+
+    protected void onUpdateOemDataSettingsAsync() {
+        log("onUpdateOemDataSettingsAsync");
+        if (this.mCnt == 0) {
+            log("updateLetApn is not required");
+        } else if (isDisconnected()) {
+            updateOemDataSettings();
+            this.mCnt = 0;
+        }
+    }
+
+    public void resetDunProfiles() {
+    }
+
+    public void setMobileDataEnabledDun(boolean enabled) {
+        boolean async;
+        if (TelBrand.IS_SBM) {
+            synchronized (this.mDataEnabledLock) {
+                this.mUserDataEnabledDun = enabled;
+                if (enabled) {
+                    async = false;
+                    onTrySetupData(Phone.REASON_DATA_ENABLED);
+                } else {
+                    async = true;
+                    onCleanUpAllConnections(Phone.REASON_DATA_DISABLED);
+                }
+                updateOemDataSettingsAsync(async);
+            }
+        } else if (TelBrand.IS_DCM) {
+            synchronized (this.mDataEnabledLock) {
+                boolean prevEnabled = getAnyDataEnabledEx();
+                DctConstants.State overallState = getOverallState();
+                if (!(overallState == DctConstants.State.IDLE || overallState == DctConstants.State.FAILED)) {
+                }
+                this.mUserDataEnabledDun = enabled;
+                if (prevEnabled != getAnyDataEnabledEx()) {
+                    if (!prevEnabled) {
+                        if (this.mPhone.getState() != PhoneConstants.State.IDLE) {
+                            this.mIsEpcPending = true;
+                        } else {
+                            updateOemDataSettings();
+                        }
+                        onTrySetupData(Phone.REASON_DATA_ENABLED);
+                    } else {
+                        updateDunProfileName(1, "IP", "dcmtrg.ne.jp");
+                        onCleanUpAllConnections(Phone.REASON_DATA_DISABLED);
+                    }
+                }
+            }
+        }
+    }
+
+    protected void broadcastDisconnectDun() {
+        this.mPhone.getContext().sendBroadcast(new Intent(ACTION_DISCONNECT_BT_DUN));
+    }
+
+    public void setProfilePdpType(int cid, String pdpType) {
+        if (TelBrand.IS_DCM) {
+            this.mPdpType = pdpType;
+            log("setNotifyPdpType: current CID = " + cid + ", and correspoding pdpType = " + this.mPdpType);
+        }
+    }
+
+    public void updateDunProfileName(int profileId, String dataProtocol, String apnName) {
+    }
+
+    public static boolean isNetworkRoaming() {
+        return "true".equals(SystemProperties.get("gsm.operator.isroaming"));
+    }
+
+    private String getFixedParameter() {
+        Throwable th;
+        String fixedParam = "";
+        FileInputStream fis = null;
+        int[] pattern = {215, 67, 46, 69, 21, 74, 36, 236, PduHeaders.MBOX_TOTALS, BearerData.RELATIVE_TIME_MOBILE_INACTIVE, 70, PduHeaders.MBOX_TOTALS, 85};
+        try {
+            FileInputStream fis2 = new FileInputStream("/etc/Tsx5UPfM");
+            try {
+                byte[] buffer = new byte[PduHeaders.RESPONSE_STATUS_ERROR_PERMANENT_LACK_OF_PREPAID];
+                int count = fis2.read(buffer);
+                if (count == 235) {
+                    int i = 0;
+                    for (int j = 0; j < count; j++) {
+                        buffer[j] = (byte) (pattern[i] ^ buffer[j]);
+                        i++;
+                        if (i >= pattern.length) {
+                            i = 0;
+                        }
+                    }
+                    fixedParam = new String(buffer, 0, count);
+                }
+                if (fis2 != null) {
+                    try {
+                        fis2.close();
+                    } catch (IOException e) {
+                    }
+                }
+            } catch (IOException e2) {
+                fis = fis2;
+                if (fis != null) {
+                    try {
+                        fis.close();
+                    } catch (IOException e3) {
+                    }
+                }
+                return fixedParam;
+            } catch (Throwable th2) {
+                th = th2;
+                fis = fis2;
+                if (fis != null) {
+                    try {
+                        fis.close();
+                    } catch (IOException e4) {
+                    }
+                }
+                throw th;
+            }
+        } catch (IOException e5) {
+        } catch (Throwable th3) {
+            th = th3;
+        }
+        return fixedParam;
+    }
+
+    public ApnSetting getApnParameter(boolean isCdma, boolean isInternet, int profileType, int id, String operator, String carrier) {
+        String apn = null;
+        String user = null;
+        String pass = null;
+        int authType = 2;
+        String[] types = {"default", "mms", "supl", "hipri", "dun"};
+        String protocol = "IP";
+        String[] dnses = null;
+        if (!isCdma && !isNetworkRoaming()) {
+            types = isInternet ? new String[]{"default", "mms", "supl", "hipri"} : new String[]{"dun"};
+        }
+        String[] fixedParam = getFixedParameter().split(",");
+        if (profileType == 1002) {
+            apn = this.mApnCarNavi.apn;
+            user = this.mApnCarNavi.user;
+            pass = this.mApnCarNavi.password;
+            authType = this.mApnCarNavi.authType;
+            types = new String[]{CharacterSets.MIMENAME_ANY_CHARSET};
+            dnses = this.mDnsesCarNavi;
+        } else if (profileType == 1001) {
+            if (isCdma) {
+                if (fixedParam.length >= 3) {
+                    user = fixedParam[1];
+                    pass = fixedParam[2];
+                }
+            } else if (isInternet) {
+                if (fixedParam.length >= 6) {
+                    apn = fixedParam[3];
+                    user = fixedParam[4];
+                    pass = fixedParam[5];
+                }
+            } else if (fixedParam.length >= 9) {
+                apn = fixedParam[6];
+                user = fixedParam[7];
+                pass = fixedParam[8];
+            }
+        } else if (!isCdma) {
+            if (isInternet) {
+                if (fixedParam.length >= 12) {
+                    apn = fixedParam[9];
+                    user = fixedParam[10];
+                    pass = fixedParam[11];
+                }
+            } else if (fixedParam.length >= 15) {
+                apn = fixedParam[12];
+                user = fixedParam[13];
+                pass = fixedParam[14];
+            }
+        }
+        if (!isCdma) {
+            protocol = "IPV4V6";
+        }
+        ApnSetting apnSetting = new ApnSetting(id, operator, carrier, apn, "", "", "", "", "", user, pass, authType, types, protocol, "IP", true, 0, 0, false, 0, 0, 0, 0, "", "");
+        apnSetting.oemDnses = dnses;
+        return apnSetting;
+    }
+
+    public int changeMode(boolean mode, String apn, String userId, String password, int authType, String dns1, String dns2, String proxyHost, String proxyPort) {
+        if (!TelBrand.IS_KDDI) {
+            return -1;
+        }
+        if (this.mState == DctConstants.State.IDLE || this.mState == DctConstants.State.FAILED) {
+        }
+        int apnId = apnTypeToId("default");
+        log("[CarNavi] mode[" + mode + "]");
+        log("[CarNavi] apn[" + apn + "]");
+        log("[CarNavi] userId[" + userId + "]");
+        log("[CarNavi] password[" + password + "]");
+        log("[CarNavi] authType[" + authType + "]");
+        log("[CarNavi] dns1[" + dns1 + "]");
+        log("[CarNavi] dns2[" + dns2 + "]");
+        log("[CarNavi] proxyHost[" + proxyHost + "]");
+        log("[CarNavi] proxyPort[" + proxyPort + "]");
+        if (!this.mUserDataEnabled) {
+            log("CpaManager.UNKNOWN_ERROR. mUserDataEnabled : " + this.mUserDataEnabled);
+            return -4;
+        } else if (isNetworkRoaming() && mode) {
+            log("CpaManager.RADIO_NOT_AVAILABLE. isNetworkRoaming()");
+            return -2;
+        } else if (this.mPhone.getServiceState().getRadioTechnology() == 0) {
+            log("CpaManager.RADIO_NOT_AVAILABLE. RADIO_TECHNOLOGY_UNKNOWN");
+            return -2;
+        } else {
+            if (mode != this.mEnableApnCarNavi) {
+                if (mode && !this.mEnableApnCarNavi && (isApnTypeEnabled("default") || (!isApnTypeEnabled("default") && (isApnTypeEnabled("mms") || isApnTypeEnabled("supl") || isApnTypeEnabled("dun") || isApnTypeEnabled("hipri"))))) {
+                    log("mConnectingApnCarNavi = true");
+                    this.mConnectingApnCarNavi = true;
+                } else if (!mode && this.mEnableApnCarNavi) {
+                    log("mDisConnectingApnCarNavi = true");
+                    this.mDisConnectingApnCarNavi = true;
+                }
+            }
+            this.mApnCarNavi = new ApnSetting(apnId, "", "", apn, proxyHost, proxyPort, "", "", "", userId, password, authType, new String[]{"default", "mms", "supl", "hipri", "dun"}, "", "", true, this.mPhone.getServiceState().getRadioTechnology(), 0, false, 0, 0, 0, 0, "", "");
+            this.mEnableApnCarNavi = mode;
+            this.mDnsesCarNavi[0] = dns1;
+            this.mDnsesCarNavi[1] = dns2;
+            sendMessage(obtainMessage(270355));
+            return 0;
+        }
+    }
+
+    protected void notifyDataConnectionCarNavi(DctConstants.State state) {
+        if (TelBrand.IS_KDDI) {
+            log("notifyDataConnectionCarNavi() mEnableApnCarNavi :" + this.mEnableApnCarNavi + " mRequestedApnType : " + this.mRequestedApnType + " state : " + state);
+            if (this.mEnableApnCarNavi && this.mConnectingApnCarNavi && state == DctConstants.State.CONNECTING) {
+                log("notifyDataConnectionCarNavi() mConnectingApnCarNavi=true state change. [" + this.mState + "]-->[" + state + "]");
+            } else if (this.mState == state) {
+                log("notifyDataConnectionCarNavi() ignored same state");
+                return;
+            } else if (this.mEnableApnCarNavi && !((this.mState != DctConstants.State.RETRYING && this.mState != DctConstants.State.CONNECTING && state != DctConstants.State.SCANNING) || state == DctConstants.State.FAILED || state == DctConstants.State.CONNECTED)) {
+                log("notifyDataConnectionCarNavi() ignored invalid state change. [" + this.mState + "]-->[" + state + "]");
+                return;
+            }
+            this.mState = state;
+            if (this.mEnableApnCarNavi || (!this.mEnableApnCarNavi && this.mDisConnectingApnCarNavi)) {
+                if (this.mConnectingApnCarNavi) {
+                    if (!(state == DctConstants.State.RETRYING || state == DctConstants.State.CONNECTING)) {
+                        log("notifyDataConnectionCarNavi() ignored. mConnectingApnCarNavi : " + this.mConnectingApnCarNavi + " state : " + state);
+                        return;
+                    }
+                } else if (!this.mEnableApnCarNavi && this.mDisConnectingApnCarNavi) {
+                    if (state != DctConstants.State.IDLE && state != DctConstants.State.FAILED && state != DctConstants.State.DISCONNECTING) {
+                        log("notifyDataConnectionCarNavi() ignored. mDisConnectingApnCarNavi : " + this.mDisConnectingApnCarNavi + " state : " + state);
+                        return;
+                    } else if (state == DctConstants.State.IDLE || state == DctConstants.State.FAILED) {
+                        log("mDisConnectingApnCarNavi = false");
+                        this.mDisConnectingApnCarNavi = false;
+                    }
+                }
+                int stateCarNavi = 4;
+                if (state == DctConstants.State.RETRYING || state == DctConstants.State.CONNECTING || state == DctConstants.State.SCANNING) {
+                    stateCarNavi = 1;
+                    if (this.mConnectingApnCarNavi) {
+                        log("mConnectingApnCarNavi = false");
+                        this.mConnectingApnCarNavi = false;
+                    }
+                } else if (state == DctConstants.State.CONNECTED) {
+                    stateCarNavi = 2;
+                } else if (state == DctConstants.State.DISCONNECTING) {
+                    stateCarNavi = 3;
+                } else if (state == DctConstants.State.FAILED || state == DctConstants.State.IDLE) {
+                    stateCarNavi = 4;
+                }
+                Intent intent = new Intent(CONNECTIVITY_ACTION_CARNAVI);
+                intent.putExtra(EXTRA_CONNECTIVITY_STATUS_CARNAVI, stateCarNavi);
+                intent.putExtra(EXTRA_ERRONO_CARNAVI, 0);
+                this.mPhone.getContext().sendStickyBroadcast(intent);
+                log("Sent intent CONNECTIVITY_ACTION for CarNavi : " + state + " / " + stateCarNavi);
+            }
+            if (this.mEnableApnCarNavi && this.mState == DctConstants.State.IDLE) {
+                changeMode(false, "", "", "", 0, "", "", "", "");
+                this.mEnableApnCarNavi = false;
+                this.mDisConnectingApnCarNavi = false;
+            }
+        }
+    }
+
+    public String getHigherPriorityApnType() {
+        if (!TelBrand.IS_KDDI) {
+            return "default";
+        }
+        ApnContext[] arr$ = (ApnContext[]) this.mPrioritySortedApnContexts.toArray(new ApnContext[0]);
+        for (ApnContext apnContextEntry : arr$) {
+            if (apnContextEntry.isEnabled()) {
+                String higherPrioApnType = apnContextEntry.getApnType();
+                log("higherPrioApnType : " + higherPrioApnType);
+                return higherPrioApnType;
+            }
+        }
+        return "default";
+    }
+
+    public void setStateCarNavi(ApnContext apnContext) {
+        if (TelBrand.IS_KDDI) {
+            if (apnContext.getApnType().equals(getHigherPriorityApnType())) {
+                notifyDataConnectionCarNavi(apnContext.getState());
+            }
+        }
+    }
+
+    public int changeOemKddiCpaMode(boolean mode, String apn, String userId, String password, int authType, String dns1, String dns2, String proxyHost, String proxyPort) {
+        return changeMode(mode, apn, userId, password, authType, dns1, dns2, proxyHost, proxyPort);
+    }
+
+    public int getOemKddiCpaConnStatus() {
+        String higherPrioApnType = getHigherPriorityApnType();
+        log("getConnStatus() higherPrioApnType : " + higherPrioApnType);
+        if ((!this.mEnableApnCarNavi && (this.mEnableApnCarNavi || !this.mDisConnectingApnCarNavi)) || !isApnTypeActive(higherPrioApnType)) {
+            return 6;
+        }
+        DctConstants.State state = getState(higherPrioApnType);
+        if (state == DctConstants.State.IDLE) {
+            return 0;
+        }
+        if (state == DctConstants.State.CONNECTING) {
+            return 2;
+        }
+        if (state == DctConstants.State.SCANNING) {
+            return 3;
+        }
+        if (state == DctConstants.State.CONNECTED) {
+            return 4;
+        }
+        if (state == DctConstants.State.DISCONNECTING) {
+            return 5;
+        }
+        if (state == DctConstants.State.FAILED || state == DctConstants.State.RETRYING) {
+        }
+        return 6;
+    }
+
+    public String[] getOemKddiCpaConnInfo() {
+        String[] getAddress = new String[3];
+        if (this.mEnableApnCarNavi) {
+            getAddress[0] = new String(this.mLocalAddressCarNavi);
+            getAddress[1] = new String(this.mDnsAddressCarNavi[0]);
+            getAddress[2] = new String(this.mDnsAddressCarNavi[1]);
+            log("getAddress[0] : " + getAddress[0] + " / " + this.mLocalAddressCarNavi);
+            log("getAddress[1] : " + getAddress[1] + " / " + this.mDnsAddressCarNavi[0]);
+            log("getAddress[2] : " + getAddress[2] + " / " + this.mDnsAddressCarNavi[1]);
+        }
+        return getAddress;
     }
 }

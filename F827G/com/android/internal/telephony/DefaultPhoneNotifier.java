@@ -12,24 +12,315 @@ import android.telephony.ServiceState;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.VoLteServiceState;
-import com.android.internal.telephony.ITelephonyRegistry.Stub;
-import com.android.internal.telephony.Phone.DataActivityState;
-import com.android.internal.telephony.PhoneConstants.DataState;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.Call;
+import com.android.internal.telephony.ITelephonyRegistry;
+import com.android.internal.telephony.Phone;
+import com.android.internal.telephony.PhoneConstants;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DefaultPhoneNotifier implements PhoneNotifier {
     private static final boolean DBG = false;
     private static final String LOG_TAG = "DefaultPhoneNotifier";
-    protected ITelephonyRegistry mRegistry = Stub.asInterface(ServiceManager.getService("telephony.registry"));
+    protected ITelephonyRegistry mRegistry = ITelephonyRegistry.Stub.asInterface(ServiceManager.getService("telephony.registry"));
 
-    /* renamed from: com.android.internal.telephony.DefaultPhoneNotifier$1 */
-    static /* synthetic */ class AnonymousClass1 {
-        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState = new int[DataState.values().length];
-        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$PhoneConstants$State = new int[State.values().length];
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public interface IDataStateChangedCallback {
+        void onDataStateChanged(int i, String str, String str2, String str3, String str4, boolean z);
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyPhoneState(Phone sender) {
+        Call ringingCall = sender.getRingingCall();
+        int subId = sender.getSubId();
+        String incomingNumber = "";
+        if (!(ringingCall == null || ringingCall.getEarliestConnection() == null)) {
+            incomingNumber = ringingCall.getEarliestConnection().getAddress();
+        }
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyCallStateForSubscriber(subId, convertCallState(sender.getState()), incomingNumber);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyServiceState(Phone sender) {
+        ServiceState ss = sender.getServiceState();
+        int phoneId = sender.getPhoneId();
+        int subId = sender.getSubId();
+        Rlog.d(LOG_TAG, "nofityServiceState: mRegistry=" + this.mRegistry + " ss=" + ss + " sender=" + sender + " phondId=" + phoneId + " subId=" + subId);
+        if (ss == null) {
+            ss = new ServiceState();
+            ss.setStateOutOfService();
+        }
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyServiceStateForPhoneId(phoneId, subId, ss);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifySignalStrength(Phone sender) {
+        int subId = sender.getSubId();
+        Rlog.d(LOG_TAG, "notifySignalStrength: mRegistry=" + this.mRegistry + " ss=" + sender.getSignalStrength() + " sender=" + sender);
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifySignalStrengthForSubscriber(subId, sender.getSignalStrength());
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyMessageWaitingChanged(Phone sender) {
+        int phoneId = sender.getPhoneId();
+        int subId = sender.getSubId();
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyMessageWaitingChangedForPhoneId(phoneId, subId, sender.getMessageWaitingIndicator());
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyCallForwardingChanged(Phone sender) {
+        int subId = sender.getSubId();
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyCallForwardingChangedForSubscriber(subId, sender.getCallForwardingIndicator());
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyDataActivity(Phone sender) {
+        int subId = sender.getSubId();
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyDataActivityForSubscriber(subId, convertDataActivityState(sender.getDataActivityState()));
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyDataConnection(Phone sender, String reason, String apnType, PhoneConstants.DataState state) {
+        doNotifyDataConnection(sender, reason, apnType, state);
+    }
+
+    private void doNotifyDataConnection(Phone sender, String reason, String apnType, PhoneConstants.DataState state) {
+        int subId = sender.getSubId();
+        SubscriptionManager.getDefaultDataSubId();
+        TelephonyManager telephony = TelephonyManager.getDefault();
+        LinkProperties linkProperties = null;
+        NetworkCapabilities networkCapabilities = null;
+        boolean roaming = false;
+        if (state == PhoneConstants.DataState.CONNECTED) {
+            linkProperties = sender.getLinkProperties(apnType);
+            networkCapabilities = sender.getNetworkCapabilities(apnType);
+        }
+        ServiceState ss = sender.getServiceState();
+        if (ss != null) {
+            roaming = ss.getDataRoaming();
+        }
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyDataConnectionForSubscriber(subId, convertDataState(state), sender.isDataConnectivityPossible(apnType), reason, sender.getActiveApnHost(apnType), apnType, linkProperties, networkCapabilities, telephony != null ? telephony.getDataNetworkType(subId) : 0, roaming);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyDataConnectionFailed(Phone sender, String reason, String apnType) {
+        int subId = sender.getSubId();
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyDataConnectionFailedForSubscriber(subId, reason, apnType);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyCellLocation(Phone sender) {
+        int subId = sender.getSubId();
+        Bundle data = new Bundle();
+        sender.getCellLocation().fillInNotifierBundle(data);
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyCellLocationForSubscriber(subId, data);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyCellInfo(Phone sender, List<CellInfo> cellInfo) {
+        int subId = sender.getSubId();
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyCellInfoForSubscriber(subId, cellInfo);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyDataConnectionRealTimeInfo(Phone sender, DataConnectionRealTimeInfo dcRtInfo) {
+        try {
+            this.mRegistry.notifyDataConnectionRealTimeInfo(dcRtInfo);
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyOtaspChanged(Phone sender, int otaspMode) {
+        try {
+            if (this.mRegistry != null) {
+                this.mRegistry.notifyOtaspChanged(otaspMode);
+            }
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyPreciseCallState(Phone sender) {
+        Call ringingCall = sender.getRingingCall();
+        Call foregroundCall = sender.getForegroundCall();
+        Call backgroundCall = sender.getBackgroundCall();
+        if (ringingCall != null && foregroundCall != null && backgroundCall != null) {
+            try {
+                this.mRegistry.notifyPreciseCallState(convertPreciseCallState(ringingCall.getState()), convertPreciseCallState(foregroundCall.getState()), convertPreciseCallState(backgroundCall.getState()));
+            } catch (RemoteException e) {
+            }
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyDisconnectCause(int cause, int preciseCause) {
+        try {
+            this.mRegistry.notifyDisconnectCause(cause, preciseCause);
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyPreciseDataConnectionFailed(Phone sender, String reason, String apnType, String apn, String failCause) {
+        try {
+            this.mRegistry.notifyPreciseDataConnectionFailed(reason, apnType, apn, failCause);
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyVoLteServiceStateChanged(Phone sender, VoLteServiceState lteState) {
+        try {
+            this.mRegistry.notifyVoLteServiceStateChanged(lteState);
+        } catch (RemoteException e) {
+        }
+    }
+
+    @Override // com.android.internal.telephony.PhoneNotifier
+    public void notifyOemHookRawEventForSubscriber(int subId, byte[] rawData) {
+        try {
+            this.mRegistry.notifyOemHookRawEventForSubscriber(subId, rawData);
+        } catch (RemoteException e) {
+        }
+    }
+
+    public static int convertCallState(PhoneConstants.State state) {
+        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$PhoneConstants$State[state.ordinal()]) {
+            case 1:
+                return 1;
+            case 2:
+                return 2;
+            default:
+                return 0;
+        }
+    }
+
+    public static PhoneConstants.State convertCallState(int state) {
+        switch (state) {
+            case 1:
+                return PhoneConstants.State.RINGING;
+            case 2:
+                return PhoneConstants.State.OFFHOOK;
+            default:
+                return PhoneConstants.State.IDLE;
+        }
+    }
+
+    public static int convertDataState(PhoneConstants.DataState state) {
+        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[state.ordinal()]) {
+            case 1:
+                return 1;
+            case 2:
+                return 2;
+            case 3:
+                return 3;
+            default:
+                return 0;
+        }
+    }
+
+    public static PhoneConstants.DataState convertDataState(int state) {
+        switch (state) {
+            case 1:
+                return PhoneConstants.DataState.CONNECTING;
+            case 2:
+                return PhoneConstants.DataState.CONNECTED;
+            case 3:
+                return PhoneConstants.DataState.SUSPENDED;
+            default:
+                return PhoneConstants.DataState.DISCONNECTED;
+        }
+    }
+
+    public static int convertDataActivityState(Phone.DataActivityState state) {
+        switch (state) {
+            case DATAIN:
+                return 1;
+            case DATAOUT:
+                return 2;
+            case DATAINANDOUT:
+                return 3;
+            case DORMANT:
+                return 4;
+            default:
+                return 0;
+        }
+    }
+
+    public static Phone.DataActivityState convertDataActivityState(int state) {
+        switch (state) {
+            case 1:
+                return Phone.DataActivityState.DATAIN;
+            case 2:
+                return Phone.DataActivityState.DATAOUT;
+            case 3:
+                return Phone.DataActivityState.DATAINANDOUT;
+            case 4:
+                return Phone.DataActivityState.DORMANT;
+            default:
+                return Phone.DataActivityState.NONE;
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    /* renamed from: com.android.internal.telephony.DefaultPhoneNotifier$1  reason: invalid class name */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static /* synthetic */ class AnonymousClass1 {
+        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState;
+        static final /* synthetic */ int[] $SwitchMap$com$android$internal$telephony$PhoneConstants$State;
 
         static {
-            $SwitchMap$com$android$internal$telephony$Call$State = new int[Call.State.values().length];
             try {
                 $SwitchMap$com$android$internal$telephony$Call$State[Call.State.ACTIVE.ordinal()] = 1;
             } catch (NoSuchFieldError e) {
@@ -62,128 +353,45 @@ public class DefaultPhoneNotifier implements PhoneNotifier {
                 $SwitchMap$com$android$internal$telephony$Call$State[Call.State.DISCONNECTING.ordinal()] = 8;
             } catch (NoSuchFieldError e8) {
             }
-            $SwitchMap$com$android$internal$telephony$Phone$DataActivityState = new int[DataActivityState.values().length];
+            $SwitchMap$com$android$internal$telephony$Phone$DataActivityState = new int[Phone.DataActivityState.values().length];
             try {
-                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[DataActivityState.DATAIN.ordinal()] = 1;
+                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[Phone.DataActivityState.DATAIN.ordinal()] = 1;
             } catch (NoSuchFieldError e9) {
             }
             try {
-                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[DataActivityState.DATAOUT.ordinal()] = 2;
+                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[Phone.DataActivityState.DATAOUT.ordinal()] = 2;
             } catch (NoSuchFieldError e10) {
             }
             try {
-                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[DataActivityState.DATAINANDOUT.ordinal()] = 3;
+                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[Phone.DataActivityState.DATAINANDOUT.ordinal()] = 3;
             } catch (NoSuchFieldError e11) {
             }
             try {
-                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[DataActivityState.DORMANT.ordinal()] = 4;
+                $SwitchMap$com$android$internal$telephony$Phone$DataActivityState[Phone.DataActivityState.DORMANT.ordinal()] = 4;
             } catch (NoSuchFieldError e12) {
             }
+            $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState = new int[PhoneConstants.DataState.values().length];
             try {
-                $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[DataState.CONNECTING.ordinal()] = 1;
+                $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[PhoneConstants.DataState.CONNECTING.ordinal()] = 1;
             } catch (NoSuchFieldError e13) {
             }
             try {
-                $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[DataState.CONNECTED.ordinal()] = 2;
+                $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[PhoneConstants.DataState.CONNECTED.ordinal()] = 2;
             } catch (NoSuchFieldError e14) {
             }
             try {
-                $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[DataState.SUSPENDED.ordinal()] = 3;
+                $SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[PhoneConstants.DataState.SUSPENDED.ordinal()] = 3;
             } catch (NoSuchFieldError e15) {
             }
+            $SwitchMap$com$android$internal$telephony$PhoneConstants$State = new int[PhoneConstants.State.values().length];
             try {
-                $SwitchMap$com$android$internal$telephony$PhoneConstants$State[State.RINGING.ordinal()] = 1;
+                $SwitchMap$com$android$internal$telephony$PhoneConstants$State[PhoneConstants.State.RINGING.ordinal()] = 1;
             } catch (NoSuchFieldError e16) {
             }
             try {
-                $SwitchMap$com$android$internal$telephony$PhoneConstants$State[State.OFFHOOK.ordinal()] = 2;
+                $SwitchMap$com$android$internal$telephony$PhoneConstants$State[PhoneConstants.State.OFFHOOK.ordinal()] = 2;
             } catch (NoSuchFieldError e17) {
             }
-        }
-    }
-
-    public interface IDataStateChangedCallback {
-        void onDataStateChanged(int i, String str, String str2, String str3, String str4, boolean z);
-    }
-
-    protected DefaultPhoneNotifier() {
-    }
-
-    public static int convertCallState(State state) {
-        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$PhoneConstants$State[state.ordinal()]) {
-            case 1:
-                return 1;
-            case 2:
-                return 2;
-            default:
-                return 0;
-        }
-    }
-
-    public static State convertCallState(int i) {
-        switch (i) {
-            case 1:
-                return State.RINGING;
-            case 2:
-                return State.OFFHOOK;
-            default:
-                return State.IDLE;
-        }
-    }
-
-    public static int convertDataActivityState(DataActivityState dataActivityState) {
-        switch (dataActivityState) {
-            case DATAIN:
-                return 1;
-            case DATAOUT:
-                return 2;
-            case DATAINANDOUT:
-                return 3;
-            case DORMANT:
-                return 4;
-            default:
-                return 0;
-        }
-    }
-
-    public static DataActivityState convertDataActivityState(int i) {
-        switch (i) {
-            case 1:
-                return DataActivityState.DATAIN;
-            case 2:
-                return DataActivityState.DATAOUT;
-            case 3:
-                return DataActivityState.DATAINANDOUT;
-            case 4:
-                return DataActivityState.DORMANT;
-            default:
-                return DataActivityState.NONE;
-        }
-    }
-
-    public static int convertDataState(DataState dataState) {
-        switch (AnonymousClass1.$SwitchMap$com$android$internal$telephony$PhoneConstants$DataState[dataState.ordinal()]) {
-            case 1:
-                return 1;
-            case 2:
-                return 2;
-            case 3:
-                return 3;
-            default:
-                return 0;
-        }
-    }
-
-    public static DataState convertDataState(int i) {
-        switch (i) {
-            case 1:
-                return DataState.CONNECTING;
-            case 2:
-                return DataState.CONNECTED;
-            case 3:
-                return DataState.SUSPENDED;
-            default:
-                return DataState.DISCONNECTED;
         }
     }
 
@@ -210,8 +418,8 @@ public class DefaultPhoneNotifier implements PhoneNotifier {
         }
     }
 
-    public static Call.State convertPreciseCallState(int i) {
-        switch (i) {
+    public static Call.State convertPreciseCallState(int state) {
+        switch (state) {
             case 1:
                 return Call.State.ACTIVE;
             case 2:
@@ -233,204 +441,7 @@ public class DefaultPhoneNotifier implements PhoneNotifier {
         }
     }
 
-    private void doNotifyDataConnection(Phone phone, String str, String str2, DataState dataState) {
-        LinkProperties linkProperties;
-        NetworkCapabilities networkCapabilities;
-        int i = 0;
-        int subId = phone.getSubId();
-        SubscriptionManager.getDefaultDataSubId();
-        TelephonyManager telephonyManager = TelephonyManager.getDefault();
-        if (dataState == DataState.CONNECTED) {
-            linkProperties = phone.getLinkProperties(str2);
-            networkCapabilities = phone.getNetworkCapabilities(str2);
-        } else {
-            networkCapabilities = null;
-            linkProperties = null;
-        }
-        ServiceState serviceState = phone.getServiceState();
-        boolean dataRoaming = serviceState != null ? serviceState.getDataRoaming() : false;
-        try {
-            if (this.mRegistry != null) {
-                ITelephonyRegistry iTelephonyRegistry = this.mRegistry;
-                int convertDataState = convertDataState(dataState);
-                boolean isDataConnectivityPossible = phone.isDataConnectivityPossible(str2);
-                String activeApnHost = phone.getActiveApnHost(str2);
-                if (telephonyManager != null) {
-                    i = telephonyManager.getDataNetworkType(subId);
-                }
-                iTelephonyRegistry.notifyDataConnectionForSubscriber(subId, convertDataState, isDataConnectivityPossible, str, activeApnHost, str2, linkProperties, networkCapabilities, i, dataRoaming);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    private void log(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    public void notifyCallForwardingChanged(Phone phone) {
-        int subId = phone.getSubId();
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyCallForwardingChangedForSubscriber(subId, phone.getCallForwardingIndicator());
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyCellInfo(Phone phone, List<CellInfo> list) {
-        int subId = phone.getSubId();
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyCellInfoForSubscriber(subId, list);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyCellLocation(Phone phone) {
-        int subId = phone.getSubId();
-        Bundle bundle = new Bundle();
-        phone.getCellLocation().fillInNotifierBundle(bundle);
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyCellLocationForSubscriber(subId, bundle);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyDataActivity(Phone phone) {
-        int subId = phone.getSubId();
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyDataActivityForSubscriber(subId, convertDataActivityState(phone.getDataActivityState()));
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyDataConnection(Phone phone, String str, String str2, DataState dataState) {
-        doNotifyDataConnection(phone, str, str2, dataState);
-    }
-
-    public void notifyDataConnectionFailed(Phone phone, String str, String str2) {
-        int subId = phone.getSubId();
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyDataConnectionFailedForSubscriber(subId, str, str2);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyDataConnectionRealTimeInfo(Phone phone, DataConnectionRealTimeInfo dataConnectionRealTimeInfo) {
-        try {
-            this.mRegistry.notifyDataConnectionRealTimeInfo(dataConnectionRealTimeInfo);
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyDisconnectCause(int i, int i2) {
-        try {
-            this.mRegistry.notifyDisconnectCause(i, i2);
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyMessageWaitingChanged(Phone phone) {
-        int phoneId = phone.getPhoneId();
-        int subId = phone.getSubId();
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyMessageWaitingChangedForPhoneId(phoneId, subId, phone.getMessageWaitingIndicator());
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyOemHookRawEventForSubscriber(int i, byte[] bArr) {
-        try {
-            this.mRegistry.notifyOemHookRawEventForSubscriber(i, bArr);
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyOtaspChanged(Phone phone, int i) {
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyOtaspChanged(i);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyPhoneState(Phone phone) {
-        Call ringingCall = phone.getRingingCall();
-        int subId = phone.getSubId();
-        String str = "";
-        if (!(ringingCall == null || ringingCall.getEarliestConnection() == null)) {
-            str = ringingCall.getEarliestConnection().getAddress();
-        }
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyCallStateForSubscriber(subId, convertCallState(phone.getState()), str);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyPreciseCallState(Phone phone) {
-        Call ringingCall = phone.getRingingCall();
-        Call foregroundCall = phone.getForegroundCall();
-        Call backgroundCall = phone.getBackgroundCall();
-        if (ringingCall != null && foregroundCall != null && backgroundCall != null) {
-            try {
-                this.mRegistry.notifyPreciseCallState(convertPreciseCallState(ringingCall.getState()), convertPreciseCallState(foregroundCall.getState()), convertPreciseCallState(backgroundCall.getState()));
-            } catch (RemoteException e) {
-            }
-        }
-    }
-
-    public void notifyPreciseDataConnectionFailed(Phone phone, String str, String str2, String str3, String str4) {
-        try {
-            this.mRegistry.notifyPreciseDataConnectionFailed(str, str2, str3, str4);
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyServiceState(Phone phone) {
-        ServiceState serviceState = phone.getServiceState();
-        int phoneId = phone.getPhoneId();
-        int subId = phone.getSubId();
-        Rlog.d(LOG_TAG, "nofityServiceState: mRegistry=" + this.mRegistry + " ss=" + serviceState + " sender=" + phone + " phondId=" + phoneId + " subId=" + subId);
-        if (serviceState == null) {
-            serviceState = new ServiceState();
-            serviceState.setStateOutOfService();
-        }
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifyServiceStateForPhoneId(phoneId, subId, serviceState);
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifySignalStrength(Phone phone) {
-        int subId = phone.getSubId();
-        Rlog.d(LOG_TAG, "notifySignalStrength: mRegistry=" + this.mRegistry + " ss=" + phone.getSignalStrength() + " sender=" + phone);
-        try {
-            if (this.mRegistry != null) {
-                this.mRegistry.notifySignalStrengthForSubscriber(subId, phone.getSignalStrength());
-            }
-        } catch (RemoteException e) {
-        }
-    }
-
-    public void notifyVoLteServiceStateChanged(Phone phone, VoLteServiceState voLteServiceState) {
-        try {
-            this.mRegistry.notifyVoLteServiceStateChanged(voLteServiceState);
-        } catch (RemoteException e) {
-        }
+    private void log(String s) {
+        Rlog.d(LOG_TAG, s);
     }
 }

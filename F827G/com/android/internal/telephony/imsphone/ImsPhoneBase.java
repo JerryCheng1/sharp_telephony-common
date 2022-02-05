@@ -18,11 +18,9 @@ import com.android.internal.telephony.IccCard;
 import com.android.internal.telephony.IccPhoneBookInterfaceManager;
 import com.android.internal.telephony.MmiCode;
 import com.android.internal.telephony.OperatorInfo;
-import com.android.internal.telephony.Phone.DataActivityState;
-import com.android.internal.telephony.Phone.SuppService;
+import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.PhoneBase;
-import com.android.internal.telephony.PhoneConstants.DataState;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.PhoneNotifier;
 import com.android.internal.telephony.PhoneSubInfo;
 import com.android.internal.telephony.UUSInfo;
@@ -31,109 +29,215 @@ import com.android.internal.telephony.uicc.IccFileHandler;
 import java.util.ArrayList;
 import java.util.List;
 
-abstract class ImsPhoneBase extends PhoneBase {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public abstract class ImsPhoneBase extends PhoneBase {
     private static final String LOG_TAG = "ImsPhoneBase";
-    private RegistrantList mOnHoldRegistrants = new RegistrantList();
     private RegistrantList mRingbackRegistrants = new RegistrantList();
-    private State mState = State.IDLE;
+    private RegistrantList mOnHoldRegistrants = new RegistrantList();
     private RegistrantList mTtyModeReceivedRegistrants = new RegistrantList();
+    private PhoneConstants.State mState = PhoneConstants.State.IDLE;
 
-    public ImsPhoneBase(String str, Context context, PhoneNotifier phoneNotifier) {
-        super(str, phoneNotifier, context, new ImsPhoneCommandInterface(context), false);
+    public ImsPhoneBase(String name, Context context, PhoneNotifier notifier) {
+        super(name, notifier, context, new ImsPhoneCommandInterface(context), false);
     }
 
-    public void activateCellBroadcastSms(int i, Message message) {
-        Rlog.e(LOG_TAG, "Error! This functionality is not implemented for Volte.");
+    public Connection dial(String dialString, UUSInfo uusInfo, int videoState) throws CallStateException {
+        return dial(dialString, videoState);
     }
 
-    public boolean canDial() {
-        int state = getServiceState().getState();
-        Rlog.v(LOG_TAG, "canDial(): serviceState = " + state);
-        if (state != 3) {
-            String str = SystemProperties.get("ro.telephony.disable-call", "false");
-            Rlog.v(LOG_TAG, "canDial(): disableCall = " + str);
-            if (!str.equals("true")) {
-                Rlog.v(LOG_TAG, "canDial(): ringingCall: " + getRingingCall().getState());
-                Rlog.v(LOG_TAG, "canDial(): foregndCall: " + getForegroundCall().getState());
-                Rlog.v(LOG_TAG, "canDial(): backgndCall: " + getBackgroundCall().getState());
-                if (!(getRingingCall().isRinging() || (getForegroundCall().getState().isAlive() && getBackgroundCall().getState().isAlive()))) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    @Override // com.android.internal.telephony.PhoneBase
+    public void migrateFrom(PhoneBase from) {
+        super.migrateFrom(from);
+        migrate(this.mRingbackRegistrants, ((ImsPhoneBase) from).mRingbackRegistrants);
     }
 
-    public Connection dial(String str, UUSInfo uUSInfo, int i) throws CallStateException {
-        return dial(str, i);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void registerForRingbackTone(Handler h, int what, Object obj) {
+        this.mRingbackRegistrants.addUnique(h, what, obj);
     }
 
-    public boolean disableDataConnectivity() {
-        return false;
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void unregisterForRingbackTone(Handler h) {
+        this.mRingbackRegistrants.remove(h);
     }
 
-    public void disableLocationUpdates() {
+    protected void startRingbackTone() {
+        this.mRingbackRegistrants.notifyRegistrants(new AsyncResult((Object) null, Boolean.TRUE, (Throwable) null));
     }
 
-    public boolean enableDataConnectivity() {
-        return false;
+    protected void stopRingbackTone() {
+        this.mRingbackRegistrants.notifyRegistrants(new AsyncResult((Object) null, Boolean.FALSE, (Throwable) null));
     }
 
-    public void enableLocationUpdates() {
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void registerForOnHoldTone(Handler h, int what, Object obj) {
+        this.mOnHoldRegistrants.addUnique(h, what, obj);
     }
 
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void unregisterForOnHoldTone(Handler h) {
+        this.mOnHoldRegistrants.remove(h);
+    }
+
+    protected void startOnHoldTone() {
+        this.mOnHoldRegistrants.notifyRegistrants(new AsyncResult((Object) null, Boolean.TRUE, (Throwable) null));
+    }
+
+    protected void stopOnHoldTone() {
+        this.mOnHoldRegistrants.notifyRegistrants(new AsyncResult((Object) null, Boolean.FALSE, (Throwable) null));
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void registerForTtyModeReceived(Handler h, int what, Object obj) {
+        this.mTtyModeReceivedRegistrants.addUnique(h, what, obj);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void unregisterForTtyModeReceived(Handler h) {
+        this.mTtyModeReceivedRegistrants.remove(h);
+    }
+
+    public void onTtyModeReceived(int mode) {
+        this.mTtyModeReceivedRegistrants.notifyRegistrants(new AsyncResult((Object) null, Integer.valueOf(mode), (Throwable) null));
+    }
+
+    public ServiceState getServiceState() {
+        ServiceState s = new ServiceState();
+        s.setState(0);
+        return s;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
     public List<CellInfo> getAllCellInfo() {
         return getServiceStateTracker().getAllCellInfo();
-    }
-
-    public void getAvailableNetworks(Message message) {
-    }
-
-    public boolean getCallForwardingIndicator() {
-        return false;
-    }
-
-    public void getCallForwardingOption(int i, Message message) {
-    }
-
-    public void getCallWaiting(Message message) {
-        AsyncResult.forMessage(message, null, null);
-        message.sendToTarget();
-    }
-
-    public void getCellBroadcastSmsConfig(Message message) {
-        Rlog.e(LOG_TAG, "Error! This functionality is not implemented for Volte.");
     }
 
     public CellLocation getCellLocation() {
         return null;
     }
 
-    public List<DataConnection> getCurrentDataConnectionList() {
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public PhoneConstants.State getState() {
+        return this.mState;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public int getPhoneType() {
+        return 5;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public SignalStrength getSignalStrength() {
+        return new SignalStrength();
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean getMessageWaitingIndicator() {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean getCallForwardingIndicator() {
+        return false;
+    }
+
+    public List<? extends MmiCode> getPendingMmiCodes() {
+        return new ArrayList(0);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public PhoneConstants.DataState getDataConnectionState() {
+        return PhoneConstants.DataState.DISCONNECTED;
+    }
+
+    public PhoneConstants.DataState getDataConnectionState(String apnType) {
+        return PhoneConstants.DataState.DISCONNECTED;
+    }
+
+    public Phone.DataActivityState getDataActivityState() {
+        return Phone.DataActivityState.NONE;
+    }
+
+    void notifyPhoneStateChanged() {
+        this.mNotifier.notifyPhoneState(this);
+    }
+
+    void notifyPreciseCallStateChanged() {
+        super.notifyPreciseCallStateChangedP();
+    }
+
+    void notifyDisconnect(Connection cn) {
+        this.mDisconnectRegistrants.notifyResult(cn);
+    }
+
+    void notifyUnknownConnection() {
+        this.mUnknownConnectionRegistrants.notifyResult(this);
+    }
+
+    void notifySuppServiceFailed(Phone.SuppService code) {
+        this.mSuppServiceFailedRegistrants.notifyResult(code);
+    }
+
+    void notifyServiceStateChanged(ServiceState ss) {
+        super.notifyServiceStateChangedP(ss);
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase
+    public void notifyCallForwardingIndicator() {
+        this.mNotifier.notifyCallForwardingChanged(this);
+    }
+
+    public boolean canDial() {
+        int serviceState = getServiceState().getState();
+        Rlog.v(LOG_TAG, "canDial(): serviceState = " + serviceState);
+        if (serviceState == 3) {
+            return false;
+        }
+        String disableCall = SystemProperties.get("ro.telephony.disable-call", "false");
+        Rlog.v(LOG_TAG, "canDial(): disableCall = " + disableCall);
+        if (disableCall.equals("true")) {
+            return false;
+        }
+        Rlog.v(LOG_TAG, "canDial(): ringingCall: " + getRingingCall().getState());
+        Rlog.v(LOG_TAG, "canDial(): foregndCall: " + getForegroundCall().getState());
+        Rlog.v(LOG_TAG, "canDial(): backgndCall: " + getBackgroundCall().getState());
+        if (!getRingingCall().isRinging()) {
+            return !getForegroundCall().getState().isAlive() || !getBackgroundCall().getState().isAlive();
+        }
+        return false;
+    }
+
+    public boolean handleInCallMmiCommands(String dialString) {
+        return false;
+    }
+
+    boolean isInCall() {
+        return getForegroundCall().getState().isAlive() || getBackgroundCall().getState().isAlive() || getRingingCall().getState().isAlive();
+    }
+
+    public boolean handlePinMmi(String dialString) {
+        return false;
+    }
+
+    public void sendUssdResponse(String ussdMessge) {
+    }
+
+    public void registerForSuppServiceNotification(Handler h, int what, Object obj) {
+    }
+
+    public void unregisterForSuppServiceNotification(Handler h) {
+    }
+
+    public void setRadioPower(boolean power) {
+    }
+
+    public String getVoiceMailNumber() {
         return null;
     }
 
-    public DataActivityState getDataActivityState() {
-        return DataActivityState.NONE;
-    }
-
-    public void getDataCallList(Message message) {
-    }
-
-    public DataState getDataConnectionState() {
-        return DataState.DISCONNECTED;
-    }
-
-    public DataState getDataConnectionState(String str) {
-        return DataState.DISCONNECTED;
-    }
-
-    public boolean getDataEnabled() {
-        return false;
-    }
-
-    public boolean getDataRoamingEnabled() {
-        return false;
+    public String getVoiceMailAlphaTag() {
+        return null;
     }
 
     public String getDeviceId() {
@@ -144,49 +248,13 @@ abstract class ImsPhoneBase extends PhoneBase {
         return null;
     }
 
-    public String getEsn() {
-        Rlog.e(LOG_TAG, "[VoltePhone] getEsn() is a CDMA method");
-        return "0";
-    }
-
-    public String getGroupIdLevel1() {
-        return null;
-    }
-
-    public IccCard getIccCard() {
-        return null;
-    }
-
-    public IccFileHandler getIccFileHandler() {
-        return null;
-    }
-
-    public IccPhoneBookInterfaceManager getIccPhoneBookInterfaceManager() {
-        return null;
-    }
-
-    public boolean getIccRecordsLoaded() {
-        return false;
-    }
-
-    public String getIccSerialNumber() {
-        return null;
-    }
-
     public String getImei() {
         return null;
     }
 
-    public String getLine1AlphaTag() {
-        return null;
-    }
-
-    public String getLine1Number() {
-        return null;
-    }
-
-    public LinkProperties getLinkProperties(String str) {
-        return null;
+    public String getEsn() {
+        Rlog.e(LOG_TAG, "[VoltePhone] getEsn() is a CDMA method");
+        return "0";
     }
 
     public String getMeid() {
@@ -194,245 +262,194 @@ abstract class ImsPhoneBase extends PhoneBase {
         return "0";
     }
 
-    public boolean getMessageWaitingIndicator() {
+    public String getSubscriberId() {
+        return null;
+    }
+
+    public String getGroupIdLevel1() {
+        return null;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public String getIccSerialNumber() {
+        return null;
+    }
+
+    public String getLine1Number() {
+        return null;
+    }
+
+    public String getLine1AlphaTag() {
+        return null;
+    }
+
+    public void setLine1Number(String alphaTag, String number, Message onComplete) {
+        AsyncResult.forMessage(onComplete, (Object) null, (Throwable) null);
+        onComplete.sendToTarget();
+    }
+
+    public void setVoiceMailNumber(String alphaTag, String voiceMailNumber, Message onComplete) {
+        AsyncResult.forMessage(onComplete, (Object) null, (Throwable) null);
+        onComplete.sendToTarget();
+    }
+
+    public void getCallForwardingOption(int commandInterfaceCFReason, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallForwardingOption(int commandInterfaceCFAction, int commandInterfaceCFReason, String dialingNumber, int timerSeconds, Message onComplete) {
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallForwardingUncondTimerOption(int startHour, int startMinute, int endHour, int endMinute, int commandInterfaceCFAction, int commandInterfaceCFReason, String dialingNumber, Message onComplete) {
+    }
+
+    public void getOutgoingCallerIdDisplay(Message onComplete) {
+        AsyncResult.forMessage(onComplete, (Object) null, (Throwable) null);
+        onComplete.sendToTarget();
+    }
+
+    public void setOutgoingCallerIdDisplay(int commandInterfaceCLIRMode, Message onComplete) {
+        AsyncResult.forMessage(onComplete, (Object) null, (Throwable) null);
+        onComplete.sendToTarget();
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void getCallWaiting(Message onComplete) {
+        AsyncResult.forMessage(onComplete, (Object) null, (Throwable) null);
+        onComplete.sendToTarget();
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setCallWaiting(boolean enable, Message onComplete) {
+        Rlog.e(LOG_TAG, "call waiting not supported");
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean getIccRecordsLoaded() {
         return false;
     }
 
-    public void getNeighboringCids(Message message) {
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public IccCard getIccCard() {
+        return null;
     }
 
-    public void getOutgoingCallerIdDisplay(Message message) {
-        AsyncResult.forMessage(message, null, null);
-        message.sendToTarget();
+    public void getAvailableNetworks(Message response) {
     }
 
-    public List<? extends MmiCode> getPendingMmiCodes() {
-        return new ArrayList(0);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void setNetworkSelectionModeAutomatic(Message response) {
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public void selectNetworkManually(OperatorInfo network, Message response) {
+    }
+
+    public void getNeighboringCids(Message response) {
+    }
+
+    public void getDataCallList(Message response) {
+    }
+
+    public List<DataConnection> getCurrentDataConnectionList() {
+        return null;
+    }
+
+    public void updateServiceLocation() {
+    }
+
+    public void enableLocationUpdates() {
+    }
+
+    public void disableLocationUpdates() {
+    }
+
+    public boolean getDataRoamingEnabled() {
+        return false;
+    }
+
+    public void setDataRoamingEnabled(boolean enable) {
+    }
+
+    public boolean getDataEnabled() {
+        return false;
+    }
+
+    public void setDataEnabled(boolean enable) {
+    }
+
+    public boolean enableDataConnectivity() {
+        return false;
+    }
+
+    public boolean disableDataConnectivity() {
+        return false;
+    }
+
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public boolean isDataConnectivityPossible() {
+        return false;
+    }
+
+    boolean updateCurrentCarrierInProvider() {
+        return false;
+    }
+
+    public void saveClirSetting(int commandInterfaceCLIRMode) {
     }
 
     public PhoneSubInfo getPhoneSubInfo() {
         return null;
     }
 
-    public int getPhoneType() {
-        return 5;
-    }
-
-    public ServiceState getServiceState() {
-        ServiceState serviceState = new ServiceState();
-        serviceState.setState(0);
-        return serviceState;
-    }
-
-    public SignalStrength getSignalStrength() {
-        return new SignalStrength();
-    }
-
-    public State getState() {
-        return this.mState;
-    }
-
-    public String getSubscriberId() {
+    public IccPhoneBookInterfaceManager getIccPhoneBookInterfaceManager() {
         return null;
     }
 
-    public String getVoiceMailAlphaTag() {
+    @Override // com.android.internal.telephony.PhoneBase
+    public IccFileHandler getIccFileHandler() {
         return null;
     }
 
-    public String getVoiceMailNumber() {
-        return null;
+    public void activateCellBroadcastSms(int activate, Message response) {
+        Rlog.e(LOG_TAG, "Error! This functionality is not implemented for Volte.");
     }
 
-    public boolean handleInCallMmiCommands(String str) {
-        return false;
+    public void getCellBroadcastSmsConfig(Message response) {
+        Rlog.e(LOG_TAG, "Error! This functionality is not implemented for Volte.");
     }
 
-    public boolean handlePinMmi(String str) {
-        return false;
+    public void setCellBroadcastSmsConfig(int[] configValuesArray, Message response) {
+        Rlog.e(LOG_TAG, "Error! This functionality is not implemented for Volte.");
     }
 
-    public boolean isDataConnectivityPossible() {
-        return false;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isInCall() {
-        return getForegroundCall().getState().isAlive() || getBackgroundCall().getState().isAlive() || getRingingCall().getState().isAlive();
-    }
-
-    public void migrateFrom(PhoneBase phoneBase) {
-        super.migrateFrom(phoneBase);
-        migrate(this.mRingbackRegistrants, ((ImsPhoneBase) phoneBase).mRingbackRegistrants);
-    }
-
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
     public boolean needsOtaServiceProvisioning() {
         return false;
     }
 
-    public void notifyCallForwardingIndicator() {
-        this.mNotifier.notifyCallForwardingChanged(this);
+    @Override // com.android.internal.telephony.PhoneBase, com.android.internal.telephony.Phone
+    public LinkProperties getLinkProperties(String apnType) {
+        return null;
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void notifyDisconnect(Connection connection) {
-        this.mDisconnectRegistrants.notifyResult(connection);
+    @Override // com.android.internal.telephony.PhoneBase
+    protected void onUpdateIccAvailability() {
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void notifyPhoneStateChanged() {
-        this.mNotifier.notifyPhoneState(this);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifyPreciseCallStateChanged() {
-        super.notifyPreciseCallStateChangedP();
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifyServiceStateChanged(ServiceState serviceState) {
-        super.notifyServiceStateChangedP(serviceState);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifySuppServiceFailed(SuppService suppService) {
-        this.mSuppServiceFailedRegistrants.notifyResult(suppService);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void notifyUnknownConnection() {
-        this.mUnknownConnectionRegistrants.notifyResult(this);
-    }
-
-    public void onTtyModeReceived(int i) {
-        this.mTtyModeReceivedRegistrants.notifyRegistrants(new AsyncResult(null, Integer.valueOf(i), null));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void onUpdateIccAvailability() {
-    }
-
-    public void registerForOnHoldTone(Handler handler, int i, Object obj) {
-        this.mOnHoldRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForRingbackTone(Handler handler, int i, Object obj) {
-        this.mRingbackRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSuppServiceNotification(Handler handler, int i, Object obj) {
-    }
-
-    public void registerForTtyModeReceived(Handler handler, int i, Object obj) {
-        this.mTtyModeReceivedRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void saveClirSetting(int i) {
-    }
-
-    public void selectNetworkManually(OperatorInfo operatorInfo, Message message) {
-    }
-
-    public void sendUssdResponse(String str) {
-    }
-
-    public void setCallForwardingOption(int i, int i2, String str, int i3, Message message) {
-    }
-
-    public void setCallForwardingUncondTimerOption(int i, int i2, int i3, int i4, int i5, int i6, String str, Message message) {
-    }
-
-    public void setCallWaiting(boolean z, Message message) {
-        Rlog.e(LOG_TAG, "call waiting not supported");
-    }
-
-    public void setCellBroadcastSmsConfig(int[] iArr, Message message) {
-        Rlog.e(LOG_TAG, "Error! This functionality is not implemented for Volte.");
-    }
-
-    public void setDataEnabled(boolean z) {
-    }
-
-    public void setDataRoamingEnabled(boolean z) {
-    }
-
-    public void setLine1Number(String str, String str2, Message message) {
-        AsyncResult.forMessage(message, null, null);
-        message.sendToTarget();
-    }
-
-    public void setNetworkSelectionModeAutomatic(Message message) {
-    }
-
-    public void setOutgoingCallerIdDisplay(int i, Message message) {
-        AsyncResult.forMessage(message, null, null);
-        message.sendToTarget();
-    }
-
-    public void setRadioPower(boolean z) {
-    }
-
-    public void setVoiceMailNumber(String str, String str2, Message message) {
-        AsyncResult.forMessage(message, null, null);
-        message.sendToTarget();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void startOnHoldTone() {
-        this.mOnHoldRegistrants.notifyRegistrants(new AsyncResult(null, Boolean.TRUE, null));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void startRingbackTone() {
-        this.mRingbackRegistrants.notifyRegistrants(new AsyncResult(null, Boolean.TRUE, null));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void stopOnHoldTone() {
-        this.mOnHoldRegistrants.notifyRegistrants(new AsyncResult(null, Boolean.FALSE, null));
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void stopRingbackTone() {
-        this.mRingbackRegistrants.notifyRegistrants(new AsyncResult(null, Boolean.FALSE, null));
-    }
-
-    public void unregisterForOnHoldTone(Handler handler) {
-        this.mOnHoldRegistrants.remove(handler);
-    }
-
-    public void unregisterForRingbackTone(Handler handler) {
-        this.mRingbackRegistrants.remove(handler);
-    }
-
-    public void unregisterForSuppServiceNotification(Handler handler) {
-    }
-
-    public void unregisterForTtyModeReceived(Handler handler) {
-        this.mTtyModeReceivedRegistrants.remove(handler);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean updateCurrentCarrierInProvider() {
-        return false;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void updatePhoneState() {
-        State state = this.mState;
+    void updatePhoneState() {
+        PhoneConstants.State oldState = this.mState;
         if (getRingingCall().isRinging()) {
-            this.mState = State.RINGING;
-        } else if (getForegroundCall().isIdle() && getBackgroundCall().isIdle()) {
-            this.mState = State.IDLE;
+            this.mState = PhoneConstants.State.RINGING;
+        } else if (!getForegroundCall().isIdle() || !getBackgroundCall().isIdle()) {
+            this.mState = PhoneConstants.State.OFFHOOK;
         } else {
-            this.mState = State.OFFHOOK;
+            this.mState = PhoneConstants.State.IDLE;
         }
-        if (this.mState != state) {
+        if (this.mState != oldState) {
             Rlog.d(LOG_TAG, " ^^^ new phone state: " + this.mState);
             notifyPhoneStateChanged();
         }
-    }
-
-    public void updateServiceLocation() {
     }
 }

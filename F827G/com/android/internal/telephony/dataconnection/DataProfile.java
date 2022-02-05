@@ -3,6 +3,7 @@ package com.android.internal.telephony.dataconnection;
 import android.os.Parcel;
 import android.telephony.ServiceState;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DataProfile {
     static final int TYPE_3GPP = 1;
     static final int TYPE_3GPP2 = 2;
@@ -19,57 +20,54 @@ public class DataProfile {
     public final String user;
     public final int waitTime;
 
-    DataProfile(int i, String str, String str2, int i2, String str3, String str4, int i3, int i4, int i5, int i6, boolean z) {
-        this.profileId = i;
-        this.apn = str;
-        this.protocol = str2;
-        this.authType = i2;
-        this.user = str3;
-        this.password = str4;
-        this.type = i3;
-        this.maxConnsTime = i4;
-        this.maxConns = i5;
-        this.waitTime = i6;
-        this.enabled = z;
+    DataProfile(int profileId, String apn, String protocol, int authType, String user, String password, int type, int maxConnsTime, int maxConns, int waitTime, boolean enabled) {
+        this.profileId = profileId;
+        this.apn = apn;
+        this.protocol = protocol;
+        this.authType = authType;
+        this.user = user;
+        this.password = password;
+        this.type = type;
+        this.maxConnsTime = maxConnsTime;
+        this.maxConns = maxConns;
+        this.waitTime = waitTime;
+        this.enabled = enabled;
     }
 
-    DataProfile(ApnSetting apnSetting, boolean z) {
-        int i = apnSetting.profileId;
-        String str = apnSetting.apn;
-        String str2 = z ? apnSetting.protocol : apnSetting.roamingProtocol;
-        int i2 = apnSetting.authType;
-        String str3 = apnSetting.user;
-        String str4 = apnSetting.password;
-        int i3 = apnSetting.bearer == 0 ? 0 : ServiceState.isCdma(apnSetting.bearer) ? 2 : 1;
-        this(i, str, str2, i2, str3, str4, i3, apnSetting.maxConnsTime, apnSetting.maxConns, apnSetting.waitTime, apnSetting.carrierEnabled);
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public DataProfile(ApnSetting apn, boolean isRoaming) {
+        this(apn.profileId, apn.apn, isRoaming ? apn.protocol : apn.roamingProtocol, apn.authType, apn.user, apn.password, apn.bearer == 0 ? 0 : ServiceState.isCdma(apn.bearer) ? 2 : 1, apn.maxConnsTime, apn.maxConns, apn.waitTime, apn.carrierEnabled);
     }
 
-    public static Parcel toParcel(Parcel parcel, DataProfile[] dataProfileArr) {
-        if (parcel == null) {
+    public static Parcel toParcel(Parcel pc, DataProfile[] dps) {
+        if (pc == null) {
             return null;
         }
-        parcel.writeInt(dataProfileArr.length);
-        for (int i = 0; i < dataProfileArr.length; i++) {
-            parcel.writeInt(dataProfileArr[i].profileId);
-            parcel.writeString(dataProfileArr[i].apn);
-            parcel.writeString(dataProfileArr[i].protocol);
-            parcel.writeInt(dataProfileArr[i].authType);
-            parcel.writeString(dataProfileArr[i].user);
-            parcel.writeString(dataProfileArr[i].password);
-            parcel.writeInt(dataProfileArr[i].type);
-            parcel.writeInt(dataProfileArr[i].maxConnsTime);
-            parcel.writeInt(dataProfileArr[i].maxConns);
-            parcel.writeInt(dataProfileArr[i].waitTime);
-            parcel.writeInt(dataProfileArr[i].enabled ? 1 : 0);
+        pc.writeInt(dps.length);
+        for (int i = 0; i < dps.length; i++) {
+            pc.writeInt(dps[i].profileId);
+            pc.writeString(dps[i].apn);
+            pc.writeString(dps[i].protocol);
+            pc.writeInt(dps[i].authType);
+            pc.writeString(dps[i].user);
+            pc.writeString(dps[i].password);
+            pc.writeInt(dps[i].type);
+            pc.writeInt(dps[i].maxConnsTime);
+            pc.writeInt(dps[i].maxConns);
+            pc.writeInt(dps[i].waitTime);
+            pc.writeInt(dps[i].enabled ? 1 : 0);
         }
-        return parcel;
-    }
-
-    public boolean equals(Object obj) {
-        return !(obj instanceof DataProfile) ? false : toString().equals(obj.toString());
+        return pc;
     }
 
     public String toString() {
         return "DataProfile " + this.profileId + "/" + this.apn + "/" + this.protocol + "/" + this.authType + "/" + this.user + "/" + this.password + "/" + this.type + "/" + this.maxConnsTime + "/" + this.maxConns + "/" + this.waitTime + "/" + this.enabled;
+    }
+
+    public boolean equals(Object o) {
+        if (!(o instanceof DataProfile)) {
+            return false;
+        }
+        return toString().equals(o.toString());
     }
 }

@@ -2,16 +2,14 @@ package com.android.internal.telephony.cat;
 
 import java.io.ByteArrayOutputStream;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 abstract class ResponseData {
-    ResponseData() {
-    }
-
-    public static void writeLength(ByteArrayOutputStream byteArrayOutputStream, int i) {
-        if (i > 127) {
-            byteArrayOutputStream.write(129);
-        }
-        byteArrayOutputStream.write(i);
-    }
-
     public abstract void format(ByteArrayOutputStream byteArrayOutputStream);
+
+    public static void writeLength(ByteArrayOutputStream buf, int length) {
+        if (length > 127) {
+            buf.write(129);
+        }
+        buf.write(length);
+    }
 }

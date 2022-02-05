@@ -3,8 +3,11 @@ package com.android.internal.telephony.gsm;
 import android.telephony.SmsCbCmasInfo;
 import android.telephony.SmsCbEtwsInfo;
 import java.util.Arrays;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
-class SmsCbHeader {
+/* JADX INFO: Access modifiers changed from: package-private */
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class SmsCbHeader {
     static final int FORMAT_ETWS_PRIMARY = 3;
     static final int FORMAT_GSM = 1;
     static final int FORMAT_UMTS = 2;
@@ -22,105 +25,168 @@ class SmsCbHeader {
     private final int mPageIndex;
     private final int mSerialNumber;
 
-    public SmsCbHeader(byte[] bArr) throws IllegalArgumentException {
-        boolean z = true;
-        if (bArr == null || bArr.length < 6) {
+    public SmsCbHeader(byte[] pdu) throws IllegalArgumentException {
+        byte[] warningSecurityInfo;
+        if (pdu == null || pdu.length < 6) {
             throw new IllegalArgumentException("Illegal PDU");
         }
-        if (bArr.length <= PDU_LENGTH_GSM) {
-            this.mGeographicalScope = (bArr[0] & 192) >>> 6;
-            this.mSerialNumber = ((bArr[0] & 255) << 8) | (bArr[1] & 255);
-            this.mMessageIdentifier = ((bArr[2] & 255) << 8) | (bArr[3] & 255);
-            if (!isEtwsMessage() || bArr.length > 56) {
+        if (pdu.length <= PDU_LENGTH_GSM) {
+            this.mGeographicalScope = (pdu[0] & 192) >>> 6;
+            this.mSerialNumber = ((pdu[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) | (pdu[1] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT);
+            this.mMessageIdentifier = ((pdu[2] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) | (pdu[3] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT);
+            if (!isEtwsMessage() || pdu.length > 56) {
                 this.mFormat = 1;
-                this.mDataCodingScheme = bArr[4] & 255;
-                int i = (bArr[5] & 240) >>> 4;
-                int i2 = bArr[5] & 15;
-                if (i == 0 || i2 == 0 || i > i2) {
-                    i2 = 1;
-                    i = 1;
+                this.mDataCodingScheme = pdu[4] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+                int pageIndex = (pdu[5] & 240) >>> 4;
+                int nrOfPages = pdu[5] & 15;
+                if (pageIndex == 0 || nrOfPages == 0 || pageIndex > nrOfPages) {
+                    pageIndex = 1;
+                    nrOfPages = 1;
                 }
-                this.mPageIndex = i;
-                this.mNrOfPages = i2;
+                this.mPageIndex = pageIndex;
+                this.mNrOfPages = nrOfPages;
             } else {
                 this.mFormat = 3;
                 this.mDataCodingScheme = -1;
                 this.mPageIndex = -1;
                 this.mNrOfPages = -1;
-                boolean z2 = (bArr[4] & 1) != 0;
-                if ((bArr[5] & 128) == 0) {
-                    z = false;
+                boolean emergencyUserAlert = (pdu[4] & 1) != 0;
+                boolean activatePopup = (pdu[5] & 128) != 0;
+                int warningType = (pdu[4] & 254) >>> 1;
+                if (pdu.length > 6) {
+                    warningSecurityInfo = Arrays.copyOfRange(pdu, 6, pdu.length);
+                } else {
+                    warningSecurityInfo = null;
                 }
-                this.mEtwsInfo = new SmsCbEtwsInfo((bArr[4] & 254) >>> 1, z2, z, bArr.length > 6 ? Arrays.copyOfRange(bArr, 6, bArr.length) : null);
+                this.mEtwsInfo = new SmsCbEtwsInfo(warningType, emergencyUserAlert, activatePopup, warningSecurityInfo);
                 this.mCmasInfo = null;
                 return;
             }
+        } else {
+            this.mFormat = 2;
+            byte b = pdu[0];
+            if (b != 1) {
+                throw new IllegalArgumentException("Unsupported message type " + ((int) b));
+            }
+            this.mMessageIdentifier = ((pdu[1] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) | (pdu[2] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT);
+            this.mGeographicalScope = (pdu[3] & 192) >>> 6;
+            this.mSerialNumber = ((pdu[3] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) | (pdu[4] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT);
+            this.mDataCodingScheme = pdu[5] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+            this.mPageIndex = 1;
+            this.mNrOfPages = 1;
         }
-        this.mFormat = 2;
-        byte b = bArr[0];
-        if (b != (byte) 1) {
-            throw new IllegalArgumentException("Unsupported message type " + b);
-        }
-        this.mMessageIdentifier = ((bArr[1] & 255) << 8) | (bArr[2] & 255);
-        this.mGeographicalScope = (bArr[3] & 192) >>> 6;
-        this.mSerialNumber = ((bArr[3] & 255) << 8) | (bArr[4] & 255);
-        this.mDataCodingScheme = bArr[5] & 255;
-        this.mPageIndex = 1;
-        this.mNrOfPages = 1;
         if (isEtwsMessage()) {
             this.mEtwsInfo = new SmsCbEtwsInfo(getEtwsWarningType(), isEtwsEmergencyUserAlert(), isEtwsPopupAlert(), null);
             this.mCmasInfo = null;
         } else if (isCmasMessage()) {
-            int cmasMessageClass = getCmasMessageClass();
-            int cmasSeverity = getCmasSeverity();
-            int cmasUrgency = getCmasUrgency();
-            int cmasCertainty = getCmasCertainty();
+            int messageClass = getCmasMessageClass();
+            int severity = getCmasSeverity();
+            int urgency = getCmasUrgency();
+            int certainty = getCmasCertainty();
             this.mEtwsInfo = null;
-            this.mCmasInfo = new SmsCbCmasInfo(cmasMessageClass, -1, -1, cmasSeverity, cmasUrgency, cmasCertainty);
+            this.mCmasInfo = new SmsCbCmasInfo(messageClass, -1, -1, severity, urgency, certainty);
         } else {
             this.mEtwsInfo = null;
             this.mCmasInfo = null;
         }
     }
 
-    private int getCmasCertainty() {
-        switch (this.mMessageIdentifier) {
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /*4371*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /*4373*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /*4375*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /*4377*/:
-                return 0;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /*4372*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /*4374*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /*4376*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /*4378*/:
-                return 1;
-            default:
-                return -1;
-        }
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getGeographicalScope() {
+        return this.mGeographicalScope;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getSerialNumber() {
+        return this.mSerialNumber;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getServiceCategory() {
+        return this.mMessageIdentifier;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getDataCodingScheme() {
+        return this.mDataCodingScheme;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getPageIndex() {
+        return this.mPageIndex;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public int getNumberOfPages() {
+        return this.mNrOfPages;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SmsCbEtwsInfo getEtwsInfo() {
+        return this.mEtwsInfo;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public SmsCbCmasInfo getCmasInfo() {
+        return this.mCmasInfo;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public boolean isEmergencyMessage() {
+        return this.mMessageIdentifier >= 4352 && this.mMessageIdentifier <= 6399;
+    }
+
+    private boolean isEtwsMessage() {
+        return (this.mMessageIdentifier & SmsCbConstants.MESSAGE_ID_ETWS_TYPE_MASK) == 4352;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public boolean isEtwsPrimaryNotification() {
+        return this.mFormat == 3;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
+    public boolean isUmtsFormat() {
+        return this.mFormat == 2;
+    }
+
+    private boolean isCmasMessage() {
+        return this.mMessageIdentifier >= 4370 && this.mMessageIdentifier <= 4399;
+    }
+
+    private boolean isEtwsPopupAlert() {
+        return (this.mSerialNumber & 4096) != 0;
+    }
+
+    private boolean isEtwsEmergencyUserAlert() {
+        return (this.mSerialNumber & SmsCbConstants.SERIAL_NUMBER_ETWS_EMERGENCY_USER_ALERT) != 0;
+    }
+
+    private int getEtwsWarningType() {
+        return this.mMessageIdentifier - 4352;
     }
 
     private int getCmasMessageClass() {
         switch (this.mMessageIdentifier) {
             case 4370:
                 return 0;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /*4371*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /*4372*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /* 4371 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /* 4372 */:
                 return 1;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /*4373*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /*4374*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /*4375*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /*4376*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /*4377*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /*4378*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /* 4373 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /* 4374 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /* 4375 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /* 4376 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /* 4377 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /* 4378 */:
                 return 2;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_CHILD_ABDUCTION_EMERGENCY /*4379*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_CHILD_ABDUCTION_EMERGENCY /* 4379 */:
                 return 3;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_REQUIRED_MONTHLY_TEST /*4380*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_REQUIRED_MONTHLY_TEST /* 4380 */:
                 return 4;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXERCISE /*4381*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXERCISE /* 4381 */:
                 return 5;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_OPERATOR_DEFINED_USE /*4382*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_OPERATOR_DEFINED_USE /* 4382 */:
                 return 6;
             default:
                 return -1;
@@ -129,15 +195,15 @@ class SmsCbHeader {
 
     private int getCmasSeverity() {
         switch (this.mMessageIdentifier) {
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /*4371*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /*4372*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /*4373*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /*4374*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /* 4371 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /* 4372 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /* 4373 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /* 4374 */:
                 return 0;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /*4375*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /*4376*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /*4377*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /*4378*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /* 4375 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /* 4376 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /* 4377 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /* 4378 */:
                 return 1;
             default:
                 return -1;
@@ -146,94 +212,36 @@ class SmsCbHeader {
 
     private int getCmasUrgency() {
         switch (this.mMessageIdentifier) {
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /*4371*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /*4372*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /*4375*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /*4376*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /* 4371 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /* 4372 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /* 4375 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /* 4376 */:
                 return 0;
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /*4373*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /*4374*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /*4377*/:
-            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /*4378*/:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /* 4373 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /* 4374 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /* 4377 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /* 4378 */:
                 return 1;
             default:
                 return -1;
         }
     }
 
-    private int getEtwsWarningType() {
-        return this.mMessageIdentifier - 4352;
-    }
-
-    private boolean isCmasMessage() {
-        return this.mMessageIdentifier >= 4370 && this.mMessageIdentifier <= SmsCbConstants.MESSAGE_ID_CMAS_LAST_IDENTIFIER;
-    }
-
-    private boolean isEtwsEmergencyUserAlert() {
-        return (this.mSerialNumber & SmsCbConstants.SERIAL_NUMBER_ETWS_EMERGENCY_USER_ALERT) != 0;
-    }
-
-    private boolean isEtwsMessage() {
-        return (this.mMessageIdentifier & SmsCbConstants.MESSAGE_ID_ETWS_TYPE_MASK) == 4352;
-    }
-
-    private boolean isEtwsPopupAlert() {
-        return (this.mSerialNumber & 4096) != 0;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public SmsCbCmasInfo getCmasInfo() {
-        return this.mCmasInfo;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getDataCodingScheme() {
-        return this.mDataCodingScheme;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public SmsCbEtwsInfo getEtwsInfo() {
-        return this.mEtwsInfo;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getGeographicalScope() {
-        return this.mGeographicalScope;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getNumberOfPages() {
-        return this.mNrOfPages;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getPageIndex() {
-        return this.mPageIndex;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getSerialNumber() {
-        return this.mSerialNumber;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public int getServiceCategory() {
-        return this.mMessageIdentifier;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isEmergencyMessage() {
-        return this.mMessageIdentifier >= 4352 && this.mMessageIdentifier <= SmsCbConstants.MESSAGE_ID_PWS_LAST_IDENTIFIER;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isEtwsPrimaryNotification() {
-        return this.mFormat == 3;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isUmtsFormat() {
-        return this.mFormat == 2;
+    private int getCmasCertainty() {
+        switch (this.mMessageIdentifier) {
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_OBSERVED /* 4371 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_OBSERVED /* 4373 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_OBSERVED /* 4375 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_OBSERVED /* 4377 */:
+                return 0;
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_IMMEDIATE_LIKELY /* 4372 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_EXTREME_EXPECTED_LIKELY /* 4374 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_IMMEDIATE_LIKELY /* 4376 */:
+            case SmsCbConstants.MESSAGE_ID_CMAS_ALERT_SEVERE_EXPECTED_LIKELY /* 4378 */:
+                return 1;
+            default:
+                return -1;
+        }
     }
 
     public String toString() {

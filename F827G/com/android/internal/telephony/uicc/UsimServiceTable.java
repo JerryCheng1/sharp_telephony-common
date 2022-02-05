@@ -1,7 +1,9 @@
 package com.android.internal.telephony.uicc;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class UsimServiceTable extends IccServiceTable {
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum UsimService {
         PHONEBOOK,
         FDN,
@@ -101,21 +103,21 @@ public final class UsimServiceTable extends IccServiceTable {
         NAS_CONFIG_BY_USIM
     }
 
-    public UsimServiceTable(byte[] bArr) {
-        super(bArr);
+    public UsimServiceTable(byte[] table) {
+        super(table);
     }
 
-    /* Access modifiers changed, original: protected */
-    public String getTag() {
+    public boolean isAvailable(UsimService service) {
+        return super.isAvailable(service.ordinal());
+    }
+
+    @Override // com.android.internal.telephony.uicc.IccServiceTable
+    protected String getTag() {
         return "UsimServiceTable";
     }
 
-    /* Access modifiers changed, original: protected */
-    public Object[] getValues() {
+    @Override // com.android.internal.telephony.uicc.IccServiceTable
+    protected Object[] getValues() {
         return UsimService.values();
-    }
-
-    public boolean isAvailable(UsimService usimService) {
-        return super.isAvailable(usimService.ordinal());
     }
 }

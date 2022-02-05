@@ -6,14 +6,15 @@ import android.os.Message;
 import android.os.SystemProperties;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
-import com.android.internal.telephony.Call.SrvccState;
-import com.android.internal.telephony.CommandException.Error;
-import com.android.internal.telephony.PhoneConstants.State;
+import com.android.internal.telephony.Call;
+import com.android.internal.telephony.CommandException;
+import com.android.internal.telephony.PhoneConstants;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public abstract class CallTracker extends Handler {
     private static final boolean DBG_POLL = false;
     protected static final int EVENT_CALL_STATE_CHANGE = 2;
@@ -33,191 +34,22 @@ public abstract class CallTracker extends Handler {
     protected static final int EVENT_THREE_WAY_DIAL_BLANK_FLASH = 20;
     protected static final int EVENT_THREE_WAY_DIAL_L2_RESULT_CDMA = 16;
     static final int POLL_DELAY_MSEC = 250;
-    private final int VALID_COMPARE_LENGTH = 3;
     public CommandsInterface mCi;
-    protected ArrayList<Connection> mHandoverConnections = new ArrayList();
     protected Message mLastRelevantPoll;
     protected boolean mNeedsPoll;
-    protected boolean mNumberConverted = false;
     protected int mPendingOperations;
+    protected ArrayList<Connection> mHandoverConnections = new ArrayList<>();
+    protected boolean mNumberConverted = false;
+    private final int VALID_COMPARE_LENGTH = 3;
 
-    private boolean checkNoOperationsPending() {
-        return this.mPendingOperations == 0;
-    }
+    public abstract PhoneConstants.State getState();
 
-    private boolean compareGid1(PhoneBase phoneBase, String str) {
-        boolean z = true;
-        String groupIdLevel1 = phoneBase.getGroupIdLevel1();
-        int length = str.length();
-        if (str == null || str.equals("")) {
-            log("compareGid1 serviceGid is empty, return " + true);
-        } else {
-            if (groupIdLevel1 == null || groupIdLevel1.length() < length || !groupIdLevel1.substring(0, length).equalsIgnoreCase(str)) {
-                log(" gid1 " + groupIdLevel1 + " serviceGid1 " + str);
-                z = false;
-            }
-            log("compareGid1 is " + (z ? "Same" : "Different"));
-        }
-        return z;
-    }
-
-    /* Access modifiers changed, original: protected */
-    public String checkForTestEmergencyNumber(String str) {
-        String str2 = SystemProperties.get("ril.test.emergencynumber");
-        if (TextUtils.isEmpty(str2)) {
-            return str;
-        }
-        String[] split = str2.split(":");
-        log("checkForTestEmergencyNumber: values.length=" + split.length);
-        if (split.length != 2 || !split[0].equals(PhoneNumberUtils.stripSeparators(str))) {
-            return str;
-        }
-        this.mCi.testingEmergencyCall();
-        log("checkForTestEmergencyNumber: remap " + str + " to " + split[1]);
-        return split[1];
-    }
-
-    /* Access modifiers changed, original: protected */
-    public String convertNumberIfNecessary(PhoneBase phoneBase, String str) {
-        if (str == null) {
-            return str;
-        }
-        String[] stringArray = phoneBase.getContext().getResources().getStringArray(17236029);
-        log("convertNumberIfNecessary Roaming convertMaps.length " + stringArray.length + " dialNumber.length() " + str.length());
-        if (stringArray.length < 1 || str.length() < 3) {
-            return str;
-        }
-        String str2 = "";
-        int length = stringArray.length;
-        int i = 0;
-        int i2 = 0;
-        while (i < length) {
-            int i3;
-            String str3 = stringArray[i];
-            log("convertNumberIfNecessary: " + str3);
-            String[] split = str3.split(":");
-            if (split.length > 1) {
-                String[] split2 = split[1].split(",");
-                if (!TextUtils.isEmpty(split[0]) && str.equals(split[0])) {
-                    if (split2.length < 2 || TextUtils.isEmpty(split2[1])) {
-                        if (str2.isEmpty()) {
-                            i2 = 1;
-                        }
-                    } else if (compareGid1(phoneBase, split2[1])) {
-                        i2 = 1;
-                    }
-                    if (i2 != 0) {
-                        String str4;
-                        if (TextUtils.isEmpty(split2[0]) || !split2[0].endsWith("MDN")) {
-                            str4 = split2[0];
-                        } else {
-                            str4 = phoneBase.getLine1Number();
-                            if (TextUtils.isEmpty(str4)) {
-                                str4 = str2;
-                            } else if (!str4.startsWith("+")) {
-                                str4 = split2[0].substring(0, split2[0].length() - 3) + str4;
-                            }
-                        }
-                        i3 = 0;
-                        str2 = str4;
-                        i++;
-                        i2 = i3;
-                    }
-                }
-            }
-            i3 = i2;
-            i++;
-            i2 = i3;
-        }
-        if (TextUtils.isEmpty(str2)) {
-            return str;
-        }
-        log("convertNumberIfNecessary: convert service number");
-        this.mNumberConverted = true;
-        return str2;
-    }
-
-    public void dump(FileDescriptor fileDescriptor, PrintWriter printWriter, String[] strArr) {
-        printWriter.println("CallTracker:");
-        printWriter.println(" mPendingOperations=" + this.mPendingOperations);
-        printWriter.println(" mNeedsPoll=" + this.mNeedsPoll);
-        printWriter.println(" mLastRelevantPoll=" + this.mLastRelevantPoll);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public Connection getHoConnection(DriverCall driverCall) {
-        Connection connection;
-        Iterator it = this.mHandoverConnections.iterator();
-        while (it.hasNext()) {
-            connection = (Connection) it.next();
-            log("getHoConnection - compare number: hoConn= " + connection.toString());
-            if (connection.getAddress() != null && connection.getAddress().contains(driverCall.number)) {
-                log("getHoConnection: Handover connection match found = " + connection.toString());
-                return connection;
-            }
-        }
-        it = this.mHandoverConnections.iterator();
-        while (it.hasNext()) {
-            connection = (Connection) it.next();
-            log("getHoConnection: compare state hoConn= " + connection.toString());
-            if (connection.getStateBeforeHandover() == Call.stateFromDCState(driverCall.state)) {
-                log("getHoConnection: Handover connection match found = " + connection.toString());
-                return connection;
-            }
-        }
-        return null;
-    }
-
-    public abstract State getState();
-
+    @Override // android.os.Handler
     public abstract void handleMessage(Message message);
 
-    public abstract void handlePollCalls(AsyncResult asyncResult);
+    protected abstract void handlePollCalls(AsyncResult asyncResult);
 
-    /* Access modifiers changed, original: protected */
-    public void handleRadioAvailable() {
-        pollCallsWhenSafe();
-    }
-
-    /* Access modifiers changed, original: protected */
-    public boolean isCommandExceptionRadioNotAvailable(Throwable th) {
-        return th != null && (th instanceof CommandException) && ((CommandException) th).getCommandError() == Error.RADIO_NOT_AVAILABLE;
-    }
-
-    public abstract void log(String str);
-
-    /* Access modifiers changed, original: protected */
-    public void notifySrvccState(SrvccState srvccState, ArrayList<Connection> arrayList) {
-        if (srvccState == SrvccState.STARTED && arrayList != null) {
-            this.mHandoverConnections.addAll(arrayList);
-        } else if (srvccState != SrvccState.COMPLETED) {
-            this.mHandoverConnections.clear();
-        }
-        log("notifySrvccState: mHandoverConnections= " + this.mHandoverConnections.toString());
-    }
-
-    /* Access modifiers changed, original: protected */
-    public Message obtainNoPollCompleteMessage(int i) {
-        this.mPendingOperations++;
-        this.mLastRelevantPoll = null;
-        return obtainMessage(i);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void pollCallsAfterDelay() {
-        Message obtainMessage = obtainMessage();
-        obtainMessage.what = 3;
-        sendMessageDelayed(obtainMessage, 250);
-    }
-
-    /* Access modifiers changed, original: protected */
-    public void pollCallsWhenSafe() {
-        this.mNeedsPoll = true;
-        if (checkNoOperationsPending()) {
-            this.mLastRelevantPoll = obtainMessage(1);
-            this.mCi.getCurrentCalls(this.mLastRelevantPoll);
-        }
-    }
+    protected abstract void log(String str);
 
     public abstract void registerForVoiceCallEnded(Handler handler, int i, Object obj);
 
@@ -226,4 +58,156 @@ public abstract class CallTracker extends Handler {
     public abstract void unregisterForVoiceCallEnded(Handler handler);
 
     public abstract void unregisterForVoiceCallStarted(Handler handler);
+
+    protected void pollCallsWhenSafe() {
+        this.mNeedsPoll = true;
+        if (checkNoOperationsPending()) {
+            this.mLastRelevantPoll = obtainMessage(1);
+            this.mCi.getCurrentCalls(this.mLastRelevantPoll);
+        }
+    }
+
+    protected void pollCallsAfterDelay() {
+        Message msg = obtainMessage();
+        msg.what = 3;
+        sendMessageDelayed(msg, 250L);
+    }
+
+    protected boolean isCommandExceptionRadioNotAvailable(Throwable e) {
+        return e != null && (e instanceof CommandException) && ((CommandException) e).getCommandError() == CommandException.Error.RADIO_NOT_AVAILABLE;
+    }
+
+    protected Connection getHoConnection(DriverCall dc) {
+        Iterator i$ = this.mHandoverConnections.iterator();
+        while (i$.hasNext()) {
+            Connection hoConn = i$.next();
+            log("getHoConnection - compare number: hoConn= " + hoConn.toString());
+            if (hoConn.getAddress() != null && hoConn.getAddress().contains(dc.number)) {
+                log("getHoConnection: Handover connection match found = " + hoConn.toString());
+                return hoConn;
+            }
+        }
+        Iterator i$2 = this.mHandoverConnections.iterator();
+        while (i$2.hasNext()) {
+            Connection hoConn2 = i$2.next();
+            log("getHoConnection: compare state hoConn= " + hoConn2.toString());
+            if (hoConn2.getStateBeforeHandover() == Call.stateFromDCState(dc.state)) {
+                log("getHoConnection: Handover connection match found = " + hoConn2.toString());
+                return hoConn2;
+            }
+        }
+        return null;
+    }
+
+    /* JADX INFO: Access modifiers changed from: protected */
+    public void notifySrvccState(Call.SrvccState state, ArrayList<Connection> c) {
+        if (state == Call.SrvccState.STARTED && c != null) {
+            this.mHandoverConnections.addAll(c);
+        } else if (state != Call.SrvccState.COMPLETED) {
+            this.mHandoverConnections.clear();
+        }
+        log("notifySrvccState: mHandoverConnections= " + this.mHandoverConnections.toString());
+    }
+
+    protected void handleRadioAvailable() {
+        pollCallsWhenSafe();
+    }
+
+    protected Message obtainNoPollCompleteMessage(int what) {
+        this.mPendingOperations++;
+        this.mLastRelevantPoll = null;
+        return obtainMessage(what);
+    }
+
+    private boolean checkNoOperationsPending() {
+        return this.mPendingOperations == 0;
+    }
+
+    protected String checkForTestEmergencyNumber(String dialString) {
+        String testEn = SystemProperties.get("ril.test.emergencynumber");
+        if (TextUtils.isEmpty(testEn)) {
+            return dialString;
+        }
+        String[] values = testEn.split(":");
+        log("checkForTestEmergencyNumber: values.length=" + values.length);
+        if (values.length != 2 || !values[0].equals(PhoneNumberUtils.stripSeparators(dialString))) {
+            return dialString;
+        }
+        this.mCi.testingEmergencyCall();
+        log("checkForTestEmergencyNumber: remap " + dialString + " to " + values[1]);
+        return values[1];
+    }
+
+    protected String convertNumberIfNecessary(PhoneBase phoneBase, String dialNumber) {
+        if (dialNumber == null) {
+            return dialNumber;
+        }
+        String[] convertMaps = phoneBase.getContext().getResources().getStringArray(17236029);
+        log("convertNumberIfNecessary Roaming convertMaps.length " + convertMaps.length + " dialNumber.length() " + dialNumber.length());
+        if (convertMaps.length < 1 || dialNumber.length() < 3) {
+            return dialNumber;
+        }
+        String outNumber = "";
+        boolean needConvert = false;
+        for (String convertMap : convertMaps) {
+            log("convertNumberIfNecessary: " + convertMap);
+            String[] entry = convertMap.split(":");
+            if (entry.length > 1) {
+                String[] tmpArray = entry[1].split(",");
+                if (!TextUtils.isEmpty(entry[0]) && dialNumber.equals(entry[0])) {
+                    if (tmpArray.length < 2 || TextUtils.isEmpty(tmpArray[1])) {
+                        if (outNumber.isEmpty()) {
+                            needConvert = true;
+                        }
+                    } else if (compareGid1(phoneBase, tmpArray[1])) {
+                        needConvert = true;
+                    }
+                    if (needConvert) {
+                        if (TextUtils.isEmpty(tmpArray[0]) || !tmpArray[0].endsWith("MDN")) {
+                            outNumber = tmpArray[0];
+                        } else {
+                            String mdn = phoneBase.getLine1Number();
+                            if (!TextUtils.isEmpty(mdn)) {
+                                if (mdn.startsWith("+")) {
+                                    outNumber = mdn;
+                                } else {
+                                    outNumber = tmpArray[0].substring(0, tmpArray[0].length() - 3) + mdn;
+                                }
+                            }
+                        }
+                        needConvert = false;
+                    }
+                }
+            }
+        }
+        if (TextUtils.isEmpty(outNumber)) {
+            return dialNumber;
+        }
+        log("convertNumberIfNecessary: convert service number");
+        this.mNumberConverted = true;
+        return outNumber;
+    }
+
+    private boolean compareGid1(PhoneBase phoneBase, String serviceGid1) {
+        String gid1 = phoneBase.getGroupIdLevel1();
+        int gid_length = serviceGid1.length();
+        boolean ret = true;
+        if (serviceGid1 == null || serviceGid1.equals("")) {
+            log("compareGid1 serviceGid is empty, return true");
+            return true;
+        }
+        if (gid1 == null || gid1.length() < gid_length || !gid1.substring(0, gid_length).equalsIgnoreCase(serviceGid1)) {
+            log(" gid1 " + gid1 + " serviceGid1 " + serviceGid1);
+            ret = false;
+        }
+        log("compareGid1 is " + (ret ? "Same" : "Different"));
+        return ret;
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("CallTracker:");
+        pw.println(" mPendingOperations=" + this.mPendingOperations);
+        pw.println(" mNeedsPoll=" + this.mNeedsPoll);
+        pw.println(" mLastRelevantPoll=" + this.mLastRelevantPoll);
+    }
 }

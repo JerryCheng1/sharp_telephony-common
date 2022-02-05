@@ -2,7 +2,9 @@ package com.android.internal.telephony;
 
 import com.google.android.mms.ContentType;
 import java.util.HashMap;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class WspTypeDecoder {
     public static final String CONTENT_TYPE_B_MMS = "application/vnd.wap.mms-message";
     public static final String CONTENT_TYPE_B_PUSH_CO = "application/vnd.wap.coc";
@@ -13,8 +15,8 @@ public class WspTypeDecoder {
     private static final int Q_VALUE = 0;
     private static final int WAP_PDU_LENGTH_QUOTE = 31;
     private static final int WAP_PDU_SHORT_LENGTH_MAX = 30;
-    private static final HashMap<Integer, String> WELL_KNOWN_MIME_TYPES = new HashMap();
-    private static final HashMap<Integer, String> WELL_KNOWN_PARAMETERS = new HashMap();
+    private static final HashMap<Integer, String> WELL_KNOWN_MIME_TYPES = new HashMap<>();
+    private static final HashMap<Integer, String> WELL_KNOWN_PARAMETERS = new HashMap<>();
     HashMap<String, String> mContentParameters;
     int mDataLength;
     String mStringValue;
@@ -22,161 +24,366 @@ public class WspTypeDecoder {
     byte[] mWspData;
 
     static {
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(0), "*/*");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(1), "text/*");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(2), ContentType.TEXT_HTML);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(3), ContentType.TEXT_PLAIN);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(4), "text/x-hdml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(5), "text/x-ttml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(6), ContentType.TEXT_VCALENDAR);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(7), ContentType.TEXT_VCARD);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(8), "text/vnd.wap.wml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(9), "text/vnd.wap.wmlscript");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(10), "text/vnd.wap.wta-event");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(11), "multipart/*");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(12), "multipart/mixed");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(13), "multipart/form-data");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(14), "multipart/byterantes");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(15), "multipart/alternative");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(16), "application/*");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(17), "application/java-vm");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(18), "application/x-www-form-urlencoded");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(19), "application/x-hdmlc");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(20), "application/vnd.wap.wmlc");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(21), "application/vnd.wap.wmlscriptc");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(22), "application/vnd.wap.wta-eventc");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(23), "application/vnd.wap.uaprof");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(24), "application/vnd.wap.wtls-ca-certificate");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(25), "application/vnd.wap.wtls-user-certificate");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(26), "application/x-x509-ca-cert");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(27), "application/x-x509-user-cert");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(28), ContentType.IMAGE_UNSPECIFIED);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(29), ContentType.IMAGE_GIF);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(30), ContentType.IMAGE_JPEG);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(31), "image/tiff");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(32), ContentType.IMAGE_PNG);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(33), ContentType.IMAGE_WBMP);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(34), "application/vnd.wap.multipart.*");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(35), ContentType.MULTIPART_MIXED);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(36), "application/vnd.wap.multipart.form-data");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(37), "application/vnd.wap.multipart.byteranges");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(38), ContentType.MULTIPART_ALTERNATIVE);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(39), "application/xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(40), "text/xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(41), "application/vnd.wap.wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(42), "application/x-x968-cross-cert");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(43), "application/x-x968-ca-cert");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(44), "application/x-x968-user-cert");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(45), "text/vnd.wap.si");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(46), "application/vnd.wap.sic");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(47), "text/vnd.wap.sl");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(48), "application/vnd.wap.slc");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(49), "text/vnd.wap.co");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(50), CONTENT_TYPE_B_PUSH_CO);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(51), ContentType.MULTIPART_RELATED);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(52), "application/vnd.wap.sia");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(53), "text/vnd.wap.connectivity-xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(54), "application/vnd.wap.connectivity-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(55), "application/pkcs7-mime");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(56), "application/vnd.wap.hashed-certificate");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(57), "application/vnd.wap.signed-certificate");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(58), "application/vnd.wap.cert-response");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(59), ContentType.APP_XHTML);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(60), "application/wml+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(61), "text/css");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(62), "application/vnd.wap.mms-message");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(63), "application/vnd.wap.rollover-certificate");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(64), "application/vnd.wap.locc+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(65), "application/vnd.wap.loc+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(66), "application/vnd.syncml.dm+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(67), "application/vnd.syncml.dm+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(68), CONTENT_TYPE_B_PUSH_SYNCML_NOTI);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(69), ContentType.APP_WAP_XHTML);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(70), "application/vnd.wv.csp.cir");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(71), "application/vnd.oma.dd+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(72), "application/vnd.oma.drm.message");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(73), ContentType.APP_DRM_CONTENT);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(74), "application/vnd.oma.drm.rights+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(75), "application/vnd.oma.drm.rights+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(76), "application/vnd.wv.csp+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(77), "application/vnd.wv.csp+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(78), "application/vnd.syncml.ds.notification");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(79), ContentType.AUDIO_UNSPECIFIED);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(80), ContentType.VIDEO_UNSPECIFIED);
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(81), "application/vnd.oma.dd2+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(82), "application/mikey");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(83), "application/vnd.oma.dcd");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(84), "application/vnd.oma.dcdc");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(513), "application/vnd.uplanet.cacheop-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(514), "application/vnd.uplanet.signal");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(515), "application/vnd.uplanet.alert-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(516), "application/vnd.uplanet.list-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(517), "application/vnd.uplanet.listcmd-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(518), "application/vnd.uplanet.channel-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(519), "application/vnd.uplanet.provisioning-status-uri");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(520), "x-wap.multipart/vnd.uplanet.header-set");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(521), "application/vnd.uplanet.bearer-choice-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(522), "application/vnd.phonecom.mmc-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(523), "application/vnd.nokia.syncset+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(524), "image/x-up-wpng");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(768), "application/iota.mmc-wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(769), "application/iota.mmc-xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(770), "application/vnd.syncml+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(771), "application/vnd.syncml+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(772), "text/vnd.wap.emn+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(773), "text/calendar");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(774), "application/vnd.omads-email+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(775), "application/vnd.omads-file+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(776), "application/vnd.omads-folder+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(777), "text/directory;profile=vCard");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(778), "application/vnd.wap.emn+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(779), "application/vnd.nokia.ipdc-purchase-response");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(780), "application/vnd.motorola.screen3+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(781), "application/vnd.motorola.screen3+gzip");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(782), "application/vnd.cmcc.setting+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(783), "application/vnd.cmcc.bombing+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(784), "application/vnd.docomo.pf");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(785), "application/vnd.docomo.ub");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(786), "application/vnd.omaloc-supl-init");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(787), "application/vnd.oma.group-usage-list+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(788), "application/oma-directory+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(789), "application/vnd.docomo.pf2");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(790), "application/vnd.oma.drm.roap-trigger+wbxml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(791), "application/vnd.sbm.mid2");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(792), "application/vnd.wmf.bootstrap");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(793), "application/vnc.cmcc.dcd+xml");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(794), "application/vnd.sbm.cid");
-        WELL_KNOWN_MIME_TYPES.put(Integer.valueOf(795), "application/vnd.oma.bcast.provisioningtrigger");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(0), "Q");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(1), "Charset");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(2), "Level");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(3), "Type");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(7), "Differences");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(8), "Padding");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(9), "Type");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(14), "Max-Age");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(16), "Secure");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(17), "SEC");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(18), "MAC");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(19), "Creation-date");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(20), "Modification-date");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(21), "Read-date");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(22), "Size");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(23), "Name");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(24), "Filename");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(25), "Start");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(26), "Start-info");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(27), "Comment");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(28), "Domain");
-        WELL_KNOWN_PARAMETERS.put(Integer.valueOf(29), "Path");
+        WELL_KNOWN_MIME_TYPES.put(0, "*/*");
+        WELL_KNOWN_MIME_TYPES.put(1, "text/*");
+        WELL_KNOWN_MIME_TYPES.put(2, ContentType.TEXT_HTML);
+        WELL_KNOWN_MIME_TYPES.put(3, ContentType.TEXT_PLAIN);
+        WELL_KNOWN_MIME_TYPES.put(4, "text/x-hdml");
+        WELL_KNOWN_MIME_TYPES.put(5, "text/x-ttml");
+        WELL_KNOWN_MIME_TYPES.put(6, ContentType.TEXT_VCALENDAR);
+        WELL_KNOWN_MIME_TYPES.put(7, ContentType.TEXT_VCARD);
+        WELL_KNOWN_MIME_TYPES.put(8, "text/vnd.wap.wml");
+        WELL_KNOWN_MIME_TYPES.put(9, "text/vnd.wap.wmlscript");
+        WELL_KNOWN_MIME_TYPES.put(10, "text/vnd.wap.wta-event");
+        WELL_KNOWN_MIME_TYPES.put(11, "multipart/*");
+        WELL_KNOWN_MIME_TYPES.put(12, "multipart/mixed");
+        WELL_KNOWN_MIME_TYPES.put(13, "multipart/form-data");
+        WELL_KNOWN_MIME_TYPES.put(14, "multipart/byterantes");
+        WELL_KNOWN_MIME_TYPES.put(15, "multipart/alternative");
+        WELL_KNOWN_MIME_TYPES.put(16, "application/*");
+        WELL_KNOWN_MIME_TYPES.put(17, "application/java-vm");
+        WELL_KNOWN_MIME_TYPES.put(18, "application/x-www-form-urlencoded");
+        WELL_KNOWN_MIME_TYPES.put(19, "application/x-hdmlc");
+        WELL_KNOWN_MIME_TYPES.put(20, "application/vnd.wap.wmlc");
+        WELL_KNOWN_MIME_TYPES.put(21, "application/vnd.wap.wmlscriptc");
+        WELL_KNOWN_MIME_TYPES.put(22, "application/vnd.wap.wta-eventc");
+        WELL_KNOWN_MIME_TYPES.put(23, "application/vnd.wap.uaprof");
+        WELL_KNOWN_MIME_TYPES.put(24, "application/vnd.wap.wtls-ca-certificate");
+        WELL_KNOWN_MIME_TYPES.put(25, "application/vnd.wap.wtls-user-certificate");
+        WELL_KNOWN_MIME_TYPES.put(26, "application/x-x509-ca-cert");
+        WELL_KNOWN_MIME_TYPES.put(27, "application/x-x509-user-cert");
+        WELL_KNOWN_MIME_TYPES.put(28, ContentType.IMAGE_UNSPECIFIED);
+        WELL_KNOWN_MIME_TYPES.put(29, ContentType.IMAGE_GIF);
+        WELL_KNOWN_MIME_TYPES.put(30, ContentType.IMAGE_JPEG);
+        WELL_KNOWN_MIME_TYPES.put(31, "image/tiff");
+        WELL_KNOWN_MIME_TYPES.put(32, ContentType.IMAGE_PNG);
+        WELL_KNOWN_MIME_TYPES.put(33, ContentType.IMAGE_WBMP);
+        WELL_KNOWN_MIME_TYPES.put(34, "application/vnd.wap.multipart.*");
+        WELL_KNOWN_MIME_TYPES.put(35, ContentType.MULTIPART_MIXED);
+        WELL_KNOWN_MIME_TYPES.put(36, "application/vnd.wap.multipart.form-data");
+        WELL_KNOWN_MIME_TYPES.put(37, "application/vnd.wap.multipart.byteranges");
+        WELL_KNOWN_MIME_TYPES.put(38, ContentType.MULTIPART_ALTERNATIVE);
+        WELL_KNOWN_MIME_TYPES.put(39, "application/xml");
+        WELL_KNOWN_MIME_TYPES.put(40, "text/xml");
+        WELL_KNOWN_MIME_TYPES.put(41, "application/vnd.wap.wbxml");
+        WELL_KNOWN_MIME_TYPES.put(42, "application/x-x968-cross-cert");
+        WELL_KNOWN_MIME_TYPES.put(43, "application/x-x968-ca-cert");
+        WELL_KNOWN_MIME_TYPES.put(44, "application/x-x968-user-cert");
+        WELL_KNOWN_MIME_TYPES.put(45, "text/vnd.wap.si");
+        WELL_KNOWN_MIME_TYPES.put(46, "application/vnd.wap.sic");
+        WELL_KNOWN_MIME_TYPES.put(47, "text/vnd.wap.sl");
+        WELL_KNOWN_MIME_TYPES.put(48, "application/vnd.wap.slc");
+        WELL_KNOWN_MIME_TYPES.put(49, "text/vnd.wap.co");
+        WELL_KNOWN_MIME_TYPES.put(50, CONTENT_TYPE_B_PUSH_CO);
+        WELL_KNOWN_MIME_TYPES.put(51, ContentType.MULTIPART_RELATED);
+        WELL_KNOWN_MIME_TYPES.put(52, "application/vnd.wap.sia");
+        WELL_KNOWN_MIME_TYPES.put(53, "text/vnd.wap.connectivity-xml");
+        WELL_KNOWN_MIME_TYPES.put(54, "application/vnd.wap.connectivity-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(55, "application/pkcs7-mime");
+        WELL_KNOWN_MIME_TYPES.put(56, "application/vnd.wap.hashed-certificate");
+        WELL_KNOWN_MIME_TYPES.put(57, "application/vnd.wap.signed-certificate");
+        WELL_KNOWN_MIME_TYPES.put(58, "application/vnd.wap.cert-response");
+        WELL_KNOWN_MIME_TYPES.put(59, ContentType.APP_XHTML);
+        WELL_KNOWN_MIME_TYPES.put(60, "application/wml+xml");
+        WELL_KNOWN_MIME_TYPES.put(61, "text/css");
+        WELL_KNOWN_MIME_TYPES.put(62, "application/vnd.wap.mms-message");
+        WELL_KNOWN_MIME_TYPES.put(63, "application/vnd.wap.rollover-certificate");
+        WELL_KNOWN_MIME_TYPES.put(64, "application/vnd.wap.locc+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(65, "application/vnd.wap.loc+xml");
+        WELL_KNOWN_MIME_TYPES.put(66, "application/vnd.syncml.dm+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(67, "application/vnd.syncml.dm+xml");
+        WELL_KNOWN_MIME_TYPES.put(68, CONTENT_TYPE_B_PUSH_SYNCML_NOTI);
+        WELL_KNOWN_MIME_TYPES.put(69, ContentType.APP_WAP_XHTML);
+        WELL_KNOWN_MIME_TYPES.put(70, "application/vnd.wv.csp.cir");
+        WELL_KNOWN_MIME_TYPES.put(71, "application/vnd.oma.dd+xml");
+        WELL_KNOWN_MIME_TYPES.put(72, "application/vnd.oma.drm.message");
+        WELL_KNOWN_MIME_TYPES.put(73, ContentType.APP_DRM_CONTENT);
+        WELL_KNOWN_MIME_TYPES.put(74, "application/vnd.oma.drm.rights+xml");
+        WELL_KNOWN_MIME_TYPES.put(75, "application/vnd.oma.drm.rights+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(76, "application/vnd.wv.csp+xml");
+        WELL_KNOWN_MIME_TYPES.put(77, "application/vnd.wv.csp+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(78, "application/vnd.syncml.ds.notification");
+        WELL_KNOWN_MIME_TYPES.put(79, ContentType.AUDIO_UNSPECIFIED);
+        WELL_KNOWN_MIME_TYPES.put(80, ContentType.VIDEO_UNSPECIFIED);
+        WELL_KNOWN_MIME_TYPES.put(81, "application/vnd.oma.dd2+xml");
+        WELL_KNOWN_MIME_TYPES.put(82, "application/mikey");
+        WELL_KNOWN_MIME_TYPES.put(83, "application/vnd.oma.dcd");
+        WELL_KNOWN_MIME_TYPES.put(84, "application/vnd.oma.dcdc");
+        WELL_KNOWN_MIME_TYPES.put(513, "application/vnd.uplanet.cacheop-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(514, "application/vnd.uplanet.signal");
+        WELL_KNOWN_MIME_TYPES.put(515, "application/vnd.uplanet.alert-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(516, "application/vnd.uplanet.list-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(517, "application/vnd.uplanet.listcmd-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(518, "application/vnd.uplanet.channel-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(519, "application/vnd.uplanet.provisioning-status-uri");
+        WELL_KNOWN_MIME_TYPES.put(520, "x-wap.multipart/vnd.uplanet.header-set");
+        WELL_KNOWN_MIME_TYPES.put(521, "application/vnd.uplanet.bearer-choice-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(522, "application/vnd.phonecom.mmc-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(523, "application/vnd.nokia.syncset+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(524, "image/x-up-wpng");
+        WELL_KNOWN_MIME_TYPES.put(768, "application/iota.mmc-wbxml");
+        WELL_KNOWN_MIME_TYPES.put(769, "application/iota.mmc-xml");
+        WELL_KNOWN_MIME_TYPES.put(770, "application/vnd.syncml+xml");
+        WELL_KNOWN_MIME_TYPES.put(771, "application/vnd.syncml+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(772, "text/vnd.wap.emn+xml");
+        WELL_KNOWN_MIME_TYPES.put(773, "text/calendar");
+        WELL_KNOWN_MIME_TYPES.put(774, "application/vnd.omads-email+xml");
+        WELL_KNOWN_MIME_TYPES.put(775, "application/vnd.omads-file+xml");
+        WELL_KNOWN_MIME_TYPES.put(776, "application/vnd.omads-folder+xml");
+        WELL_KNOWN_MIME_TYPES.put(777, "text/directory;profile=vCard");
+        WELL_KNOWN_MIME_TYPES.put(778, "application/vnd.wap.emn+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(779, "application/vnd.nokia.ipdc-purchase-response");
+        WELL_KNOWN_MIME_TYPES.put(780, "application/vnd.motorola.screen3+xml");
+        WELL_KNOWN_MIME_TYPES.put(781, "application/vnd.motorola.screen3+gzip");
+        WELL_KNOWN_MIME_TYPES.put(782, "application/vnd.cmcc.setting+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(783, "application/vnd.cmcc.bombing+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(784, "application/vnd.docomo.pf");
+        WELL_KNOWN_MIME_TYPES.put(785, "application/vnd.docomo.ub");
+        WELL_KNOWN_MIME_TYPES.put(786, "application/vnd.omaloc-supl-init");
+        WELL_KNOWN_MIME_TYPES.put(787, "application/vnd.oma.group-usage-list+xml");
+        WELL_KNOWN_MIME_TYPES.put(788, "application/oma-directory+xml");
+        WELL_KNOWN_MIME_TYPES.put(789, "application/vnd.docomo.pf2");
+        WELL_KNOWN_MIME_TYPES.put(790, "application/vnd.oma.drm.roap-trigger+wbxml");
+        WELL_KNOWN_MIME_TYPES.put(791, "application/vnd.sbm.mid2");
+        WELL_KNOWN_MIME_TYPES.put(792, "application/vnd.wmf.bootstrap");
+        WELL_KNOWN_MIME_TYPES.put(793, "application/vnc.cmcc.dcd+xml");
+        WELL_KNOWN_MIME_TYPES.put(794, "application/vnd.sbm.cid");
+        WELL_KNOWN_MIME_TYPES.put(795, "application/vnd.oma.bcast.provisioningtrigger");
+        WELL_KNOWN_PARAMETERS.put(0, "Q");
+        WELL_KNOWN_PARAMETERS.put(1, "Charset");
+        WELL_KNOWN_PARAMETERS.put(2, "Level");
+        WELL_KNOWN_PARAMETERS.put(3, "Type");
+        WELL_KNOWN_PARAMETERS.put(7, "Differences");
+        WELL_KNOWN_PARAMETERS.put(8, "Padding");
+        WELL_KNOWN_PARAMETERS.put(9, "Type");
+        WELL_KNOWN_PARAMETERS.put(14, "Max-Age");
+        WELL_KNOWN_PARAMETERS.put(16, "Secure");
+        WELL_KNOWN_PARAMETERS.put(17, "SEC");
+        WELL_KNOWN_PARAMETERS.put(18, "MAC");
+        WELL_KNOWN_PARAMETERS.put(19, "Creation-date");
+        WELL_KNOWN_PARAMETERS.put(20, "Modification-date");
+        WELL_KNOWN_PARAMETERS.put(21, "Read-date");
+        WELL_KNOWN_PARAMETERS.put(22, "Size");
+        WELL_KNOWN_PARAMETERS.put(23, "Name");
+        WELL_KNOWN_PARAMETERS.put(24, "Filename");
+        WELL_KNOWN_PARAMETERS.put(25, "Start");
+        WELL_KNOWN_PARAMETERS.put(26, "Start-info");
+        WELL_KNOWN_PARAMETERS.put(27, "Comment");
+        WELL_KNOWN_PARAMETERS.put(28, "Domain");
+        WELL_KNOWN_PARAMETERS.put(29, "Path");
     }
 
-    public WspTypeDecoder(byte[] bArr) {
-        this.mWspData = bArr;
+    public WspTypeDecoder(byte[] pdu) {
+        this.mWspData = pdu;
     }
 
-    private boolean decodeNoValue(int i) {
-        if (this.mWspData[i] != (byte) 0) {
+    public boolean decodeTextString(int startIndex) {
+        int index = startIndex;
+        while (this.mWspData[index] != 0) {
+            index++;
+        }
+        this.mDataLength = (index - startIndex) + 1;
+        if (this.mWspData[startIndex] == Byte.MAX_VALUE) {
+            this.mStringValue = new String(this.mWspData, startIndex + 1, this.mDataLength - 2);
+            return true;
+        }
+        this.mStringValue = new String(this.mWspData, startIndex, this.mDataLength - 1);
+        return true;
+    }
+
+    public boolean decodeTokenText(int startIndex) {
+        int index = startIndex;
+        while (this.mWspData[index] != 0) {
+            index++;
+        }
+        this.mDataLength = (index - startIndex) + 1;
+        this.mStringValue = new String(this.mWspData, startIndex, this.mDataLength - 1);
+        return true;
+    }
+
+    public boolean decodeShortInteger(int startIndex) {
+        if ((this.mWspData[startIndex] & 128) == 0) {
+            return false;
+        }
+        this.mUnsigned32bit = this.mWspData[startIndex] & Byte.MAX_VALUE;
+        this.mDataLength = 1;
+        return true;
+    }
+
+    public boolean decodeLongInteger(int startIndex) {
+        int lengthMultiOctet = this.mWspData[startIndex] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+        if (lengthMultiOctet > 30) {
+            return false;
+        }
+        this.mUnsigned32bit = 0L;
+        for (int i = 1; i <= lengthMultiOctet; i++) {
+            this.mUnsigned32bit = (this.mUnsigned32bit << 8) | (this.mWspData[startIndex + i] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT);
+        }
+        this.mDataLength = lengthMultiOctet + 1;
+        return true;
+    }
+
+    public boolean decodeIntegerValue(int startIndex) {
+        if (decodeShortInteger(startIndex)) {
+            return true;
+        }
+        return decodeLongInteger(startIndex);
+    }
+
+    public boolean decodeUintvarInteger(int startIndex) {
+        int index = startIndex;
+        this.mUnsigned32bit = 0L;
+        while ((this.mWspData[index] & 128) != 0) {
+            if (index - startIndex >= 4) {
+                return false;
+            }
+            this.mUnsigned32bit = (this.mUnsigned32bit << 7) | (this.mWspData[index] & Byte.MAX_VALUE);
+            index++;
+        }
+        this.mUnsigned32bit = (this.mUnsigned32bit << 7) | (this.mWspData[index] & Byte.MAX_VALUE);
+        this.mDataLength = (index - startIndex) + 1;
+        return true;
+    }
+
+    public boolean decodeValueLength(int startIndex) {
+        if ((this.mWspData[startIndex] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) > 31) {
+            return false;
+        }
+        if (this.mWspData[startIndex] < 31) {
+            this.mUnsigned32bit = this.mWspData[startIndex];
+            this.mDataLength = 1;
+            return true;
+        }
+        decodeUintvarInteger(startIndex + 1);
+        this.mDataLength++;
+        return true;
+    }
+
+    public boolean decodeExtensionMedia(int startIndex) {
+        boolean rtrn = false;
+        int index = startIndex;
+        this.mDataLength = 0;
+        this.mStringValue = null;
+        int length = this.mWspData.length;
+        if (index < length) {
+            rtrn = true;
+        }
+        while (index < length && this.mWspData[index] != 0) {
+            index++;
+        }
+        this.mDataLength = (index - startIndex) + 1;
+        this.mStringValue = new String(this.mWspData, startIndex, this.mDataLength - 1);
+        return rtrn;
+    }
+
+    public boolean decodeConstrainedEncoding(int startIndex) {
+        if (!decodeShortInteger(startIndex)) {
+            return decodeExtensionMedia(startIndex);
+        }
+        this.mStringValue = null;
+        return true;
+    }
+
+    public boolean decodeContentType(int startIndex) {
+        boolean found = true;
+        this.mContentParameters = new HashMap<>();
+        try {
+            if (!decodeValueLength(startIndex)) {
+                found = decodeConstrainedEncoding(startIndex);
+                if (found) {
+                    expandWellKnownMimeType();
+                }
+            } else {
+                int headersLength = (int) this.mUnsigned32bit;
+                int mediaPrefixLength = getDecodedDataLength();
+                if (decodeIntegerValue(startIndex + mediaPrefixLength)) {
+                    this.mDataLength += mediaPrefixLength;
+                    int readLength = this.mDataLength;
+                    this.mStringValue = null;
+                    expandWellKnownMimeType();
+                    long wellKnownValue = this.mUnsigned32bit;
+                    String mimeType = this.mStringValue;
+                    if (readContentParameters(this.mDataLength + startIndex, headersLength - (this.mDataLength - mediaPrefixLength), 0)) {
+                        this.mDataLength += readLength;
+                        this.mUnsigned32bit = wellKnownValue;
+                        this.mStringValue = mimeType;
+                    } else {
+                        found = false;
+                    }
+                } else {
+                    if (decodeExtensionMedia(startIndex + mediaPrefixLength)) {
+                        this.mDataLength += mediaPrefixLength;
+                        int readLength2 = this.mDataLength;
+                        expandWellKnownMimeType();
+                        long wellKnownValue2 = this.mUnsigned32bit;
+                        String mimeType2 = this.mStringValue;
+                        if (readContentParameters(this.mDataLength + startIndex, headersLength - (this.mDataLength - mediaPrefixLength), 0)) {
+                            this.mDataLength += readLength2;
+                            this.mUnsigned32bit = wellKnownValue2;
+                            this.mStringValue = mimeType2;
+                        }
+                    }
+                    found = false;
+                }
+            }
+            return found;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            return false;
+        }
+    }
+
+    private boolean readContentParameters(int startIndex, int leftToRead, int accumulator) {
+        int totalRead;
+        String param;
+        int totalRead2;
+        String value;
+        if (leftToRead > 0) {
+            byte nextByte = this.mWspData[startIndex];
+            if ((nextByte & 128) == 0 && nextByte > 31) {
+                decodeTokenText(startIndex);
+                param = this.mStringValue;
+                totalRead = 0 + this.mDataLength;
+            } else if (!decodeIntegerValue(startIndex)) {
+                return false;
+            } else {
+                totalRead = 0 + this.mDataLength;
+                int wellKnownParameterValue = (int) this.mUnsigned32bit;
+                param = WELL_KNOWN_PARAMETERS.get(Integer.valueOf(wellKnownParameterValue));
+                if (param == null) {
+                    param = "unassigned/0x" + Long.toHexString(wellKnownParameterValue);
+                }
+                if (wellKnownParameterValue == 0) {
+                    if (!decodeUintvarInteger(startIndex + totalRead)) {
+                        return false;
+                    }
+                    int totalRead3 = totalRead + this.mDataLength;
+                    this.mContentParameters.put(param, String.valueOf(this.mUnsigned32bit));
+                    return readContentParameters(startIndex + totalRead3, leftToRead - totalRead3, accumulator + totalRead3);
+                }
+            }
+            if (decodeNoValue(startIndex + totalRead)) {
+                totalRead2 = totalRead + this.mDataLength;
+                value = null;
+            } else if (decodeIntegerValue(startIndex + totalRead)) {
+                totalRead2 = totalRead + this.mDataLength;
+                value = String.valueOf((int) this.mUnsigned32bit);
+            } else {
+                decodeTokenText(startIndex + totalRead);
+                totalRead2 = totalRead + this.mDataLength;
+                value = this.mStringValue;
+                if (value.startsWith("\"")) {
+                    value = value.substring(1);
+                }
+            }
+            this.mContentParameters.put(param, value);
+            return readContentParameters(startIndex + totalRead2, leftToRead - totalRead2, accumulator + totalRead2);
+        }
+        this.mDataLength = accumulator;
+        return true;
+    }
+
+    private boolean decodeNoValue(int startIndex) {
+        if (this.mWspData[startIndex] != 0) {
             return false;
         }
         this.mDataLength = 1;
@@ -185,245 +392,78 @@ public class WspTypeDecoder {
 
     private void expandWellKnownMimeType() {
         if (this.mStringValue == null) {
-            this.mStringValue = (String) WELL_KNOWN_MIME_TYPES.get(Integer.valueOf((int) this.mUnsigned32bit));
-            return;
+            this.mStringValue = WELL_KNOWN_MIME_TYPES.get(Integer.valueOf((int) this.mUnsigned32bit));
+        } else {
+            this.mUnsigned32bit = -1L;
         }
-        this.mUnsigned32bit = -1;
     }
 
-    private boolean readContentParameters(int i, int i2, int i3) {
-        if (i2 > 0) {
-            Object obj;
-            int i4;
-            Object obj2;
-            byte b = this.mWspData[i];
-            if ((b & 128) != 0 || b <= (byte) 31) {
-                if (decodeIntegerValue(i)) {
-                    int i5 = this.mDataLength + 0;
-                    int i6 = (int) this.mUnsigned32bit;
-                    String str = (String) WELL_KNOWN_PARAMETERS.get(Integer.valueOf(i6));
-                    if (str == null) {
-                        obj = "unassigned/0x" + Long.toHexString((long) i6);
-                    } else {
-                        String obj3 = str;
-                    }
-                    if (i6 != 0) {
-                        i4 = i5;
-                    } else if (decodeUintvarInteger(i + i5)) {
-                        i4 = this.mDataLength + i5;
-                        this.mContentParameters.put(obj3, String.valueOf(this.mUnsigned32bit));
-                        return readContentParameters(i + i4, i2 - i4, i4 + i3);
-                    }
-                }
-                return false;
-            }
-            decodeTokenText(i);
-            i4 = this.mDataLength + 0;
-            obj3 = this.mStringValue;
-            if (decodeNoValue(i + i4)) {
-                i4 += this.mDataLength;
-                obj2 = null;
-            } else if (decodeIntegerValue(i + i4)) {
-                i4 += this.mDataLength;
-                obj2 = String.valueOf((int) this.mUnsigned32bit);
-            } else {
-                decodeTokenText(i + i4);
-                i4 += this.mDataLength;
-                obj2 = this.mStringValue;
-                if (obj2.startsWith("\"")) {
-                    obj2 = obj2.substring(1);
-                }
-            }
-            this.mContentParameters.put(obj3, obj2);
-            return readContentParameters(i + i4, i2 - i4, i4 + i3);
-        }
-        this.mDataLength = i3;
-        return true;
+    public boolean decodeContentLength(int startIndex) {
+        return decodeIntegerValue(startIndex);
     }
 
-    public boolean decodeConstrainedEncoding(int i) {
-        if (!decodeShortInteger(i)) {
-            return decodeExtensionMedia(i);
+    public boolean decodeContentLocation(int startIndex) {
+        return decodeTextString(startIndex);
+    }
+
+    public boolean decodeXWapApplicationId(int startIndex) {
+        if (!decodeIntegerValue(startIndex)) {
+            return decodeTextString(startIndex);
         }
         this.mStringValue = null;
         return true;
     }
 
-    public boolean decodeContentLength(int i) {
-        return decodeIntegerValue(i);
-    }
-
-    public boolean decodeContentLocation(int i) {
-        return decodeTextString(i);
-    }
-
-    public boolean decodeContentType(int i) {
-        this.mContentParameters = new HashMap();
-        try {
-            if (decodeValueLength(i)) {
-                int i2 = (int) this.mUnsigned32bit;
-                int decodedDataLength = getDecodedDataLength();
-                int i3;
-                long j;
-                String str;
-                if (decodeIntegerValue(i + decodedDataLength)) {
-                    this.mDataLength += decodedDataLength;
-                    i3 = this.mDataLength;
-                    this.mStringValue = null;
-                    expandWellKnownMimeType();
-                    j = this.mUnsigned32bit;
-                    str = this.mStringValue;
-                    if (!readContentParameters(this.mDataLength + i, i2 - (this.mDataLength - decodedDataLength), 0)) {
-                        return false;
-                    }
-                    this.mDataLength += i3;
-                    this.mUnsigned32bit = j;
-                    this.mStringValue = str;
-                    return true;
-                }
-                if (decodeExtensionMedia(i + decodedDataLength)) {
-                    this.mDataLength += decodedDataLength;
-                    i3 = this.mDataLength;
-                    expandWellKnownMimeType();
-                    j = this.mUnsigned32bit;
-                    str = this.mStringValue;
-                    if (readContentParameters(this.mDataLength + i, i2 - (this.mDataLength - decodedDataLength), 0)) {
-                        this.mDataLength += i3;
-                        this.mUnsigned32bit = j;
-                        this.mStringValue = str;
+    public boolean seekXWapApplicationId(int startIndex, int endIndex) {
+        boolean z = false;
+        int index = startIndex;
+        while (index <= endIndex) {
+            try {
+                if (decodeIntegerValue(index)) {
+                    if (((int) getValue32()) == 47) {
+                        this.mUnsigned32bit = index + 1;
+                        z = true;
                         return true;
                     }
+                } else if (!decodeTextString(index)) {
+                    return false;
                 }
-                return false;
+                int index2 = index + getDecodedDataLength();
+                if (index2 > endIndex) {
+                    return false;
+                }
+                byte val = this.mWspData[index2];
+                if (val >= 0 && val <= 30) {
+                    index = index2 + this.mWspData[index2] + 1;
+                } else if (val == 31) {
+                    if (index2 + 1 >= endIndex) {
+                        return false;
+                    }
+                    int index3 = index2 + 1;
+                    if (!decodeUintvarInteger(index3)) {
+                        return false;
+                    }
+                    index = index3 + getDecodedDataLength();
+                } else if (31 >= val || val > Byte.MAX_VALUE) {
+                    index = index2 + 1;
+                } else if (!decodeTextString(index2)) {
+                    return false;
+                } else {
+                    index = index2 + getDecodedDataLength();
+                }
+            } catch (ArrayIndexOutOfBoundsException e) {
+                return z;
             }
-            boolean decodeConstrainedEncoding = decodeConstrainedEncoding(i);
-            if (!decodeConstrainedEncoding) {
-                return decodeConstrainedEncoding;
-            }
-            expandWellKnownMimeType();
-            return decodeConstrainedEncoding;
-        } catch (ArrayIndexOutOfBoundsException e) {
-            return false;
         }
+        return false;
     }
 
-    public boolean decodeExtensionMedia(int i) {
-        int i2;
-        boolean z = false;
-        this.mDataLength = 0;
-        this.mStringValue = null;
-        int length = this.mWspData.length;
-        if (i < length) {
-            z = true;
-            i2 = i;
-        } else {
-            i2 = i;
-        }
-        while (i2 < length && this.mWspData[i2] != (byte) 0) {
-            i2++;
-        }
-        this.mDataLength = (i2 - i) + 1;
-        this.mStringValue = new String(this.mWspData, i, this.mDataLength - 1);
-        return z;
+    public boolean decodeXWapContentURI(int startIndex) {
+        return decodeTextString(startIndex);
     }
 
-    public boolean decodeIntegerValue(int i) {
-        return decodeShortInteger(i) ? true : decodeLongInteger(i);
-    }
-
-    public boolean decodeLongInteger(int i) {
-        int i2 = this.mWspData[i] & 255;
-        if (i2 > 30) {
-            return false;
-        }
-        this.mUnsigned32bit = 0;
-        for (int i3 = 1; i3 <= i2; i3++) {
-            this.mUnsigned32bit = (this.mUnsigned32bit << 8) | ((long) (this.mWspData[i + i3] & 255));
-        }
-        this.mDataLength = i2 + 1;
-        return true;
-    }
-
-    public boolean decodeShortInteger(int i) {
-        if ((this.mWspData[i] & 128) == 0) {
-            return false;
-        }
-        this.mUnsigned32bit = (long) (this.mWspData[i] & 127);
-        this.mDataLength = 1;
-        return true;
-    }
-
-    public boolean decodeTextString(int i) {
-        int i2 = i;
-        while (this.mWspData[i2] != (byte) 0) {
-            i2++;
-        }
-        this.mDataLength = (i2 - i) + 1;
-        if (this.mWspData[i] == Byte.MAX_VALUE) {
-            this.mStringValue = new String(this.mWspData, i + 1, this.mDataLength - 2);
-        } else {
-            this.mStringValue = new String(this.mWspData, i, this.mDataLength - 1);
-        }
-        return true;
-    }
-
-    public boolean decodeTokenText(int i) {
-        int i2 = i;
-        while (this.mWspData[i2] != (byte) 0) {
-            i2++;
-        }
-        this.mDataLength = (i2 - i) + 1;
-        this.mStringValue = new String(this.mWspData, i, this.mDataLength - 1);
-        return true;
-    }
-
-    public boolean decodeUintvarInteger(int i) {
-        this.mUnsigned32bit = 0;
-        int i2 = i;
-        while ((this.mWspData[i2] & 128) != 0) {
-            if (i2 - i >= 4) {
-                return false;
-            }
-            this.mUnsigned32bit = (this.mUnsigned32bit << 7) | ((long) (this.mWspData[i2] & 127));
-            i2++;
-        }
-        this.mUnsigned32bit = (this.mUnsigned32bit << 7) | ((long) (this.mWspData[i2] & 127));
-        this.mDataLength = (i2 - i) + 1;
-        return true;
-    }
-
-    public boolean decodeValueLength(int i) {
-        if ((this.mWspData[i] & 255) > 31) {
-            return false;
-        }
-        if (this.mWspData[i] < (byte) 31) {
-            this.mUnsigned32bit = (long) this.mWspData[i];
-            this.mDataLength = 1;
-            return true;
-        }
-        decodeUintvarInteger(i + 1);
-        this.mDataLength++;
-        return true;
-    }
-
-    public boolean decodeXWapApplicationId(int i) {
-        if (!decodeIntegerValue(i)) {
-            return decodeTextString(i);
-        }
-        this.mStringValue = null;
-        return true;
-    }
-
-    public boolean decodeXWapContentURI(int i) {
-        return decodeTextString(i);
-    }
-
-    public boolean decodeXWapInitiatorURI(int i) {
-        return decodeTextString(i);
-    }
-
-    public HashMap<String, String> getContentParameters() {
-        return this.mContentParameters;
+    public boolean decodeXWapInitiatorURI(int startIndex) {
+        return decodeTextString(startIndex);
     }
 
     public int getDecodedDataLength() {
@@ -438,47 +478,7 @@ public class WspTypeDecoder {
         return this.mStringValue;
     }
 
-    public boolean seekXWapApplicationId(int i, int i2) {
-        while (i <= i2) {
-            try {
-                if (!decodeIntegerValue(i)) {
-                    if (!decodeTextString(i)) {
-                        break;
-                    }
-                } else if (((int) getValue32()) == 47) {
-                    this.mUnsigned32bit = (long) (i + 1);
-                    return true;
-                }
-                int decodedDataLength = getDecodedDataLength() + i;
-                if (decodedDataLength > i2) {
-                    break;
-                }
-                byte b = this.mWspData[decodedDataLength];
-                if (b < (byte) 0 || b > (byte) 30) {
-                    if (b != (byte) 31) {
-                        if ((byte) 31 < b && b <= Byte.MAX_VALUE) {
-                            if (!decodeTextString(decodedDataLength)) {
-                                break;
-                            }
-                            i = decodedDataLength + getDecodedDataLength();
-                        } else {
-                            i = decodedDataLength + 1;
-                        }
-                    } else if (decodedDataLength + 1 >= i2) {
-                        break;
-                    } else {
-                        decodedDataLength++;
-                        if (!decodeUintvarInteger(decodedDataLength)) {
-                            break;
-                        }
-                        i = decodedDataLength + getDecodedDataLength();
-                    }
-                } else {
-                    i = decodedDataLength + (this.mWspData[decodedDataLength] + 1);
-                }
-            } catch (ArrayIndexOutOfBoundsException e) {
-            }
-        }
-        return false;
+    public HashMap<String, String> getContentParameters() {
+        return this.mContentParameters;
     }
 }

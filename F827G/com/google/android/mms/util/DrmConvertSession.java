@@ -3,405 +3,243 @@ package com.google.android.mms.util;
 import android.drm.DrmConvertedStatus;
 import android.drm.DrmManagerClient;
 import android.util.Log;
+import com.google.android.mms.pdu.PduPart;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class DrmConvertSession {
     private static final String TAG = "DrmConvertSession";
     private int mConvertSessionId;
     private DrmManagerClient mDrmClient;
 
-    private DrmConvertSession(DrmManagerClient drmManagerClient, int i) {
-        this.mDrmClient = drmManagerClient;
-        this.mConvertSessionId = i;
+    private DrmConvertSession(DrmManagerClient drmClient, int convertSessionId) {
+        this.mDrmClient = drmClient;
+        this.mConvertSessionId = convertSessionId;
     }
 
-    /* JADX WARNING: Removed duplicated region for block: B:27:? A:{SYNTHETIC, RETURN, ORIG_RETURN, SKIP} */
-    /* JADX WARNING: Removed duplicated region for block: B:10:0x0019 A:{SKIP} */
-    /* JADX WARNING: Removed duplicated region for block: B:10:0x0019 A:{SKIP} */
-    /* JADX WARNING: Removed duplicated region for block: B:27:? A:{SYNTHETIC, RETURN, ORIG_RETURN, SKIP} */
+    /* JADX WARN: Removed duplicated region for block: B:11:0x001a A[ADDED_TO_REGION] */
+    /*
+        Code decompiled incorrectly, please refer to instructions dump.
+        To view partially-correct code enable 'Show inconsistent code' option in preferences
+    */
     public static com.google.android.mms.util.DrmConvertSession open(android.content.Context r7, java.lang.String r8) {
         /*
-        r2 = 0;
-        r0 = -1;
-        if (r7 == 0) goto L_0x0063;
-    L_0x0004:
-        if (r8 == 0) goto L_0x0063;
-    L_0x0006:
-        r1 = "";
-        r1 = r8.equals(r1);
-        if (r1 != 0) goto L_0x0063;
-    L_0x000e:
-        r1 = new android.drm.DrmManagerClient;	 Catch:{ IllegalArgumentException -> 0x0060, IllegalStateException -> 0x005d }
-        r1.<init>(r7);	 Catch:{ IllegalArgumentException -> 0x0060, IllegalStateException -> 0x005d }
-        r0 = r1.openConvertSession(r8);	 Catch:{ IllegalArgumentException -> 0x001c, IllegalStateException -> 0x0045 }
-    L_0x0017:
-        if (r1 == 0) goto L_0x001b;
-    L_0x0019:
-        if (r0 >= 0) goto L_0x0057;
-    L_0x001b:
-        return r2;
-    L_0x001c:
-        r3 = move-exception;
-        r4 = "DrmConvertSession";
-        r5 = new java.lang.StringBuilder;	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        r5.<init>();	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        r6 = "Conversion of Mimetype: ";
-        r5 = r5.append(r6);	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        r5 = r5.append(r8);	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        r6 = " is not supported.";
-        r5 = r5.append(r6);	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        r5 = r5.toString();	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        android.util.Log.w(r4, r5, r3);	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        goto L_0x0017;
-    L_0x003c:
-        r3 = move-exception;
-    L_0x003d:
-        r3 = "DrmConvertSession";
-        r4 = "DrmManagerClient instance could not be created, context is Illegal.";
-        android.util.Log.w(r3, r4);
-        goto L_0x0017;
-    L_0x0045:
-        r3 = move-exception;
-        r4 = "DrmConvertSession";
-        r5 = "Could not access Open DrmFramework.";
-        android.util.Log.w(r4, r5, r3);	 Catch:{ IllegalArgumentException -> 0x003c, IllegalStateException -> 0x004e }
-        goto L_0x0017;
-    L_0x004e:
-        r3 = move-exception;
-    L_0x004f:
-        r3 = "DrmConvertSession";
-        r4 = "DrmManagerClient didn't initialize properly.";
-        android.util.Log.w(r3, r4);
-        goto L_0x0017;
-    L_0x0057:
-        r2 = new com.google.android.mms.util.DrmConvertSession;
-        r2.<init>(r1, r0);
-        goto L_0x001b;
-    L_0x005d:
-        r1 = move-exception;
-        r1 = r2;
-        goto L_0x004f;
-    L_0x0060:
-        r1 = move-exception;
-        r1 = r2;
-        goto L_0x003d;
-    L_0x0063:
-        r1 = r2;
-        goto L_0x0017;
+            r1 = 0
+            r0 = -1
+            if (r7 == 0) goto L_0x0018
+            if (r8 == 0) goto L_0x0018
+            java.lang.String r4 = ""
+            boolean r4 = r8.equals(r4)
+            if (r4 != 0) goto L_0x0018
+            android.drm.DrmManagerClient r2 = new android.drm.DrmManagerClient     // Catch: IllegalArgumentException -> 0x0063, IllegalStateException -> 0x0061
+            r2.<init>(r7)     // Catch: IllegalArgumentException -> 0x0063, IllegalStateException -> 0x0061
+            int r0 = r2.openConvertSession(r8)     // Catch: IllegalArgumentException -> 0x001e, IllegalStateException -> 0x0048
+        L_0x0017:
+            r1 = r2
+        L_0x0018:
+            if (r1 == 0) goto L_0x001c
+            if (r0 >= 0) goto L_0x005b
+        L_0x001c:
+            r4 = 0
+        L_0x001d:
+            return r4
+        L_0x001e:
+            r3 = move-exception
+            java.lang.String r4 = "DrmConvertSession"
+            java.lang.StringBuilder r5 = new java.lang.StringBuilder     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            r5.<init>()     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            java.lang.String r6 = "Conversion of Mimetype: "
+            java.lang.StringBuilder r5 = r5.append(r6)     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            java.lang.StringBuilder r5 = r5.append(r8)     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            java.lang.String r6 = " is not supported."
+            java.lang.StringBuilder r5 = r5.append(r6)     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            java.lang.String r5 = r5.toString()     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            android.util.Log.w(r4, r5, r3)     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            goto L_0x0017
+        L_0x003e:
+            r3 = move-exception
+            r1 = r2
+        L_0x0040:
+            java.lang.String r4 = "DrmConvertSession"
+            java.lang.String r5 = "DrmManagerClient instance could not be created, context is Illegal."
+            android.util.Log.w(r4, r5)
+            goto L_0x0018
+        L_0x0048:
+            r3 = move-exception
+            java.lang.String r4 = "DrmConvertSession"
+            java.lang.String r5 = "Could not access Open DrmFramework."
+            android.util.Log.w(r4, r5, r3)     // Catch: IllegalArgumentException -> 0x003e, IllegalStateException -> 0x0051
+            goto L_0x0017
+        L_0x0051:
+            r3 = move-exception
+            r1 = r2
+        L_0x0053:
+            java.lang.String r4 = "DrmConvertSession"
+            java.lang.String r5 = "DrmManagerClient didn't initialize properly."
+            android.util.Log.w(r4, r5)
+            goto L_0x0018
+        L_0x005b:
+            com.google.android.mms.util.DrmConvertSession r4 = new com.google.android.mms.util.DrmConvertSession
+            r4.<init>(r1, r0)
+            goto L_0x001d
+        L_0x0061:
+            r3 = move-exception
+            goto L_0x0053
+        L_0x0063:
+            r3 = move-exception
+            goto L_0x0040
         */
         throw new UnsupportedOperationException("Method not decompiled: com.google.android.mms.util.DrmConvertSession.open(android.content.Context, java.lang.String):com.google.android.mms.util.DrmConvertSession");
     }
 
-    /* JADX WARNING: Unknown top exception splitter block from list: {B:39:0x00c5=Splitter:B:39:0x00c5, B:49:0x010d=Splitter:B:49:0x010d, B:29:0x007e=Splitter:B:29:0x007e} */
-    /* JADX WARNING: Removed duplicated region for block: B:95:0x01d8  */
-    /* JADX WARNING: Removed duplicated region for block: B:72:0x018c A:{SYNTHETIC, Splitter:B:72:0x018c} */
-    /* JADX WARNING: Removed duplicated region for block: B:72:0x018c A:{SYNTHETIC, Splitter:B:72:0x018c} */
-    /* JADX WARNING: Removed duplicated region for block: B:95:0x01d8  */
-    /* JADX WARNING: Removed duplicated region for block: B:32:0x009e A:{SYNTHETIC, Splitter:B:32:0x009e} */
-    /* JADX WARNING: Removed duplicated region for block: B:42:0x00e5 A:{SYNTHETIC, Splitter:B:42:0x00e5} */
-    /* JADX WARNING: Removed duplicated region for block: B:52:0x0116 A:{SYNTHETIC, Splitter:B:52:0x0116} */
-    /* JADX WARNING: Removed duplicated region for block: B:62:0x015e A:{SYNTHETIC, Splitter:B:62:0x015e} */
-    /* JADX WARNING: Removed duplicated region for block: B:95:0x01d8  */
-    /* JADX WARNING: Removed duplicated region for block: B:72:0x018c A:{SYNTHETIC, Splitter:B:72:0x018c} */
-    /* JADX WARNING: Removed duplicated region for block: B:91:0x01cd A:{ExcHandler: IllegalStateException (r1_12 'e' java.lang.Throwable), PHI: r0 , Splitter:B:18:0x003a} */
-    /* JADX WARNING: Exception block dominator not found, dom blocks: [B:18:0x003a, B:72:0x018c] */
-    /* JADX WARNING: Missing block: B:77:0x0191, code skipped:
-            r0 = move-exception;
-     */
-    /* JADX WARNING: Missing block: B:78:0x0192, code skipped:
-            android.util.Log.w(TAG, "Failed to close File:" + r9 + ".", r0);
-     */
-    /* JADX WARNING: Missing block: B:91:0x01cd, code skipped:
-            r1 = move-exception;
-     */
-    /* JADX WARNING: Missing block: B:92:0x01ce, code skipped:
-            r3 = r1;
-            r2 = r0;
-     */
-    public int close(java.lang.String r9) {
-        /*
-        r8 = this;
-        r1 = 491; // 0x1eb float:6.88E-43 double:2.426E-321;
-        r0 = 200; // 0xc8 float:2.8E-43 double:9.9E-322;
-        r4 = 0;
-        r2 = 492; // 0x1ec float:6.9E-43 double:2.43E-321;
-        r3 = r8.mDrmClient;
-        if (r3 == 0) goto L_0x01d5;
-    L_0x000b:
-        r3 = r8.mConvertSessionId;
-        if (r3 < 0) goto L_0x01d5;
-    L_0x000f:
-        r3 = r8.mDrmClient;	 Catch:{ IllegalStateException -> 0x01c8 }
-        r5 = r8.mConvertSessionId;	 Catch:{ IllegalStateException -> 0x01c8 }
-        r5 = r3.closeConvertSession(r5);	 Catch:{ IllegalStateException -> 0x01c8 }
-        if (r5 == 0) goto L_0x0022;
-    L_0x0019:
-        r3 = r5.statusCode;	 Catch:{ IllegalStateException -> 0x01c8 }
-        r6 = 1;
-        if (r3 != r6) goto L_0x0022;
-    L_0x001e:
-        r3 = r5.convertedData;	 Catch:{ IllegalStateException -> 0x01c8 }
-        if (r3 != 0) goto L_0x0026;
-    L_0x0022:
-        r0 = 406; // 0x196 float:5.69E-43 double:2.006E-321;
-    L_0x0024:
-        r2 = r0;
-    L_0x0025:
-        return r2;
-    L_0x0026:
-        r3 = new java.io.RandomAccessFile;	 Catch:{ FileNotFoundException -> 0x007c, IOException -> 0x00c3, IllegalArgumentException -> 0x010b, SecurityException -> 0x013c, all -> 0x0185 }
-        r6 = "rw";
-        r3.<init>(r9, r6);	 Catch:{ FileNotFoundException -> 0x007c, IOException -> 0x00c3, IllegalArgumentException -> 0x010b, SecurityException -> 0x013c, all -> 0x0185 }
-        r4 = r5.offset;	 Catch:{ FileNotFoundException -> 0x01b5, IOException -> 0x01b8, IllegalArgumentException -> 0x01bb, SecurityException -> 0x01be, all -> 0x01b1 }
-        r6 = (long) r4;	 Catch:{ FileNotFoundException -> 0x01b5, IOException -> 0x01b8, IllegalArgumentException -> 0x01bb, SecurityException -> 0x01be, all -> 0x01b1 }
-        r3.seek(r6);	 Catch:{ FileNotFoundException -> 0x01b5, IOException -> 0x01b8, IllegalArgumentException -> 0x01bb, SecurityException -> 0x01be, all -> 0x01b1 }
-        r4 = r5.convertedData;	 Catch:{ FileNotFoundException -> 0x01b5, IOException -> 0x01b8, IllegalArgumentException -> 0x01bb, SecurityException -> 0x01be, all -> 0x01b1 }
-        r3.write(r4);	 Catch:{ FileNotFoundException -> 0x01b5, IOException -> 0x01b8, IllegalArgumentException -> 0x01bb, SecurityException -> 0x01be, all -> 0x01b1 }
-        if (r3 == 0) goto L_0x0024;
-    L_0x003a:
-        r3.close();	 Catch:{ IOException -> 0x003f, IllegalStateException -> 0x01cd }
-        r2 = r0;
-        goto L_0x0025;
-    L_0x003f:
-        r0 = move-exception;
-        r1 = "DrmConvertSession";
-        r3 = new java.lang.StringBuilder;	 Catch:{ IllegalStateException -> 0x005f }
-        r3.<init>();	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = "Failed to close File:";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.append(r9);	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = ".";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.toString();	 Catch:{ IllegalStateException -> 0x005f }
-        android.util.Log.w(r1, r3, r0);	 Catch:{ IllegalStateException -> 0x005f }
-        goto L_0x0025;
-    L_0x005f:
-        r0 = move-exception;
-        r3 = r0;
-    L_0x0061:
-        r0 = "DrmConvertSession";
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r4 = "Could not close convertsession. Convertsession: ";
-        r1 = r1.append(r4);
-        r4 = r8.mConvertSessionId;
-        r1 = r1.append(r4);
-        r1 = r1.toString();
-        android.util.Log.w(r0, r1, r3);
-        goto L_0x0025;
-    L_0x007c:
-        r0 = move-exception;
-        r3 = r4;
-    L_0x007e:
-        r1 = "DrmConvertSession";
-        r4 = new java.lang.StringBuilder;	 Catch:{ all -> 0x01c4 }
-        r4.<init>();	 Catch:{ all -> 0x01c4 }
-        r5 = "File: ";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x01c4 }
-        r4 = r4.append(r9);	 Catch:{ all -> 0x01c4 }
-        r5 = " could not be found.";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x01c4 }
-        r4 = r4.toString();	 Catch:{ all -> 0x01c4 }
-        android.util.Log.w(r1, r4, r0);	 Catch:{ all -> 0x01c4 }
-        if (r3 == 0) goto L_0x01d2;
-    L_0x009e:
-        r3.close();	 Catch:{ IOException -> 0x00a2 }
-        goto L_0x0025;
-    L_0x00a2:
-        r0 = move-exception;
-        r1 = "DrmConvertSession";
-        r3 = new java.lang.StringBuilder;	 Catch:{ IllegalStateException -> 0x005f }
-        r3.<init>();	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = "Failed to close File:";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.append(r9);	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = ".";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.toString();	 Catch:{ IllegalStateException -> 0x005f }
-        android.util.Log.w(r1, r3, r0);	 Catch:{ IllegalStateException -> 0x005f }
-        goto L_0x0025;
-    L_0x00c3:
-        r0 = move-exception;
-        r3 = r4;
-    L_0x00c5:
-        r1 = "DrmConvertSession";
-        r4 = new java.lang.StringBuilder;	 Catch:{ all -> 0x01c4 }
-        r4.<init>();	 Catch:{ all -> 0x01c4 }
-        r5 = "Could not access File: ";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x01c4 }
-        r4 = r4.append(r9);	 Catch:{ all -> 0x01c4 }
-        r5 = " .";
-        r4 = r4.append(r5);	 Catch:{ all -> 0x01c4 }
-        r4 = r4.toString();	 Catch:{ all -> 0x01c4 }
-        android.util.Log.w(r1, r4, r0);	 Catch:{ all -> 0x01c4 }
-        if (r3 == 0) goto L_0x01d2;
-    L_0x00e5:
-        r3.close();	 Catch:{ IOException -> 0x00ea }
-        goto L_0x0025;
-    L_0x00ea:
-        r0 = move-exception;
-        r1 = "DrmConvertSession";
-        r3 = new java.lang.StringBuilder;	 Catch:{ IllegalStateException -> 0x005f }
-        r3.<init>();	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = "Failed to close File:";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.append(r9);	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = ".";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.toString();	 Catch:{ IllegalStateException -> 0x005f }
-        android.util.Log.w(r1, r3, r0);	 Catch:{ IllegalStateException -> 0x005f }
-        goto L_0x0025;
-    L_0x010b:
-        r0 = move-exception;
-        r3 = r4;
-    L_0x010d:
-        r1 = "DrmConvertSession";
-        r4 = "Could not open file in mode: rw";
-        android.util.Log.w(r1, r4, r0);	 Catch:{ all -> 0x01c4 }
-        if (r3 == 0) goto L_0x01d2;
-    L_0x0116:
-        r3.close();	 Catch:{ IOException -> 0x011b }
-        goto L_0x0025;
-    L_0x011b:
-        r0 = move-exception;
-        r1 = "DrmConvertSession";
-        r3 = new java.lang.StringBuilder;	 Catch:{ IllegalStateException -> 0x005f }
-        r3.<init>();	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = "Failed to close File:";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.append(r9);	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = ".";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.toString();	 Catch:{ IllegalStateException -> 0x005f }
-        android.util.Log.w(r1, r3, r0);	 Catch:{ IllegalStateException -> 0x005f }
-        goto L_0x0025;
-    L_0x013c:
-        r0 = move-exception;
-        r3 = r4;
-    L_0x013e:
-        r4 = "DrmConvertSession";
-        r5 = new java.lang.StringBuilder;	 Catch:{ all -> 0x01c1 }
-        r5.<init>();	 Catch:{ all -> 0x01c1 }
-        r6 = "Access to File: ";
-        r5 = r5.append(r6);	 Catch:{ all -> 0x01c1 }
-        r5 = r5.append(r9);	 Catch:{ all -> 0x01c1 }
-        r6 = " was denied denied by SecurityManager.";
-        r5 = r5.append(r6);	 Catch:{ all -> 0x01c1 }
-        r5 = r5.toString();	 Catch:{ all -> 0x01c1 }
-        android.util.Log.w(r4, r5, r0);	 Catch:{ all -> 0x01c1 }
-        if (r3 == 0) goto L_0x01d5;
-    L_0x015e:
-        r3.close();	 Catch:{ IOException -> 0x0164 }
-        r2 = r1;
-        goto L_0x0025;
-    L_0x0164:
-        r0 = move-exception;
-        r1 = "DrmConvertSession";
-        r3 = new java.lang.StringBuilder;	 Catch:{ IllegalStateException -> 0x005f }
-        r3.<init>();	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = "Failed to close File:";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.append(r9);	 Catch:{ IllegalStateException -> 0x005f }
-        r4 = ".";
-        r3 = r3.append(r4);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.toString();	 Catch:{ IllegalStateException -> 0x005f }
-        android.util.Log.w(r1, r3, r0);	 Catch:{ IllegalStateException -> 0x005f }
-        goto L_0x0025;
-    L_0x0185:
-        r0 = move-exception;
-        r5 = r0;
-        r3 = r4;
-    L_0x0188:
-        r0 = r1;
-        r4 = r5;
-    L_0x018a:
-        if (r3 == 0) goto L_0x01d8;
-    L_0x018c:
-        r3.close();	 Catch:{ IOException -> 0x0191, IllegalStateException -> 0x01cd }
-        r2 = r0;
-    L_0x0190:
-        throw r4;	 Catch:{ IllegalStateException -> 0x005f }
-    L_0x0191:
-        r0 = move-exception;
-        r1 = "DrmConvertSession";
-        r3 = new java.lang.StringBuilder;	 Catch:{ IllegalStateException -> 0x005f }
-        r3.<init>();	 Catch:{ IllegalStateException -> 0x005f }
-        r5 = "Failed to close File:";
-        r3 = r3.append(r5);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.append(r9);	 Catch:{ IllegalStateException -> 0x005f }
-        r5 = ".";
-        r3 = r3.append(r5);	 Catch:{ IllegalStateException -> 0x005f }
-        r3 = r3.toString();	 Catch:{ IllegalStateException -> 0x005f }
-        android.util.Log.w(r1, r3, r0);	 Catch:{ IllegalStateException -> 0x005f }
-        goto L_0x0190;
-    L_0x01b1:
-        r0 = move-exception;
-        r4 = r0;
-        r0 = r1;
-        goto L_0x018a;
-    L_0x01b5:
-        r0 = move-exception;
-        goto L_0x007e;
-    L_0x01b8:
-        r0 = move-exception;
-        goto L_0x00c5;
-    L_0x01bb:
-        r0 = move-exception;
-        goto L_0x010d;
-    L_0x01be:
-        r0 = move-exception;
-        goto L_0x013e;
-    L_0x01c1:
-        r0 = move-exception;
-        r5 = r0;
-        goto L_0x0188;
-    L_0x01c4:
-        r0 = move-exception;
-        r5 = r0;
-        r1 = r2;
-        goto L_0x0188;
-    L_0x01c8:
-        r0 = move-exception;
-        r3 = r0;
-        r2 = r1;
-        goto L_0x0061;
-    L_0x01cd:
-        r1 = move-exception;
-        r3 = r1;
-        r2 = r0;
-        goto L_0x0061;
-    L_0x01d2:
-        r0 = r2;
-        goto L_0x0024;
-    L_0x01d5:
-        r0 = r1;
-        goto L_0x0024;
-    L_0x01d8:
-        r2 = r0;
-        goto L_0x0190;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.google.android.mms.util.DrmConvertSession.close(java.lang.String):int");
-    }
-
-    public byte[] convert(byte[] bArr, int i) {
-        if (bArr != null) {
+    public byte[] convert(byte[] inBuffer, int size) {
+        DrmConvertedStatus convertedStatus;
+        byte[] result = null;
+        if (inBuffer != null) {
             try {
-                DrmConvertedStatus convertData;
-                if (i != bArr.length) {
-                    byte[] bArr2 = new byte[i];
-                    System.arraycopy(bArr, 0, bArr2, 0, i);
-                    convertData = this.mDrmClient.convertData(this.mConvertSessionId, bArr2);
+                if (size != inBuffer.length) {
+                    byte[] buf = new byte[size];
+                    System.arraycopy(inBuffer, 0, buf, 0, size);
+                    convertedStatus = this.mDrmClient.convertData(this.mConvertSessionId, buf);
                 } else {
-                    convertData = this.mDrmClient.convertData(this.mConvertSessionId, bArr);
+                    convertedStatus = this.mDrmClient.convertData(this.mConvertSessionId, inBuffer);
                 }
-                return (convertData == null || convertData.statusCode != 1 || convertData.convertedData == null) ? null : convertData.convertedData;
+                if (convertedStatus == null || convertedStatus.statusCode != 1 || convertedStatus.convertedData == null) {
+                    return null;
+                }
+                result = convertedStatus.convertedData;
+                return result;
             } catch (IllegalArgumentException e) {
                 Log.w(TAG, "Buffer with data to convert is illegal. Convertsession: " + this.mConvertSessionId, e);
-                return null;
+                return result;
             } catch (IllegalStateException e2) {
                 Log.w(TAG, "Could not convert data. Convertsession: " + this.mConvertSessionId, e2);
-                return null;
+                return result;
             }
+        } else {
+            throw new IllegalArgumentException("Parameter inBuffer is null");
         }
-        throw new IllegalArgumentException("Parameter inBuffer is null");
+    }
+
+    public int close(String filename) {
+        Throwable th;
+        RandomAccessFile rndAccessFile;
+        SecurityException e;
+        IllegalArgumentException e2;
+        IOException e3;
+        FileNotFoundException e4;
+        RandomAccessFile rndAccessFile2;
+        int result = 491;
+        if (this.mDrmClient == null || this.mConvertSessionId < 0) {
+            return 491;
+        }
+        try {
+            DrmConvertedStatus convertedStatus = this.mDrmClient.closeConvertSession(this.mConvertSessionId);
+            if (convertedStatus == null || convertedStatus.statusCode != 1 || convertedStatus.convertedData == null) {
+                return 406;
+            }
+            try {
+                rndAccessFile = null;
+                try {
+                    rndAccessFile2 = new RandomAccessFile(filename, "rw");
+                } catch (FileNotFoundException e5) {
+                    e4 = e5;
+                } catch (IOException e6) {
+                    e3 = e6;
+                } catch (IllegalArgumentException e7) {
+                    e2 = e7;
+                } catch (SecurityException e8) {
+                    e = e8;
+                }
+            } catch (Throwable th2) {
+                th = th2;
+            }
+            try {
+                rndAccessFile2.seek(convertedStatus.offset);
+                rndAccessFile2.write(convertedStatus.convertedData);
+                result = PduPart.P_CONTENT_TRANSFER_ENCODING;
+                if (rndAccessFile2 != null) {
+                    try {
+                        rndAccessFile2.close();
+                    } catch (IOException e9) {
+                        result = 492;
+                        Log.w(TAG, "Failed to close File:" + filename + ".", e9);
+                    }
+                }
+            } catch (FileNotFoundException e10) {
+                e4 = e10;
+                rndAccessFile = rndAccessFile2;
+                result = 492;
+                Log.w(TAG, "File: " + filename + " could not be found.", e4);
+                if (rndAccessFile != null) {
+                    try {
+                        rndAccessFile.close();
+                    } catch (IOException e11) {
+                        result = 492;
+                        Log.w(TAG, "Failed to close File:" + filename + ".", e11);
+                    }
+                }
+                return result;
+            } catch (IOException e12) {
+                e3 = e12;
+                rndAccessFile = rndAccessFile2;
+                result = 492;
+                Log.w(TAG, "Could not access File: " + filename + " .", e3);
+                if (rndAccessFile != null) {
+                    try {
+                        rndAccessFile.close();
+                    } catch (IOException e13) {
+                        result = 492;
+                        Log.w(TAG, "Failed to close File:" + filename + ".", e13);
+                    }
+                }
+                return result;
+            } catch (IllegalArgumentException e14) {
+                e2 = e14;
+                rndAccessFile = rndAccessFile2;
+                result = 492;
+                Log.w(TAG, "Could not open file in mode: rw", e2);
+                if (rndAccessFile != null) {
+                    try {
+                        rndAccessFile.close();
+                    } catch (IOException e15) {
+                        result = 492;
+                        Log.w(TAG, "Failed to close File:" + filename + ".", e15);
+                    }
+                }
+                return result;
+            } catch (SecurityException e16) {
+                e = e16;
+                rndAccessFile = rndAccessFile2;
+                Log.w(TAG, "Access to File: " + filename + " was denied denied by SecurityManager.", e);
+                if (rndAccessFile != null) {
+                    try {
+                        rndAccessFile.close();
+                    } catch (IOException e17) {
+                        result = 492;
+                        Log.w(TAG, "Failed to close File:" + filename + ".", e17);
+                    }
+                }
+                return result;
+            } catch (Throwable th3) {
+                th = th3;
+                rndAccessFile = rndAccessFile2;
+                if (rndAccessFile != null) {
+                    try {
+                        rndAccessFile.close();
+                    } catch (IOException e18) {
+                        result = 492;
+                        Log.w(TAG, "Failed to close File:" + filename + ".", e18);
+                    }
+                }
+                throw th;
+            }
+            return result;
+        } catch (IllegalStateException e19) {
+            Log.w(TAG, "Could not close convertsession. Convertsession: " + this.mConvertSessionId, e19);
+            return result;
+        }
     }
 }

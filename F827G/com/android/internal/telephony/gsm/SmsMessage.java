@@ -7,21 +7,21 @@ import android.text.TextUtils;
 import android.text.format.Time;
 import com.android.internal.telephony.EncodeException;
 import com.android.internal.telephony.GsmAlphabet;
-import com.android.internal.telephony.GsmAlphabet.TextEncodingDetails;
 import com.android.internal.telephony.Sms7BitEncodingTranslator;
-import com.android.internal.telephony.SmsConstants.MessageClass;
+import com.android.internal.telephony.SmsConstants;
 import com.android.internal.telephony.SmsHeader;
-import com.android.internal.telephony.SmsHeader.PortAddrs;
 import com.android.internal.telephony.SmsMessageBase;
-import com.android.internal.telephony.SmsMessageBase.SubmitPduBase;
 import com.android.internal.telephony.uicc.IccUtils;
 import com.google.android.mms.pdu.CharacterSets;
 import com.google.android.mms.pdu.PduHeaders;
 import java.io.ByteArrayOutputStream;
 import java.io.UnsupportedEncodingException;
 import java.text.ParseException;
+import java.util.Iterator;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 import jp.co.sharp.telephony.OemGsmTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsMessage extends SmsMessageBase {
     private static final int INVALID_VALIDITY_PERIOD = -1;
     static final String LOG_TAG = "SmsMessage";
@@ -33,995 +33,792 @@ public class SmsMessage extends SmsMessageBase {
     private static final int VALIDITY_PERIOD_MIN = 5;
     private static final boolean VDBG = false;
     private int mDataCodingScheme;
-    private boolean mIsStatusReportMessage = false;
     private int mMti;
     private int mProtocolIdentifier;
-    private boolean mReplyPathPresent = false;
     private int mStatus;
+    private SmsConstants.MessageClass messageClass;
+    private boolean mReplyPathPresent = false;
+    private boolean mIsStatusReportMessage = false;
     private int mVoiceMailCount = 0;
-    private MessageClass messageClass;
 
-    private static class PduParser {
-        int mCur = 0;
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class SubmitPdu extends SmsMessageBase.SubmitPduBase {
+    }
+
+    public static SmsMessage createFromPdu(byte[] pdu) {
+        try {
+            SmsMessage msg = new SmsMessage();
+            msg.parsePdu(pdu);
+            return msg;
+        } catch (OutOfMemoryError e) {
+            Rlog.e(LOG_TAG, "SMS PDU parsing failed with out of memory: ", e);
+            return null;
+        } catch (RuntimeException ex) {
+            Rlog.e(LOG_TAG, "SMS PDU parsing failed: ", ex);
+            return null;
+        }
+    }
+
+    public boolean isTypeZero() {
+        return this.mProtocolIdentifier == 64;
+    }
+
+    public static SmsMessage newFromCMT(String[] lines) {
+        try {
+            SmsMessage msg = new SmsMessage();
+            msg.parsePdu(IccUtils.hexStringToBytes(lines[1]));
+            return msg;
+        } catch (RuntimeException ex) {
+            Rlog.e(LOG_TAG, "SMS PDU parsing failed: ", ex);
+            return null;
+        }
+    }
+
+    public static SmsMessage newFromCDS(String line) {
+        try {
+            SmsMessage msg = new SmsMessage();
+            msg.parsePdu(IccUtils.hexStringToBytes(line));
+            return msg;
+        } catch (RuntimeException ex) {
+            Rlog.e(LOG_TAG, "CDS SMS PDU parsing failed: ", ex);
+            return null;
+        }
+    }
+
+    public static SmsMessage createFromEfRecord(int index, byte[] data) {
+        try {
+            SmsMessage msg = new SmsMessage();
+            msg.mIndexOnIcc = index;
+            if ((data[0] & 1) == 0) {
+                Rlog.w(LOG_TAG, "SMS parsing failed: Trying to parse a free record");
+                msg = null;
+            } else {
+                msg.mStatusOnIcc = data[0] & 7;
+                int size = data.length - 1;
+                byte[] pdu = new byte[size];
+                System.arraycopy(data, 1, pdu, 0, size);
+                msg.parsePdu(pdu);
+            }
+            return msg;
+        } catch (RuntimeException ex) {
+            Rlog.e(LOG_TAG, "SMS PDU parsing failed: ", ex);
+            return null;
+        }
+    }
+
+    public static int getTPLayerLengthForPDU(String pdu) {
+        return ((pdu.length() / 2) - Integer.parseInt(pdu.substring(0, 2), 16)) - 1;
+    }
+
+    public static int getRelativeValidityPeriod(int validityPeriod) {
+        int relValidityPeriod = -1;
+        if (validityPeriod < 5 || validityPeriod > VALIDITY_PERIOD_MAX) {
+            Rlog.e(LOG_TAG, "Invalid Validity Period" + validityPeriod);
+            return -1;
+        }
+        if (validityPeriod <= 720) {
+            relValidityPeriod = (validityPeriod / 5) - 1;
+        } else if (validityPeriod <= 1440) {
+            relValidityPeriod = ((validityPeriod - 720) / 30) + 143;
+        } else if (validityPeriod <= 43200) {
+            relValidityPeriod = (validityPeriod / 1440) + PduHeaders.STORE_STATUS_TEXT;
+        } else if (validityPeriod <= VALIDITY_PERIOD_MAX) {
+            relValidityPeriod = (validityPeriod / 10080) + 192;
+        }
+        return relValidityPeriod;
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested, byte[] header) {
+        return getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, header, 0, 0, 0);
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested, byte[] header, int encoding, int languageTable, int languageShiftTable) {
+        return getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, header, encoding, languageTable, languageShiftTable, -1);
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested, byte[] header, int encoding, int languageTable, int languageShiftTable, int validityPeriod) {
+        byte[] userData;
+        if (message == null || destinationAddress == null) {
+            return null;
+        }
+        if (encoding == 0) {
+            GsmAlphabet.TextEncodingDetails ted = calculateLength(message, false);
+            encoding = ted.codeUnitSize;
+            languageTable = ted.languageTable;
+            languageShiftTable = ted.languageShiftTable;
+            if (encoding == 1 && !(languageTable == 0 && languageShiftTable == 0)) {
+                if (header != null) {
+                    SmsHeader smsHeader = SmsHeader.fromByteArray(header);
+                    if (!(smsHeader.languageTable == languageTable && smsHeader.languageShiftTable == languageShiftTable)) {
+                        Rlog.w(LOG_TAG, "Updating language table in SMS header: " + smsHeader.languageTable + " -> " + languageTable + ", " + smsHeader.languageShiftTable + " -> " + languageShiftTable);
+                        smsHeader.languageTable = languageTable;
+                        smsHeader.languageShiftTable = languageShiftTable;
+                        header = SmsHeader.toByteArray(smsHeader);
+                    }
+                } else {
+                    SmsHeader smsHeader2 = new SmsHeader();
+                    smsHeader2.languageTable = languageTable;
+                    smsHeader2.languageShiftTable = languageShiftTable;
+                    header = SmsHeader.toByteArray(smsHeader2);
+                }
+            }
+        }
+        SubmitPdu ret = new SubmitPdu();
+        int validityPeriodFormat = 0;
+        int relativeValidityPeriod = getRelativeValidityPeriod(validityPeriod);
+        if (relativeValidityPeriod >= 0) {
+            validityPeriodFormat = 2;
+        }
+        ByteArrayOutputStream bo = getSubmitPduHead(scAddress, destinationAddress, (byte) ((header != null ? 64 : 0) | 17), statusReportRequested, ret);
+        try {
+            if (encoding == 1) {
+                userData = GsmAlphabet.stringToGsm7BitPackedWithHeader(message, header, languageTable, languageShiftTable);
+            } else {
+                try {
+                    userData = encodeUCS2(message, header);
+                } catch (UnsupportedEncodingException uex) {
+                    Rlog.e(LOG_TAG, "Implausible UnsupportedEncodingException ", uex);
+                    return null;
+                }
+            }
+        } catch (EncodeException e) {
+            try {
+                userData = encodeUCS2(message, header);
+                encoding = 3;
+            } catch (UnsupportedEncodingException uex2) {
+                Rlog.e(LOG_TAG, "Implausible UnsupportedEncodingException ", uex2);
+                return null;
+            }
+        }
+        if (encoding == 1) {
+            if ((userData[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) > 160) {
+                Rlog.e(LOG_TAG, "Message too long (" + (userData[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) + " septets)");
+                return null;
+            }
+            bo.write(0);
+        } else if ((userData[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) > 140) {
+            Rlog.e(LOG_TAG, "Message too long (" + (userData[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) + " bytes)");
+            return null;
+        } else {
+            bo.write(8);
+        }
+        if (validityPeriodFormat == 2) {
+            bo.write(relativeValidityPeriod);
+        } else {
+            bo.write(PduHeaders.TOTALS);
+        }
+        bo.write(userData, 0, userData.length);
+        ret.encodedMessage = bo.toByteArray();
+        return ret;
+    }
+
+    private static byte[] encodeUCS2(String message, byte[] header) throws UnsupportedEncodingException {
+        byte[] userData;
+        byte[] textPart = message.getBytes("utf-16be");
+        if (header != null) {
+            userData = new byte[header.length + textPart.length + 1];
+            userData[0] = (byte) header.length;
+            System.arraycopy(header, 0, userData, 1, header.length);
+            System.arraycopy(textPart, 0, userData, header.length + 1, textPart.length);
+        } else {
+            userData = textPart;
+        }
+        byte[] ret = new byte[userData.length + 1];
+        ret[0] = (byte) (userData.length & 255);
+        System.arraycopy(userData, 0, ret, 1, userData.length);
+        return ret;
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested) {
+        return getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, (byte[]) null);
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested, int validityPeriod) {
+        return getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, null, 0, 0, 0, validityPeriod);
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, int destinationPort, byte[] data, boolean statusReportRequested) {
+        return getSubmitPdu(scAddress, destinationAddress, destinationPort, 0, data, statusReportRequested);
+    }
+
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, int destinationPort, int originatorPort, byte[] data, boolean statusReportRequested) {
+        SmsHeader.PortAddrs portAddrs = new SmsHeader.PortAddrs();
+        portAddrs.destPort = destinationPort;
+        portAddrs.origPort = originatorPort;
+        portAddrs.areEightBits = false;
+        SmsHeader smsHeader = new SmsHeader();
+        smsHeader.portAddrs = portAddrs;
+        byte[] smsHeaderData = SmsHeader.toByteArray(smsHeader);
+        if (data.length + smsHeaderData.length + 1 > 140) {
+            Rlog.e(LOG_TAG, "SMS data message may only contain " + ((140 - smsHeaderData.length) - 1) + " bytes");
+            return null;
+        }
+        SubmitPdu ret = new SubmitPdu();
+        ByteArrayOutputStream bo = getSubmitPduHead(scAddress, destinationAddress, (byte) 65, statusReportRequested, ret);
+        bo.write(4);
+        bo.write(data.length + smsHeaderData.length + 1);
+        bo.write(smsHeaderData.length);
+        bo.write(smsHeaderData, 0, smsHeaderData.length);
+        bo.write(data, 0, data.length);
+        ret.encodedMessage = bo.toByteArray();
+        return ret;
+    }
+
+    private static ByteArrayOutputStream getSubmitPduHead(String scAddress, String destinationAddress, byte mtiByte, boolean statusReportRequested, SubmitPdu ret) {
+        ByteArrayOutputStream bo = new ByteArrayOutputStream(PduHeaders.RECOMMENDED_RETRIEVAL_MODE);
+        if (scAddress == null) {
+            ret.encodedScAddress = null;
+        } else {
+            ret.encodedScAddress = PhoneNumberUtils.networkPortionToCalledPartyBCDWithLength(scAddress);
+        }
+        if (statusReportRequested) {
+            mtiByte = (byte) (mtiByte | 32);
+        }
+        bo.write(mtiByte);
+        bo.write(0);
+        byte[] daBytes = PhoneNumberUtils.networkPortionToCalledPartyBCD(destinationAddress);
+        bo.write(((daBytes.length - 1) * 2) - ((daBytes[daBytes.length + (-1)] & 240) == 240 ? 1 : 0));
+        bo.write(daBytes, 0, daBytes.length);
+        bo.write(0);
+        return bo;
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public static class PduParser {
         byte[] mPdu;
         byte[] mUserData;
         SmsHeader mUserDataHeader;
+        int mCur = 0;
         int mUserDataSeptetPadding = 0;
 
-        PduParser(byte[] bArr) {
-            this.mPdu = bArr;
+        PduParser(byte[] pdu) {
+            this.mPdu = pdu;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public int constructUserData(boolean z, boolean z2) {
-            int i;
-            int i2;
-            int i3 = this.mCur;
-            int i4 = i3 + 1;
-            int i5 = this.mPdu[i3] & 255;
-            if (z) {
-                try {
-                    i = i4 + 1;
-                    i2 = this.mPdu[i4] & 255;
-                    byte[] bArr = new byte[i2];
-                    System.arraycopy(this.mPdu, i, bArr, 0, i2);
-                    this.mUserDataHeader = SmsHeader.fromByteArray(bArr);
-                    i3 = i + i2;
-                    i = (i2 + 1) * 8;
-                    i4 = (i % 7 > 0 ? 1 : 0) + (i / 7);
-                    this.mUserDataSeptetPadding = (i4 * 7) - i;
-                    i = i4;
-                } catch (Exception e) {
-                    throw new RuntimeException(e.getMessage());
-                }
-            }
-            i3 = i4;
-            i = 0;
-            i2 = 0;
-            if (z2) {
-                i4 = this.mPdu.length - i3;
+        String getSCAddress() {
+            String ret;
+            int len = getByte();
+            if (len == 0) {
+                ret = null;
             } else {
-                i4 = i5 - (z ? i2 + 1 : 0);
-                if (i4 < 0) {
-                    i4 = 0;
+                try {
+                    ret = PhoneNumberUtils.calledPartyBCDToString(this.mPdu, this.mCur, len);
+                } catch (RuntimeException tr) {
+                    Rlog.d(SmsMessage.LOG_TAG, "invalid SC address: ", tr);
+                    ret = null;
                 }
             }
-            this.mUserData = new byte[i4];
-            System.arraycopy(this.mPdu, i3, this.mUserData, 0, this.mUserData.length);
-            this.mCur = i3;
-            if (!z2) {
-                return this.mUserData.length;
-            }
-            i4 = i5 - i;
-            return i4 < 0 ? 0 : i4;
+            this.mCur += len;
+            return ret;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public GsmSmsAddress getAddress() {
-            int i = (((this.mPdu[this.mCur] & 255) + 1) / 2) + 2;
+        int getByte() {
+            byte[] bArr = this.mPdu;
+            int i = this.mCur;
+            this.mCur = i + 1;
+            return bArr[i] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+        }
+
+        GsmSmsAddress getAddress() {
+            int lengthBytes = (((this.mPdu[this.mCur] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) + 1) / 2) + 2;
             try {
-                GsmSmsAddress gsmSmsAddress = new GsmSmsAddress(this.mPdu, this.mCur, i);
-                this.mCur = i + this.mCur;
-                return gsmSmsAddress;
+                GsmSmsAddress ret = new GsmSmsAddress(this.mPdu, this.mCur, lengthBytes);
+                this.mCur += lengthBytes;
+                return ret;
             } catch (ParseException e) {
                 throw new RuntimeException(e.getMessage());
             }
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public int getByte() {
+        long getSCTimestampMillis() {
             byte[] bArr = this.mPdu;
             int i = this.mCur;
             this.mCur = i + 1;
-            return bArr[i] & 255;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public String getSCAddress() {
-            String str = null;
-            int i = getByte();
-            if (i != 0) {
-                try {
-                    str = PhoneNumberUtils.calledPartyBCDToString(this.mPdu, this.mCur, i);
-                } catch (RuntimeException e) {
-                    Rlog.d(SmsMessage.LOG_TAG, "invalid SC address: ", e);
-                }
-            }
-            this.mCur += i;
-            return str;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public long getSCTimestampMillis() {
-            byte[] bArr = this.mPdu;
-            int i = this.mCur;
-            this.mCur = i + 1;
-            i = IccUtils.gsmBcdByteToInt(bArr[i]);
-            bArr = this.mPdu;
+            int year = IccUtils.gsmBcdByteToInt(bArr[i]);
+            byte[] bArr2 = this.mPdu;
             int i2 = this.mCur;
             this.mCur = i2 + 1;
-            i2 = IccUtils.gsmBcdByteToInt(bArr[i2]);
-            bArr = this.mPdu;
+            int month = IccUtils.gsmBcdByteToInt(bArr2[i2]);
+            byte[] bArr3 = this.mPdu;
             int i3 = this.mCur;
             this.mCur = i3 + 1;
-            i3 = IccUtils.gsmBcdByteToInt(bArr[i3]);
-            bArr = this.mPdu;
+            int day = IccUtils.gsmBcdByteToInt(bArr3[i3]);
+            byte[] bArr4 = this.mPdu;
             int i4 = this.mCur;
             this.mCur = i4 + 1;
-            i4 = IccUtils.gsmBcdByteToInt(bArr[i4]);
-            bArr = this.mPdu;
+            int hour = IccUtils.gsmBcdByteToInt(bArr4[i4]);
+            byte[] bArr5 = this.mPdu;
             int i5 = this.mCur;
             this.mCur = i5 + 1;
-            i5 = IccUtils.gsmBcdByteToInt(bArr[i5]);
-            bArr = this.mPdu;
+            int minute = IccUtils.gsmBcdByteToInt(bArr5[i5]);
+            byte[] bArr6 = this.mPdu;
             int i6 = this.mCur;
             this.mCur = i6 + 1;
-            i6 = IccUtils.gsmBcdByteToInt(bArr[i6]);
-            bArr = this.mPdu;
+            int second = IccUtils.gsmBcdByteToInt(bArr6[i6]);
+            byte[] bArr7 = this.mPdu;
             int i7 = this.mCur;
             this.mCur = i7 + 1;
-            byte b = bArr[i7];
-            int gsmBcdByteToInt = IccUtils.gsmBcdByteToInt((byte) (b & -9));
-            if ((b & 8) != 0) {
-                gsmBcdByteToInt = -gsmBcdByteToInt;
+            byte tzByte = bArr7[i7];
+            int timezoneOffset = IccUtils.gsmBcdByteToInt((byte) (tzByte & (-9)));
+            if ((tzByte & 8) != 0) {
+                timezoneOffset = -timezoneOffset;
             }
             Time time = new Time("UTC");
-            time.year = i >= 90 ? i + OemGsmTelephonyManager.GSM_1900 : i + 2000;
-            time.month = i2 - 1;
-            time.monthDay = i3;
-            time.hour = i4;
-            time.minute = i5;
-            time.second = i6;
-            return time.toMillis(true) - ((long) (((gsmBcdByteToInt * 15) * 60) * 1000));
+            time.year = year >= 90 ? year + OemGsmTelephonyManager.GSM_1900 : year + 2000;
+            time.month = month - 1;
+            time.monthDay = day;
+            time.hour = hour;
+            time.minute = minute;
+            time.second = second;
+            return time.toMillis(true) - (((timezoneOffset * 15) * 60) * 1000);
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public byte[] getUserData() {
+        int constructUserData(boolean hasUserDataHeader, boolean dataInSeptets) {
+            Exception e;
+            int offset;
+            int offset2;
+            int bufferLen;
+            int offset3 = this.mCur;
+            int offset4 = offset3 + 1;
+            int userDataLength = this.mPdu[offset3] & 255;
+            int headerSeptets = 0;
+            int userDataHeaderLength = 0;
+            if (hasUserDataHeader) {
+                try {
+                    offset = offset4 + 1;
+                } catch (Exception e2) {
+                    e = e2;
+                }
+                try {
+                    userDataHeaderLength = this.mPdu[offset4] & 255;
+                    byte[] udh = new byte[userDataHeaderLength];
+                    System.arraycopy(this.mPdu, offset, udh, 0, userDataHeaderLength);
+                    this.mUserDataHeader = SmsHeader.fromByteArray(udh);
+                    offset2 = offset + userDataHeaderLength;
+                    int headerBits = (userDataHeaderLength + 1) * 8;
+                    headerSeptets = (headerBits / 7) + (headerBits % 7 > 0 ? 1 : 0);
+                    this.mUserDataSeptetPadding = (headerSeptets * 7) - headerBits;
+                } catch (Exception e3) {
+                    e = e3;
+                    throw new RuntimeException(e.getMessage());
+                }
+            } else {
+                offset2 = offset4;
+            }
+            if (dataInSeptets) {
+                bufferLen = this.mPdu.length - offset2;
+            } else {
+                bufferLen = userDataLength - (hasUserDataHeader ? userDataHeaderLength + 1 : 0);
+                if (bufferLen < 0) {
+                    bufferLen = 0;
+                }
+            }
+            this.mUserData = new byte[bufferLen];
+            System.arraycopy(this.mPdu, offset2, this.mUserData, 0, this.mUserData.length);
+            this.mCur = offset2;
+            if (!dataInSeptets) {
+                return this.mUserData.length;
+            }
+            int count = userDataLength - headerSeptets;
+            if (count < 0) {
+                return 0;
+            }
+            return count;
+        }
+
+        byte[] getUserData() {
             return this.mUserData;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public String getUserDataGSM7Bit(int i, int i2, int i3) {
-            String gsm7BitPackedToString = GsmAlphabet.gsm7BitPackedToString(this.mPdu, this.mCur, i, this.mUserDataSeptetPadding, i2, i3);
-            this.mCur += (i * 7) / 8;
-            return gsm7BitPackedToString;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public String getUserDataGSM8bit(int i) {
-            String gsm8BitUnpackedToString = GsmAlphabet.gsm8BitUnpackedToString(this.mPdu, this.mCur, i);
-            this.mCur += i;
-            return gsm8BitUnpackedToString;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public SmsHeader getUserDataHeader() {
+        SmsHeader getUserDataHeader() {
             return this.mUserDataHeader;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public String getUserDataKSC5601(int i) {
-            String str;
-            try {
-                str = new String(this.mPdu, this.mCur, i, "KSC5601");
-            } catch (UnsupportedEncodingException e) {
-                Throwable th = e;
-                str = "";
-                Rlog.e(SmsMessage.LOG_TAG, "implausible UnsupportedEncodingException", th);
-            }
-            this.mCur += i;
-            return str;
+        String getUserDataGSM7Bit(int septetCount, int languageTable, int languageShiftTable) {
+            String ret = GsmAlphabet.gsm7BitPackedToString(this.mPdu, this.mCur, septetCount, this.mUserDataSeptetPadding, languageTable, languageShiftTable);
+            this.mCur += (septetCount * 7) / 8;
+            return ret;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public String getUserDataUCS2(int i) {
-            String str;
-            try {
-                str = new String(this.mPdu, this.mCur, i, CharacterSets.MIMENAME_UTF_16);
-            } catch (UnsupportedEncodingException e) {
-                Throwable th = e;
-                str = "";
-                Rlog.e(SmsMessage.LOG_TAG, "implausible UnsupportedEncodingException", th);
-            }
-            this.mCur += i;
-            return str;
+        String getUserDataGSM8bit(int byteCount) {
+            String ret = GsmAlphabet.gsm8BitUnpackedToString(this.mPdu, this.mCur, byteCount);
+            this.mCur += byteCount;
+            return ret;
         }
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean moreDataPresent() {
+        String getUserDataUCS2(int byteCount) {
+            String ret;
+            try {
+                ret = new String(this.mPdu, this.mCur, byteCount, CharacterSets.MIMENAME_UTF_16);
+            } catch (UnsupportedEncodingException ex) {
+                ret = "";
+                Rlog.e(SmsMessage.LOG_TAG, "implausible UnsupportedEncodingException", ex);
+            }
+            this.mCur += byteCount;
+            return ret;
+        }
+
+        String getUserDataKSC5601(int byteCount) {
+            String ret;
+            try {
+                ret = new String(this.mPdu, this.mCur, byteCount, "KSC5601");
+            } catch (UnsupportedEncodingException ex) {
+                ret = "";
+                Rlog.e(SmsMessage.LOG_TAG, "implausible UnsupportedEncodingException", ex);
+            }
+            this.mCur += byteCount;
+            return ret;
+        }
+
+        boolean moreDataPresent() {
             return this.mPdu.length > this.mCur;
         }
     }
 
-    public static class SubmitPdu extends SubmitPduBase {
-    }
-
-    public static TextEncodingDetails calculateLength(CharSequence charSequence, boolean z) {
-        CharSequence charSequence2 = null;
+    public static GsmAlphabet.TextEncodingDetails calculateLength(CharSequence msgBody, boolean use7bitOnly) {
+        CharSequence newMsgBody = null;
         if (Resources.getSystem().getBoolean(17957010)) {
-            charSequence2 = Sms7BitEncodingTranslator.translate(charSequence);
+            newMsgBody = Sms7BitEncodingTranslator.translate(msgBody);
         }
-        if (!TextUtils.isEmpty(charSequence2)) {
-            charSequence = charSequence2;
+        if (TextUtils.isEmpty(newMsgBody)) {
+            newMsgBody = msgBody;
         }
-        TextEncodingDetails countGsmSeptets = GsmAlphabet.countGsmSeptets(charSequence, z);
-        if (countGsmSeptets != null) {
-            return countGsmSeptets;
-        }
-        TextEncodingDetails textEncodingDetails = new TextEncodingDetails();
-        int length = charSequence.length() * 2;
-        textEncodingDetails.codeUnitCount = charSequence.length();
-        if (length > 140) {
-            int i = 134;
-            if (!android.telephony.SmsMessage.hasEmsSupport() && length <= 1188) {
-                i = 132;
-            }
-            textEncodingDetails.msgCount = ((i - 1) + length) / i;
-            textEncodingDetails.codeUnitsRemaining = ((i * textEncodingDetails.msgCount) - length) / 2;
-        } else {
-            textEncodingDetails.msgCount = 1;
-            textEncodingDetails.codeUnitsRemaining = (140 - length) / 2;
-        }
-        textEncodingDetails.codeUnitSize = 3;
-        return textEncodingDetails;
-    }
-
-    public static SmsMessage createFromEfRecord(int i, byte[] bArr) {
-        try {
-            SmsMessage smsMessage = new SmsMessage();
-            smsMessage.mIndexOnIcc = i;
-            if ((bArr[0] & 1) == 0) {
-                Rlog.w(LOG_TAG, "SMS parsing failed: Trying to parse a free record");
-                return null;
-            }
-            smsMessage.mStatusOnIcc = bArr[0] & 7;
-            int length = bArr.length - 1;
-            byte[] bArr2 = new byte[length];
-            System.arraycopy(bArr, 1, bArr2, 0, length);
-            smsMessage.parsePdu(bArr2);
-            return smsMessage;
-        } catch (RuntimeException e) {
-            Rlog.e(LOG_TAG, "SMS PDU parsing failed: ", e);
-            return null;
-        }
-    }
-
-    public static SmsMessage createFromPdu(byte[] bArr) {
-        try {
-            SmsMessage smsMessage = new SmsMessage();
-            smsMessage.parsePdu(bArr);
-            return smsMessage;
-        } catch (RuntimeException e) {
-            Rlog.e(LOG_TAG, "SMS PDU parsing failed: ", e);
-            return null;
-        } catch (OutOfMemoryError e2) {
-            Rlog.e(LOG_TAG, "SMS PDU parsing failed with out of memory: ", e2);
-            return null;
-        }
-    }
-
-    private static byte[] encodeUCS2(String str, byte[] bArr) throws UnsupportedEncodingException {
-        byte[] bArr2;
-        byte[] bytes = str.getBytes("utf-16be");
-        if (bArr != null) {
-            bArr2 = new byte[((bArr.length + bytes.length) + 1)];
-            bArr2[0] = (byte) bArr.length;
-            System.arraycopy(bArr, 0, bArr2, 1, bArr.length);
-            System.arraycopy(bytes, 0, bArr2, bArr.length + 1, bytes.length);
-        } else {
-            bArr2 = bytes;
-        }
-        bytes = new byte[(bArr2.length + 1)];
-        bytes[0] = (byte) (bArr2.length & 255);
-        System.arraycopy(bArr2, 0, bytes, 1, bArr2.length);
-        return bytes;
-    }
-
-    public static int getRelativeValidityPeriod(int i) {
-        if (i >= 5 && i <= VALIDITY_PERIOD_MAX) {
-            return i <= 720 ? (i / 5) - 1 : i <= 1440 ? ((i - 720) / 30) + 143 : i <= 43200 ? (i / 1440) + PduHeaders.STORE_STATUS_TEXT : i <= VALIDITY_PERIOD_MAX ? (i / 10080) + 192 : -1;
-        } else {
-            Rlog.e(LOG_TAG, "Invalid Validity Period" + i);
-            return -1;
-        }
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, int i, int i2, byte[] bArr, boolean z) {
-        PortAddrs portAddrs = new PortAddrs();
-        portAddrs.destPort = i;
-        portAddrs.origPort = i2;
-        portAddrs.areEightBits = false;
-        SmsHeader smsHeader = new SmsHeader();
-        smsHeader.portAddrs = portAddrs;
-        byte[] toByteArray = SmsHeader.toByteArray(smsHeader);
-        if ((bArr.length + toByteArray.length) + 1 > 140) {
-            Rlog.e(LOG_TAG, "SMS data message may only contain " + ((140 - toByteArray.length) - 1) + " bytes");
-            return null;
-        }
-        SubmitPdu submitPdu = new SubmitPdu();
-        ByteArrayOutputStream submitPduHead = getSubmitPduHead(str, str2, (byte) 65, z, submitPdu);
-        submitPduHead.write(4);
-        submitPduHead.write((bArr.length + toByteArray.length) + 1);
-        submitPduHead.write(toByteArray.length);
-        submitPduHead.write(toByteArray, 0, toByteArray.length);
-        submitPduHead.write(bArr, 0, bArr.length);
-        submitPdu.encodedMessage = submitPduHead.toByteArray();
-        return submitPdu;
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, int i, byte[] bArr, boolean z) {
-        return getSubmitPdu(str, str2, i, 0, bArr, z);
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z) {
-        return getSubmitPdu(str, str2, str3, z, null);
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z, int i) {
-        return getSubmitPdu(str, str2, str3, z, null, 0, 0, 0, i);
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z, byte[] bArr) {
-        return getSubmitPdu(str, str2, str3, z, bArr, 0, 0, 0);
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z, byte[] bArr, int i, int i2, int i3) {
-        return getSubmitPdu(str, str2, str3, z, bArr, i, i2, i3, -1);
-    }
-
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z, byte[] bArr, int i, int i2, int i3, int i4) {
-        if (str3 == null || str2 == null) {
-            return null;
-        }
-        byte[] stringToGsm7BitPackedWithHeader;
-        if (i == 0) {
-            TextEncodingDetails calculateLength = calculateLength(str3, false);
-            i = calculateLength.codeUnitSize;
-            i2 = calculateLength.languageTable;
-            i3 = calculateLength.languageShiftTable;
-            if (i == 1 && !(i2 == 0 && i3 == 0)) {
-                SmsHeader fromByteArray;
-                if (bArr != null) {
-                    fromByteArray = SmsHeader.fromByteArray(bArr);
-                    if (!(fromByteArray.languageTable == i2 && fromByteArray.languageShiftTable == i3)) {
-                        Rlog.w(LOG_TAG, "Updating language table in SMS header: " + fromByteArray.languageTable + " -> " + i2 + ", " + fromByteArray.languageShiftTable + " -> " + i3);
-                        fromByteArray.languageTable = i2;
-                        fromByteArray.languageShiftTable = i3;
-                        bArr = SmsHeader.toByteArray(fromByteArray);
-                    }
-                } else {
-                    fromByteArray = new SmsHeader();
-                    fromByteArray.languageTable = i2;
-                    fromByteArray.languageShiftTable = i3;
-                    bArr = SmsHeader.toByteArray(fromByteArray);
+        GsmAlphabet.TextEncodingDetails ted = GsmAlphabet.countGsmSeptets(newMsgBody, use7bitOnly);
+        if (ted == null) {
+            ted = new GsmAlphabet.TextEncodingDetails();
+            int octets = newMsgBody.length() * 2;
+            ted.codeUnitCount = newMsgBody.length();
+            if (octets > 140) {
+                int max_user_data_bytes_with_header = 134;
+                if (!android.telephony.SmsMessage.hasEmsSupport() && octets <= 1188) {
+                    max_user_data_bytes_with_header = 134 - 2;
                 }
+                ted.msgCount = ((max_user_data_bytes_with_header - 1) + octets) / max_user_data_bytes_with_header;
+                ted.codeUnitsRemaining = ((ted.msgCount * max_user_data_bytes_with_header) - octets) / 2;
+            } else {
+                ted.msgCount = 1;
+                ted.codeUnitsRemaining = (140 - octets) / 2;
             }
+            ted.codeUnitSize = 3;
         }
-        SubmitPdu submitPdu = new SubmitPdu();
-        int relativeValidityPeriod = getRelativeValidityPeriod(i4);
-        int i5 = relativeValidityPeriod >= 0 ? 2 : 0;
-        ByteArrayOutputStream submitPduHead = getSubmitPduHead(str, str2, (byte) ((bArr != null ? 64 : 0) | 17), z, submitPdu);
-        if (i == 1) {
-            try {
-                stringToGsm7BitPackedWithHeader = GsmAlphabet.stringToGsm7BitPackedWithHeader(str3, bArr, i2, i3);
-            } catch (EncodeException e) {
-                try {
-                    stringToGsm7BitPackedWithHeader = encodeUCS2(str3, bArr);
-                    i = 3;
-                } catch (UnsupportedEncodingException e2) {
-                    Rlog.e(LOG_TAG, "Implausible UnsupportedEncodingException ", e2);
-                    return null;
-                }
-            }
-        }
-        try {
-            stringToGsm7BitPackedWithHeader = encodeUCS2(str3, bArr);
-        } catch (UnsupportedEncodingException e22) {
-            Rlog.e(LOG_TAG, "Implausible UnsupportedEncodingException ", e22);
-            return null;
-        }
-        if (i == 1) {
-            if ((stringToGsm7BitPackedWithHeader[0] & 255) > 160) {
-                Rlog.e(LOG_TAG, "Message too long (" + (stringToGsm7BitPackedWithHeader[0] & 255) + " septets)");
-                return null;
-            }
-            submitPduHead.write(0);
-        } else if ((stringToGsm7BitPackedWithHeader[0] & 255) > 140) {
-            Rlog.e(LOG_TAG, "Message too long (" + (stringToGsm7BitPackedWithHeader[0] & 255) + " bytes)");
-            return null;
-        } else {
-            submitPduHead.write(8);
-        }
-        if (i5 == 2) {
-            submitPduHead.write(relativeValidityPeriod);
-        } else {
-            submitPduHead.write(PduHeaders.TOTALS);
-        }
-        submitPduHead.write(stringToGsm7BitPackedWithHeader, 0, stringToGsm7BitPackedWithHeader.length);
-        submitPdu.encodedMessage = submitPduHead.toByteArray();
-        return submitPdu;
+        return ted;
     }
 
-    private static ByteArrayOutputStream getSubmitPduHead(String str, String str2, byte b, boolean z, SubmitPdu submitPdu) {
-        int b2;
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(PduHeaders.RECOMMENDED_RETRIEVAL_MODE);
-        if (str == null) {
-            submitPdu.encodedScAddress = null;
-        } else {
-            submitPdu.encodedScAddress = PhoneNumberUtils.networkPortionToCalledPartyBCDWithLength(str);
-        }
-        if (z) {
-            b2 = (byte) (b2 | 32);
-        }
-        byteArrayOutputStream.write(b2);
-        byteArrayOutputStream.write(0);
-        byte[] networkPortionToCalledPartyBCD = PhoneNumberUtils.networkPortionToCalledPartyBCD(str2);
-        byteArrayOutputStream.write(((networkPortionToCalledPartyBCD.length - 1) * 2) - ((networkPortionToCalledPartyBCD[networkPortionToCalledPartyBCD.length + -1] & 240) == 240 ? 1 : 0));
-        byteArrayOutputStream.write(networkPortionToCalledPartyBCD, 0, networkPortionToCalledPartyBCD.length);
-        byteArrayOutputStream.write(0);
-        return byteArrayOutputStream;
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public int getProtocolIdentifier() {
+        return this.mProtocolIdentifier;
     }
 
-    public static int getTPLayerLengthForPDU(String str) {
-        return ((str.length() / 2) - Integer.parseInt(str.substring(0, 2), 16)) - 1;
+    public int getDataCodingScheme() {
+        return this.mDataCodingScheme;
     }
 
-    public static SmsMessage newFromCDS(String str) {
-        try {
-            SmsMessage smsMessage = new SmsMessage();
-            smsMessage.parsePdu(IccUtils.hexStringToBytes(str));
-            return smsMessage;
-        } catch (RuntimeException e) {
-            Rlog.e(LOG_TAG, "CDS SMS PDU parsing failed: ", e);
-            return null;
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isReplace() {
+        return (this.mProtocolIdentifier & 192) == 64 && (this.mProtocolIdentifier & 63) > 0 && (this.mProtocolIdentifier & 63) < 8;
+    }
+
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isCphsMwiMessage() {
+        return ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageClear() || ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageSet();
+    }
+
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isMWIClearMessage() {
+        if (this.mIsMwi && !this.mMwiSense) {
+            return true;
         }
+        return this.mOriginatingAddress != null && ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageClear();
     }
 
-    public static SmsMessage newFromCMT(String[] strArr) {
-        try {
-            SmsMessage smsMessage = new SmsMessage();
-            smsMessage.parsePdu(IccUtils.hexStringToBytes(strArr[1]));
-            return smsMessage;
-        } catch (RuntimeException e) {
-            Rlog.e(LOG_TAG, "SMS PDU parsing failed: ", e);
-            return null;
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isMWISetMessage() {
+        if (this.mIsMwi && this.mMwiSense) {
+            return true;
         }
+        return this.mOriginatingAddress != null && ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageSet();
     }
 
-    private void parsePdu(byte[] bArr) {
-        this.mPdu = bArr;
-        PduParser pduParser = new PduParser(bArr);
-        this.mScAddress = pduParser.getSCAddress();
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isMwiDontStore() {
+        if (this.mIsMwi && this.mMwiDontStore) {
+            return true;
+        }
+        if (!isCphsMwiMessage() || !" ".equals(getMessageBody())) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public int getStatus() {
+        return this.mStatus;
+    }
+
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isStatusReportMessage() {
+        return this.mIsStatusReportMessage;
+    }
+
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public boolean isReplyPathPresent() {
+        return this.mReplyPathPresent;
+    }
+
+    private void parsePdu(byte[] pdu) {
+        this.mPdu = pdu;
+        PduParser p = new PduParser(pdu);
+        this.mScAddress = p.getSCAddress();
         if (this.mScAddress != null) {
         }
-        int i = pduParser.getByte();
-        this.mMti = i & 3;
+        int firstByte = p.getByte();
+        this.mMti = firstByte & 3;
         switch (this.mMti) {
             case 0:
             case 3:
-                parseSmsDeliver(pduParser, i);
+                parseSmsDeliver(p, firstByte);
                 return;
             case 1:
-                parseSmsSubmit(pduParser, i);
+                parseSmsSubmit(p, firstByte);
                 return;
             case 2:
-                parseSmsStatusReport(pduParser, i);
+                parseSmsStatusReport(p, firstByte);
                 return;
             default:
                 throw new RuntimeException("Unsupported message type");
         }
     }
 
-    private void parseSmsDeliver(PduParser pduParser, int i) {
-        boolean z = true;
-        this.mReplyPathPresent = (i & 128) == 128;
-        this.mOriginatingAddress = pduParser.getAddress();
+    private void parseSmsStatusReport(PduParser p, int firstByte) {
+        boolean hasUserDataHeader = true;
+        this.mIsStatusReportMessage = true;
+        this.mMessageRef = p.getByte();
+        this.mRecipientAddress = p.getAddress();
+        this.mScTimeMillis = p.getSCTimestampMillis();
+        p.getSCTimestampMillis();
+        this.mStatus = p.getByte();
+        if (p.moreDataPresent()) {
+            int extraParams = p.getByte();
+            int moreExtraParams = extraParams;
+            while ((moreExtraParams & 128) != 0) {
+                moreExtraParams = p.getByte();
+            }
+            if ((extraParams & 120) == 0) {
+                if ((extraParams & 1) != 0) {
+                    this.mProtocolIdentifier = p.getByte();
+                }
+                if ((extraParams & 2) != 0) {
+                    this.mDataCodingScheme = p.getByte();
+                }
+                if ((extraParams & 4) != 0) {
+                    if ((firstByte & 64) != 64) {
+                        hasUserDataHeader = false;
+                    }
+                    parseUserData(p, hasUserDataHeader);
+                }
+            }
+        }
+    }
+
+    private void parseSmsDeliver(PduParser p, int firstByte) {
+        boolean z;
+        if ((firstByte & 128) == 128) {
+            z = true;
+        } else {
+            z = false;
+        }
+        this.mReplyPathPresent = z;
+        this.mOriginatingAddress = p.getAddress();
         if (this.mOriginatingAddress != null) {
         }
-        this.mProtocolIdentifier = pduParser.getByte();
-        this.mDataCodingScheme = pduParser.getByte();
-        this.mScTimeMillis = pduParser.getSCTimestampMillis();
-        if ((i & 64) != 64) {
+        this.mProtocolIdentifier = p.getByte();
+        this.mDataCodingScheme = p.getByte();
+        this.mScTimeMillis = p.getSCTimestampMillis();
+        parseUserData(p, (firstByte & 64) == 64);
+    }
+
+    private void parseSmsSubmit(PduParser p, int firstByte) {
+        boolean z;
+        int validityPeriodLength;
+        boolean hasUserDataHeader;
+        if ((firstByte & 128) == 128) {
+            z = true;
+        } else {
             z = false;
         }
-        parseUserData(pduParser, z);
-    }
-
-    private void parseSmsStatusReport(PduParser pduParser, int i) {
-        boolean z = true;
-        this.mIsStatusReportMessage = true;
-        this.mMessageRef = pduParser.getByte();
-        this.mRecipientAddress = pduParser.getAddress();
-        this.mScTimeMillis = pduParser.getSCTimestampMillis();
-        pduParser.getSCTimestampMillis();
-        this.mStatus = pduParser.getByte();
-        if (pduParser.moreDataPresent()) {
-            int i2 = pduParser.getByte();
-            int i3 = i2;
-            while ((i3 & 128) != 0) {
-                i3 = pduParser.getByte();
-            }
-            if ((i2 & 120) == 0) {
-                if ((i2 & 1) != 0) {
-                    this.mProtocolIdentifier = pduParser.getByte();
-                }
-                if ((i2 & 2) != 0) {
-                    this.mDataCodingScheme = pduParser.getByte();
-                }
-                if ((i2 & 4) != 0) {
-                    if ((i & 64) != 64) {
-                        z = false;
-                    }
-                    parseUserData(pduParser, z);
-                }
-            }
-        }
-    }
-
-    private void parseSmsSubmit(PduParser pduParser, int i) {
-        boolean z = true;
-        this.mReplyPathPresent = (i & 128) == 128;
-        this.mMessageRef = pduParser.getByte();
-        this.mRecipientAddress = pduParser.getAddress();
+        this.mReplyPathPresent = z;
+        this.mMessageRef = p.getByte();
+        this.mRecipientAddress = p.getAddress();
         if (this.mRecipientAddress != null) {
         }
-        this.mProtocolIdentifier = pduParser.getByte();
-        this.mDataCodingScheme = pduParser.getByte();
-        int i2 = (i >> 3) & 3;
-        i2 = i2 == 0 ? 0 : 2 == i2 ? 1 : 7;
-        while (i2 > 0) {
-            pduParser.getByte();
-            i2--;
+        this.mProtocolIdentifier = p.getByte();
+        this.mDataCodingScheme = p.getByte();
+        int validityPeriodFormat = (firstByte >> 3) & 3;
+        if (validityPeriodFormat == 0) {
+            validityPeriodLength = 0;
+        } else if (2 == validityPeriodFormat) {
+            validityPeriodLength = 1;
+        } else {
+            validityPeriodLength = 7;
         }
-        if ((i & 64) != 64) {
-            z = false;
+        while (true) {
+            validityPeriodLength--;
+            if (validityPeriodLength <= 0) {
+                break;
+            }
+            p.getByte();
         }
-        parseUserData(pduParser, z);
+        if ((firstByte & 64) == 64) {
+            hasUserDataHeader = true;
+        } else {
+            hasUserDataHeader = false;
+        }
+        parseUserData(p, hasUserDataHeader);
     }
 
-    /* JADX WARNING: Missing block: B:37:0x00dc, code skipped:
-            if (android.content.res.Resources.getSystem().getBoolean(17957005) == false) goto L_0x00de;
-     */
-    private void parseUserData(com.android.internal.telephony.gsm.SmsMessage.PduParser r13, boolean r14) {
-        /*
-        r12 = this;
-        r11 = 224; // 0xe0 float:3.14E-43 double:1.107E-321;
-        r10 = 128; // 0x80 float:1.794E-43 double:6.32E-322;
-        r4 = 2;
-        r2 = 0;
-        r1 = 1;
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 128;
-        if (r0 != 0) goto L_0x00fc;
-    L_0x000d:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 32;
-        if (r0 == 0) goto L_0x00b8;
-    L_0x0013:
-        r0 = r1;
-    L_0x0014:
-        r3 = r12.mDataCodingScheme;
-        r3 = r3 & 16;
-        if (r3 == 0) goto L_0x00bb;
-    L_0x001a:
-        r3 = r1;
-    L_0x001b:
-        if (r0 == 0) goto L_0x00be;
-    L_0x001d:
-        r0 = "SmsMessage";
-        r4 = new java.lang.StringBuilder;
-        r4.<init>();
-        r5 = "4 - Unsupported SMS data coding scheme (compression) ";
-        r4 = r4.append(r5);
-        r5 = r12.mDataCodingScheme;
-        r5 = r5 & 255;
-        r4 = r4.append(r5);
-        r4 = r4.toString();
-        android.telephony.Rlog.w(r0, r4);
-        r4 = r2;
-    L_0x003a:
-        if (r4 != r1) goto L_0x0205;
-    L_0x003c:
-        r0 = r1;
-    L_0x003d:
-        r5 = r13.constructUserData(r14, r0);
-        r0 = r13.getUserData();
-        r12.mUserData = r0;
-        r0 = r13.getUserDataHeader();
-        r12.mUserDataHeader = r0;
-        if (r14 == 0) goto L_0x0242;
-    L_0x004f:
-        r0 = r12.mUserDataHeader;
-        r0 = r0.specialSmsMsgList;
-        r0 = r0.size();
-        if (r0 == 0) goto L_0x0242;
-    L_0x0059:
-        r0 = r12.mUserDataHeader;
-        r0 = r0.specialSmsMsgList;
-        r6 = r0.iterator();
-    L_0x0061:
-        r0 = r6.hasNext();
-        if (r0 == 0) goto L_0x0242;
-    L_0x0067:
-        r0 = r6.next();
-        r0 = (com.android.internal.telephony.SmsHeader.SpecialSmsMsg) r0;
-        r7 = r0.msgIndType;
-        r7 = r7 & 255;
-        if (r7 == 0) goto L_0x0075;
-    L_0x0073:
-        if (r7 != r10) goto L_0x0228;
-    L_0x0075:
-        r12.mIsMwi = r1;
-        if (r7 != r10) goto L_0x0208;
-    L_0x0079:
-        r12.mMwiDontStore = r2;
-    L_0x007b:
-        r0 = r0.msgCount;
-        r0 = r0 & 255;
-        r12.mVoiceMailCount = r0;
-        r0 = r12.mVoiceMailCount;
-        if (r0 <= 0) goto L_0x0224;
-    L_0x0085:
-        r12.mMwiSense = r1;
-    L_0x0087:
-        r0 = "SmsMessage";
-        r8 = new java.lang.StringBuilder;
-        r8.<init>();
-        r9 = "MWI in TP-UDH for Vmail. Msg Ind = ";
-        r8 = r8.append(r9);
-        r7 = r8.append(r7);
-        r8 = " Dont store = ";
-        r7 = r7.append(r8);
-        r8 = r12.mMwiDontStore;
-        r7 = r7.append(r8);
-        r8 = " Vmail count = ";
-        r7 = r7.append(r8);
-        r8 = r12.mVoiceMailCount;
-        r7 = r7.append(r8);
-        r7 = r7.toString();
-        android.telephony.Rlog.w(r0, r7);
-        goto L_0x0061;
-    L_0x00b8:
-        r0 = r2;
-        goto L_0x0014;
-    L_0x00bb:
-        r3 = r2;
-        goto L_0x001b;
-    L_0x00be:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 >> 2;
-        r0 = r0 & 3;
-        switch(r0) {
-            case 0: goto L_0x00ca;
-            case 1: goto L_0x00d1;
-            case 2: goto L_0x00cd;
-            case 3: goto L_0x00de;
-            default: goto L_0x00c7;
-        };
-    L_0x00c7:
-        r4 = r2;
-        goto L_0x003a;
-    L_0x00ca:
-        r4 = r1;
-        goto L_0x003a;
-    L_0x00cd:
-        r0 = 3;
-        r4 = r0;
-        goto L_0x003a;
-    L_0x00d1:
-        r0 = android.content.res.Resources.getSystem();
-        r5 = 17957005; // 0x112008d float:2.681636E-38 double:8.8719393E-317;
-        r0 = r0.getBoolean(r5);
-        if (r0 != 0) goto L_0x003a;
-    L_0x00de:
-        r0 = "SmsMessage";
-        r5 = new java.lang.StringBuilder;
-        r5.<init>();
-        r6 = "1 - Unsupported SMS data coding scheme ";
-        r5 = r5.append(r6);
-        r6 = r12.mDataCodingScheme;
-        r6 = r6 & 255;
-        r5 = r5.append(r6);
-        r5 = r5.toString();
-        android.telephony.Rlog.w(r0, r5);
-        goto L_0x003a;
-    L_0x00fc:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 240;
-        r3 = 240; // 0xf0 float:3.36E-43 double:1.186E-321;
-        if (r0 != r3) goto L_0x0111;
-    L_0x0104:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 4;
-        if (r0 != 0) goto L_0x010e;
-    L_0x010a:
-        r3 = r1;
-        r4 = r1;
-        goto L_0x003a;
-    L_0x010e:
-        r3 = r1;
-        goto L_0x003a;
-    L_0x0111:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 240;
-        r3 = 192; // 0xc0 float:2.69E-43 double:9.5E-322;
-        if (r0 == r3) goto L_0x0127;
-    L_0x0119:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 240;
-        r3 = 208; // 0xd0 float:2.91E-43 double:1.03E-321;
-        if (r0 == r3) goto L_0x0127;
-    L_0x0121:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 240;
-        if (r0 != r11) goto L_0x01b4;
-    L_0x0127:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 240;
-        if (r0 != r11) goto L_0x0189;
-    L_0x012d:
-        r0 = 3;
-    L_0x012e:
-        r3 = r12.mDataCodingScheme;
-        r3 = r3 & 8;
-        r4 = 8;
-        if (r3 != r4) goto L_0x018b;
-    L_0x0136:
-        r3 = r1;
-    L_0x0137:
-        r4 = r12.mDataCodingScheme;
-        r4 = r4 & 3;
-        if (r4 != 0) goto L_0x0192;
-    L_0x013d:
-        r12.mIsMwi = r1;
-        r12.mMwiSense = r3;
-        r4 = r12.mDataCodingScheme;
-        r4 = r4 & 240;
-        r5 = 192; // 0xc0 float:2.69E-43 double:9.5E-322;
-        if (r4 != r5) goto L_0x018d;
-    L_0x0149:
-        r4 = r1;
-    L_0x014a:
-        r12.mMwiDontStore = r4;
-        if (r3 != r1) goto L_0x018f;
-    L_0x014e:
-        r3 = -1;
-        r12.mVoiceMailCount = r3;
-    L_0x0151:
-        r3 = "SmsMessage";
-        r4 = new java.lang.StringBuilder;
-        r4.<init>();
-        r5 = "MWI in DCS for Vmail. DCS = ";
-        r4 = r4.append(r5);
-        r5 = r12.mDataCodingScheme;
-        r5 = r5 & 255;
-        r4 = r4.append(r5);
-        r5 = " Dont store = ";
-        r4 = r4.append(r5);
-        r5 = r12.mMwiDontStore;
-        r4 = r4.append(r5);
-        r5 = " vmail count = ";
-        r4 = r4.append(r5);
-        r5 = r12.mVoiceMailCount;
-        r4 = r4.append(r5);
-        r4 = r4.toString();
-        android.telephony.Rlog.w(r3, r4);
-        r3 = r2;
-        r4 = r0;
-        goto L_0x003a;
-    L_0x0189:
-        r0 = r1;
-        goto L_0x012e;
-    L_0x018b:
-        r3 = r2;
-        goto L_0x0137;
-    L_0x018d:
-        r4 = r2;
-        goto L_0x014a;
-    L_0x018f:
-        r12.mVoiceMailCount = r2;
-        goto L_0x0151;
-    L_0x0192:
-        r12.mIsMwi = r2;
-        r3 = "SmsMessage";
-        r4 = new java.lang.StringBuilder;
-        r4.<init>();
-        r5 = "MWI in DCS for fax/email/other: ";
-        r4 = r4.append(r5);
-        r5 = r12.mDataCodingScheme;
-        r5 = r5 & 255;
-        r4 = r4.append(r5);
-        r4 = r4.toString();
-        android.telephony.Rlog.w(r3, r4);
-        r3 = r2;
-        r4 = r0;
-        goto L_0x003a;
-    L_0x01b4:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 192;
-        if (r0 != r10) goto L_0x01e5;
-    L_0x01ba:
-        r0 = r12.mDataCodingScheme;
-        r3 = 132; // 0x84 float:1.85E-43 double:6.5E-322;
-        if (r0 != r3) goto L_0x01c5;
-    L_0x01c0:
-        r0 = 4;
-        r3 = r2;
-        r4 = r0;
-        goto L_0x003a;
-    L_0x01c5:
-        r0 = "SmsMessage";
-        r3 = new java.lang.StringBuilder;
-        r3.<init>();
-        r4 = "5 - Unsupported SMS data coding scheme ";
-        r3 = r3.append(r4);
-        r4 = r12.mDataCodingScheme;
-        r4 = r4 & 255;
-        r3 = r3.append(r4);
-        r3 = r3.toString();
-        android.telephony.Rlog.w(r0, r3);
-        r3 = r2;
-        r4 = r2;
-        goto L_0x003a;
-    L_0x01e5:
-        r0 = "SmsMessage";
-        r3 = new java.lang.StringBuilder;
-        r3.<init>();
-        r4 = "3 - Unsupported SMS data coding scheme ";
-        r3 = r3.append(r4);
-        r4 = r12.mDataCodingScheme;
-        r4 = r4 & 255;
-        r3 = r3.append(r4);
-        r3 = r3.toString();
-        android.telephony.Rlog.w(r0, r3);
-        r3 = r2;
-        r4 = r2;
-        goto L_0x003a;
-    L_0x0205:
-        r0 = r2;
-        goto L_0x003d;
-    L_0x0208:
-        r8 = r12.mMwiDontStore;
-        if (r8 != 0) goto L_0x007b;
-    L_0x020c:
-        r8 = r12.mDataCodingScheme;
-        r8 = r8 & 240;
-        r9 = 208; // 0xd0 float:2.91E-43 double:1.03E-321;
-        if (r8 == r9) goto L_0x021a;
-    L_0x0214:
-        r8 = r12.mDataCodingScheme;
-        r8 = r8 & 240;
-        if (r8 != r11) goto L_0x0220;
-    L_0x021a:
-        r8 = r12.mDataCodingScheme;
-        r8 = r8 & 3;
-        if (r8 == 0) goto L_0x007b;
-    L_0x0220:
-        r12.mMwiDontStore = r1;
-        goto L_0x007b;
-    L_0x0224:
-        r12.mMwiSense = r2;
-        goto L_0x0087;
-    L_0x0228:
-        r0 = "SmsMessage";
-        r8 = new java.lang.StringBuilder;
-        r8.<init>();
-        r9 = "TP_UDH fax/email/extended msg/multisubscriber profile. Msg Ind = ";
-        r8 = r8.append(r9);
-        r7 = r8.append(r7);
-        r7 = r7.toString();
-        android.telephony.Rlog.w(r0, r7);
-        goto L_0x0061;
-    L_0x0242:
-        switch(r4) {
-            case 0: goto L_0x0253;
-            case 1: goto L_0x026f;
-            case 2: goto L_0x0257;
-            case 3: goto L_0x0284;
-            case 4: goto L_0x028b;
-            default: goto L_0x0245;
-        };
-    L_0x0245:
-        r0 = r12.mMessageBody;
-        if (r0 == 0) goto L_0x024c;
-    L_0x0249:
-        r12.parseMessageBody();
-    L_0x024c:
-        if (r3 != 0) goto L_0x0292;
-    L_0x024e:
-        r0 = com.android.internal.telephony.SmsConstants.MessageClass.UNKNOWN;
-        r12.messageClass = r0;
-    L_0x0252:
-        return;
-    L_0x0253:
-        r0 = 0;
-        r12.mMessageBody = r0;
-        goto L_0x0245;
-    L_0x0257:
-        r0 = android.content.res.Resources.getSystem();
-        r1 = 17957005; // 0x112008d float:2.681636E-38 double:8.8719393E-317;
-        r0 = r0.getBoolean(r1);
-        if (r0 == 0) goto L_0x026b;
-    L_0x0264:
-        r0 = r13.getUserDataGSM8bit(r5);
-        r12.mMessageBody = r0;
-        goto L_0x0245;
-    L_0x026b:
-        r0 = 0;
-        r12.mMessageBody = r0;
-        goto L_0x0245;
-    L_0x026f:
-        if (r14 == 0) goto L_0x0282;
-    L_0x0271:
-        r0 = r12.mUserDataHeader;
-        r0 = r0.languageTable;
-    L_0x0275:
-        if (r14 == 0) goto L_0x027b;
-    L_0x0277:
-        r1 = r12.mUserDataHeader;
-        r2 = r1.languageShiftTable;
-    L_0x027b:
-        r0 = r13.getUserDataGSM7Bit(r5, r0, r2);
-        r12.mMessageBody = r0;
-        goto L_0x0245;
-    L_0x0282:
-        r0 = r2;
-        goto L_0x0275;
-    L_0x0284:
-        r0 = r13.getUserDataUCS2(r5);
-        r12.mMessageBody = r0;
-        goto L_0x0245;
-    L_0x028b:
-        r0 = r13.getUserDataKSC5601(r5);
-        r12.mMessageBody = r0;
-        goto L_0x0245;
-    L_0x0292:
-        r0 = r12.mDataCodingScheme;
-        r0 = r0 & 3;
-        switch(r0) {
-            case 0: goto L_0x029a;
-            case 1: goto L_0x029f;
-            case 2: goto L_0x02a4;
-            case 3: goto L_0x02a9;
-            default: goto L_0x0299;
-        };
-    L_0x0299:
-        goto L_0x0252;
-    L_0x029a:
-        r0 = com.android.internal.telephony.SmsConstants.MessageClass.CLASS_0;
-        r12.messageClass = r0;
-        goto L_0x0252;
-    L_0x029f:
-        r0 = com.android.internal.telephony.SmsConstants.MessageClass.CLASS_1;
-        r12.messageClass = r0;
-        goto L_0x0252;
-    L_0x02a4:
-        r0 = com.android.internal.telephony.SmsConstants.MessageClass.CLASS_2;
-        r12.messageClass = r0;
-        goto L_0x0252;
-    L_0x02a9:
-        r0 = com.android.internal.telephony.SmsConstants.MessageClass.CLASS_3;
-        r12.messageClass = r0;
-        goto L_0x0252;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.gsm.SmsMessage.parseUserData(com.android.internal.telephony.gsm.SmsMessage$PduParser, boolean):void");
+    /* JADX WARN: Can't fix incorrect switch cases order, some code will duplicate */
+    private void parseUserData(PduParser p, boolean hasUserDataHeader) {
+        boolean hasMessageClass = false;
+        int encodingType = 0;
+        if ((this.mDataCodingScheme & 128) == 0) {
+            boolean userDataCompressed = (this.mDataCodingScheme & 32) != 0;
+            hasMessageClass = (this.mDataCodingScheme & 16) != 0;
+            if (!userDataCompressed) {
+                switch ((this.mDataCodingScheme >> 2) & 3) {
+                    case 0:
+                        encodingType = 1;
+                        break;
+                    case 1:
+                        if (Resources.getSystem().getBoolean(17957005)) {
+                            encodingType = 2;
+                            break;
+                        }
+                        Rlog.w(LOG_TAG, "1 - Unsupported SMS data coding scheme " + (this.mDataCodingScheme & 255));
+                        encodingType = 2;
+                        break;
+                    case 2:
+                        encodingType = 3;
+                        break;
+                    case 3:
+                        Rlog.w(LOG_TAG, "1 - Unsupported SMS data coding scheme " + (this.mDataCodingScheme & 255));
+                        encodingType = 2;
+                        break;
+                }
+            } else {
+                Rlog.w(LOG_TAG, "4 - Unsupported SMS data coding scheme (compression) " + (this.mDataCodingScheme & 255));
+            }
+        } else if ((this.mDataCodingScheme & 240) == 240) {
+            hasMessageClass = true;
+            encodingType = (this.mDataCodingScheme & 4) == 0 ? 1 : 2;
+        } else if ((this.mDataCodingScheme & 240) == 192 || (this.mDataCodingScheme & 240) == 208 || (this.mDataCodingScheme & 240) == 224) {
+            if ((this.mDataCodingScheme & 240) == 224) {
+                encodingType = 3;
+            } else {
+                encodingType = 1;
+            }
+            boolean active = (this.mDataCodingScheme & 8) == 8;
+            if ((this.mDataCodingScheme & 3) == 0) {
+                this.mIsMwi = true;
+                this.mMwiSense = active;
+                this.mMwiDontStore = (this.mDataCodingScheme & 240) == 192;
+                if (active) {
+                    this.mVoiceMailCount = -1;
+                } else {
+                    this.mVoiceMailCount = 0;
+                }
+                Rlog.w(LOG_TAG, "MWI in DCS for Vmail. DCS = " + (this.mDataCodingScheme & 255) + " Dont store = " + this.mMwiDontStore + " vmail count = " + this.mVoiceMailCount);
+            } else {
+                this.mIsMwi = false;
+                Rlog.w(LOG_TAG, "MWI in DCS for fax/email/other: " + (this.mDataCodingScheme & 255));
+            }
+        } else if ((this.mDataCodingScheme & 192) != 128) {
+            Rlog.w(LOG_TAG, "3 - Unsupported SMS data coding scheme " + (this.mDataCodingScheme & 255));
+        } else if (this.mDataCodingScheme == 132) {
+            encodingType = 4;
+        } else {
+            Rlog.w(LOG_TAG, "5 - Unsupported SMS data coding scheme " + (this.mDataCodingScheme & 255));
+        }
+        int count = p.constructUserData(hasUserDataHeader, encodingType == 1);
+        this.mUserData = p.getUserData();
+        this.mUserDataHeader = p.getUserDataHeader();
+        if (hasUserDataHeader && this.mUserDataHeader.specialSmsMsgList.size() != 0) {
+            Iterator i$ = this.mUserDataHeader.specialSmsMsgList.iterator();
+            while (i$.hasNext()) {
+                SmsHeader.SpecialSmsMsg msg = i$.next();
+                int msgInd = msg.msgIndType & 255;
+                if (msgInd == 0 || msgInd == 128) {
+                    this.mIsMwi = true;
+                    if (msgInd == 128) {
+                        this.mMwiDontStore = false;
+                    } else if (!this.mMwiDontStore && !(((this.mDataCodingScheme & 240) == 208 || (this.mDataCodingScheme & 240) == 224) && (this.mDataCodingScheme & 3) == 0)) {
+                        this.mMwiDontStore = true;
+                    }
+                    this.mVoiceMailCount = msg.msgCount & 255;
+                    if (this.mVoiceMailCount > 0) {
+                        this.mMwiSense = true;
+                    } else {
+                        this.mMwiSense = false;
+                    }
+                    Rlog.w(LOG_TAG, "MWI in TP-UDH for Vmail. Msg Ind = " + msgInd + " Dont store = " + this.mMwiDontStore + " Vmail count = " + this.mVoiceMailCount);
+                } else {
+                    Rlog.w(LOG_TAG, "TP_UDH fax/email/extended msg/multisubscriber profile. Msg Ind = " + msgInd);
+                }
+            }
+        }
+        switch (encodingType) {
+            case 0:
+                this.mMessageBody = null;
+                break;
+            case 1:
+                this.mMessageBody = p.getUserDataGSM7Bit(count, hasUserDataHeader ? this.mUserDataHeader.languageTable : 0, hasUserDataHeader ? this.mUserDataHeader.languageShiftTable : 0);
+                break;
+            case 2:
+                if (!Resources.getSystem().getBoolean(17957005)) {
+                    this.mMessageBody = null;
+                    break;
+                } else {
+                    this.mMessageBody = p.getUserDataGSM8bit(count);
+                    break;
+                }
+            case 3:
+                this.mMessageBody = p.getUserDataUCS2(count);
+                break;
+            case 4:
+                this.mMessageBody = p.getUserDataKSC5601(count);
+                break;
+        }
+        if (this.mMessageBody != null) {
+            parseMessageBody();
+        }
+        if (!hasMessageClass) {
+            this.messageClass = SmsConstants.MessageClass.UNKNOWN;
+            return;
+        }
+        switch (this.mDataCodingScheme & 3) {
+            case 0:
+                this.messageClass = SmsConstants.MessageClass.CLASS_0;
+                return;
+            case 1:
+                this.messageClass = SmsConstants.MessageClass.CLASS_1;
+                return;
+            case 2:
+                this.messageClass = SmsConstants.MessageClass.CLASS_2;
+                return;
+            case 3:
+                this.messageClass = SmsConstants.MessageClass.CLASS_3;
+                return;
+            default:
+                return;
+        }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public int getDataCodingScheme() {
-        return this.mDataCodingScheme;
-    }
-
-    public MessageClass getMessageClass() {
+    @Override // com.android.internal.telephony.SmsMessageBase
+    public SmsConstants.MessageClass getMessageClass() {
         return this.messageClass;
     }
 
-    public int getMessageDCS() {
-        return this.mDataCodingScheme;
-    }
-
-    public byte[] getMessageUDH() {
-        return this.mUserDataHeader == null ? null : SmsHeader.toByteArray(this.mUserDataHeader);
+    public boolean isUsimDataDownload() {
+        return this.messageClass == SmsConstants.MessageClass.CLASS_2 && (this.mProtocolIdentifier == 127 || this.mProtocolIdentifier == 124);
     }
 
     public int getNumOfVoicemails() {
@@ -1036,56 +833,14 @@ public class SmsMessage extends SmsMessageBase {
         return this.mVoiceMailCount;
     }
 
-    public int getProtocolIdentifier() {
-        return this.mProtocolIdentifier;
+    public int getMessageDCS() {
+        return this.mDataCodingScheme;
     }
 
-    public int getStatus() {
-        return this.mStatus;
-    }
-
-    public boolean isCphsMwiMessage() {
-        return ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageClear() || ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageSet();
-    }
-
-    public boolean isMWIClearMessage() {
-        if (this.mIsMwi && !this.mMwiSense) {
-            return true;
+    public byte[] getMessageUDH() {
+        if (this.mUserDataHeader == null) {
+            return null;
         }
-        boolean z = this.mOriginatingAddress != null && ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageClear();
-        return z;
-    }
-
-    public boolean isMWISetMessage() {
-        if (this.mIsMwi && this.mMwiSense) {
-            return true;
-        }
-        boolean z = this.mOriginatingAddress != null && ((GsmSmsAddress) this.mOriginatingAddress).isCphsVoiceMessageSet();
-        return z;
-    }
-
-    public boolean isMwiDontStore() {
-        return (this.mIsMwi && this.mMwiDontStore) || (isCphsMwiMessage() && " ".equals(getMessageBody()));
-    }
-
-    public boolean isReplace() {
-        return (this.mProtocolIdentifier & 192) == 64 && (this.mProtocolIdentifier & 63) > 0 && (this.mProtocolIdentifier & 63) < 8;
-    }
-
-    public boolean isReplyPathPresent() {
-        return this.mReplyPathPresent;
-    }
-
-    public boolean isStatusReportMessage() {
-        return this.mIsStatusReportMessage;
-    }
-
-    public boolean isTypeZero() {
-        return this.mProtocolIdentifier == 64;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isUsimDataDownload() {
-        return this.messageClass == MessageClass.CLASS_2 && (this.mProtocolIdentifier == 127 || this.mProtocolIdentifier == 124);
+        return SmsHeader.toByteArray(this.mUserDataHeader);
     }
 }

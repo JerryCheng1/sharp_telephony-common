@@ -3,9 +3,10 @@ package com.android.internal.telephony;
 import android.telephony.CellInfo;
 import android.telephony.DataConnectionRealTimeInfo;
 import android.telephony.VoLteServiceState;
-import com.android.internal.telephony.PhoneConstants.DataState;
+import com.android.internal.telephony.PhoneConstants;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public interface PhoneNotifier {
     void notifyCallForwardingChanged(Phone phone);
 
@@ -15,7 +16,7 @@ public interface PhoneNotifier {
 
     void notifyDataActivity(Phone phone);
 
-    void notifyDataConnection(Phone phone, String str, String str2, DataState dataState);
+    void notifyDataConnection(Phone phone, String str, String str2, PhoneConstants.DataState dataState);
 
     void notifyDataConnectionFailed(Phone phone, String str, String str2);
 

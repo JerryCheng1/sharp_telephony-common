@@ -2,7 +2,6 @@ package com.android.internal.telephony.gsm;
 
 import android.telephony.Rlog;
 import com.android.internal.telephony.Call;
-import com.android.internal.telephony.Call.State;
 import com.android.internal.telephony.CallStateException;
 import com.android.internal.telephony.Connection;
 import com.android.internal.telephony.DriverCall;
@@ -10,120 +9,122 @@ import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.TelBrand;
 import java.util.List;
 
-class GsmCall extends Call {
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+public class GsmCall extends Call {
     protected static final String LOG_TAG = "GsmCall";
     GsmCallTracker mOwner;
 
-    GsmCall(GsmCallTracker gsmCallTracker) {
-        this.mOwner = gsmCallTracker;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void attach(Connection connection, DriverCall driverCall) {
-        this.mConnections.add(connection);
-        this.mState = Call.stateFromDCState(driverCall.state);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void attachFake(Connection connection, State state) {
-        this.mConnections.add(connection);
-        this.mState = state;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void clearDisconnected() {
-        Rlog.d(LOG_TAG, "clearDisconnected() start...");
-        for (int size = this.mConnections.size() - 1; size >= 0; size--) {
-            if (((GsmConnection) this.mConnections.get(size)).getState() == State.DISCONNECTED) {
-                synchronized (this.mConnections) {
-                    this.mConnections.remove(size);
-                }
-            }
-        }
-        if (this.mConnections.size() == 0) {
-            this.mState = State.IDLE;
-        }
-        Rlog.d(LOG_TAG, "clearDisconnected() end...");
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean connectionDisconnected(GsmConnection gsmConnection) {
-        if (this.mState != State.DISCONNECTED) {
-            Object obj;
-            int size = this.mConnections.size();
-            for (int i = 0; i < size; i++) {
-                if (((Connection) this.mConnections.get(i)).getState() != State.DISCONNECTED) {
-                    obj = null;
-                    break;
-                }
-            }
-            int obj2 = 1;
-            if (obj2 != null) {
-                this.mState = State.DISCONNECTED;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void detach(GsmConnection gsmConnection) {
-        this.mConnections.remove(gsmConnection);
-        if (this.mConnections.size() == 0) {
-            this.mState = State.IDLE;
-        }
+    public GsmCall(GsmCallTracker owner) {
+        this.mOwner = owner;
     }
 
     public void dispose() {
     }
 
+    @Override // com.android.internal.telephony.Call
     public List<Connection> getConnections() {
         return this.mConnections;
     }
 
+    @Override // com.android.internal.telephony.Call
     public Phone getPhone() {
         return this.mOwner.mPhone;
     }
 
-    public void hangup() throws CallStateException {
-        this.mOwner.hangup(this);
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public boolean isFull() {
-        return this.mConnections.size() == 5;
-    }
-
+    @Override // com.android.internal.telephony.Call
     public boolean isMultiparty() {
         return this.mConnections.size() > 1;
     }
 
-    public void onDisconnecting() {
-        if (TelBrand.IS_DCM) {
-            this.mState = State.DISCONNECTING;
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void onHangupLocal() {
-        int size = this.mConnections.size();
-        for (int i = 0; i < size; i++) {
-            ((GsmConnection) this.mConnections.get(i)).onHangupLocal();
-        }
-        this.mState = State.DISCONNECTING;
+    @Override // com.android.internal.telephony.Call
+    public void hangup() throws CallStateException {
+        this.mOwner.hangup(this);
     }
 
     public String toString() {
         return this.mState.toString();
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public boolean update(GsmConnection gsmConnection, DriverCall driverCall) {
-        State stateFromDCState = Call.stateFromDCState(driverCall.state);
-        if (stateFromDCState == this.mState) {
+    public void attach(Connection conn, DriverCall dc) {
+        this.mConnections.add(conn);
+        this.mState = stateFromDCState(dc.state);
+    }
+
+    public void attachFake(Connection conn, Call.State state) {
+        this.mConnections.add(conn);
+        this.mState = state;
+    }
+
+    public boolean connectionDisconnected(GsmConnection conn) {
+        if (this.mState != Call.State.DISCONNECTED) {
+            boolean hasOnlyDisconnectedConnections = true;
+            int i = 0;
+            int s = this.mConnections.size();
+            while (true) {
+                if (i >= s) {
+                    break;
+                } else if (((Connection) this.mConnections.get(i)).getState() != Call.State.DISCONNECTED) {
+                    hasOnlyDisconnectedConnections = false;
+                    break;
+                } else {
+                    i++;
+                }
+            }
+            if (hasOnlyDisconnectedConnections) {
+                this.mState = Call.State.DISCONNECTED;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void detach(GsmConnection conn) {
+        this.mConnections.remove(conn);
+        if (this.mConnections.size() == 0) {
+            this.mState = Call.State.IDLE;
+        }
+    }
+
+    public boolean update(GsmConnection conn, DriverCall dc) {
+        Call.State newState = stateFromDCState(dc.state);
+        if (newState == this.mState) {
             return false;
         }
-        this.mState = stateFromDCState;
+        this.mState = newState;
         return true;
+    }
+
+    public boolean isFull() {
+        return this.mConnections.size() == 5;
+    }
+
+    public void onHangupLocal() {
+        int s = this.mConnections.size();
+        for (int i = 0; i < s; i++) {
+            ((GsmConnection) this.mConnections.get(i)).onHangupLocal();
+        }
+        this.mState = Call.State.DISCONNECTING;
+    }
+
+    public void clearDisconnected() {
+        Rlog.d(LOG_TAG, "clearDisconnected() start...");
+        for (int i = this.mConnections.size() - 1; i >= 0; i--) {
+            if (((GsmConnection) this.mConnections.get(i)).getState() == Call.State.DISCONNECTED) {
+                synchronized (this.mConnections) {
+                    this.mConnections.remove(i);
+                }
+                continue;
+            }
+        }
+        if (this.mConnections.size() == 0) {
+            this.mState = Call.State.IDLE;
+        }
+        Rlog.d(LOG_TAG, "clearDisconnected() end...");
+    }
+
+    public void onDisconnecting() {
+        if (TelBrand.IS_DCM) {
+            this.mState = Call.State.DISCONNECTING;
+        }
     }
 }

@@ -1,16 +1,18 @@
 package com.android.internal.telephony.dataconnection;
 
 import android.text.TextUtils;
-import com.android.internal.telephony.dataconnection.ApnSetting.ApnProfileType;
+import com.android.internal.telephony.dataconnection.ApnSetting;
 import java.util.ArrayList;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ApnProfileOmh extends ApnSetting {
     private static final int DATA_PROFILE_OMH_PRIORITY_HIGHEST = 0;
     private static final int DATA_PROFILE_OMH_PRIORITY_LOWEST = 255;
     private ApnProfileTypeModem mApnProfileModem;
-    private int mPriority = 0;
+    private int mPriority;
     private int mServiceTypeMasks = 0;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     enum ApnProfileTypeModem {
         PROFILE_TYPE_UNSPECIFIED(1, "default"),
         PROFILE_TYPE_MMS(2, "mms"),
@@ -20,96 +22,116 @@ public class ApnProfileOmh extends ApnSetting {
         int id;
         String serviceType;
 
-        private ApnProfileTypeModem(int i, String str) {
+        ApnProfileTypeModem(int i, String serviceType) {
             this.id = i;
-            this.serviceType = str;
+            this.serviceType = serviceType;
         }
 
-        public static ApnProfileTypeModem getApnProfileTypeModem(String str) {
-            return TextUtils.equals(str, "default") ? PROFILE_TYPE_UNSPECIFIED : TextUtils.equals(str, "mms") ? PROFILE_TYPE_MMS : TextUtils.equals(str, "supl") ? PROFILE_TYPE_LBS : TextUtils.equals(str, "dun") ? PROFILE_TYPE_TETHERED : PROFILE_TYPE_UNSPECIFIED;
+        public int getid() {
+            return this.id;
         }
 
         public String getDataServiceType() {
             return this.serviceType;
         }
 
-        public int getid() {
-            return this.id;
-        }
-    }
-
-    public ApnProfileOmh(int i, int i2) {
-        super(0, "", null, "", null, null, null, null, null, null, null, 3, new String[0], "IP", "IP", true, 0, i, false, 0, 0, 0, 0, "", "");
-        this.mPriority = i2;
-    }
-
-    private boolean isValidPriority(int i) {
-        return i >= 0 && i <= 255;
-    }
-
-    public void addServiceType(ApnProfileTypeModem apnProfileTypeModem) {
-        this.mServiceTypeMasks |= apnProfileTypeModem.getid();
-        ArrayList arrayList = new ArrayList();
-        for (ApnProfileTypeModem apnProfileTypeModem2 : ApnProfileTypeModem.values()) {
-            if ((this.mServiceTypeMasks & apnProfileTypeModem2.getid()) != 0) {
-                arrayList.add(apnProfileTypeModem2.getDataServiceType());
+        public static ApnProfileTypeModem getApnProfileTypeModem(String serviceType) {
+            if (TextUtils.equals(serviceType, "default")) {
+                return PROFILE_TYPE_UNSPECIFIED;
             }
+            if (TextUtils.equals(serviceType, "mms")) {
+                return PROFILE_TYPE_MMS;
+            }
+            if (TextUtils.equals(serviceType, "supl")) {
+                return PROFILE_TYPE_LBS;
+            }
+            if (TextUtils.equals(serviceType, "dun")) {
+                return PROFILE_TYPE_TETHERED;
+            }
+            return PROFILE_TYPE_UNSPECIFIED;
         }
-        this.types = (String[]) arrayList.toArray(new String[0]);
     }
 
-    public boolean canHandleType(String str) {
-        return (this.mServiceTypeMasks & ApnProfileTypeModem.getApnProfileTypeModem(str).getid()) != 0;
+    public ApnProfileOmh(int profileId, int priority) {
+        super(0, "", null, "", null, null, null, null, null, null, null, 3, new String[0], "IP", "IP", true, 0, profileId, false, 0, 0, 0, 0, "", "");
+        this.mPriority = 0;
+        this.mPriority = priority;
     }
 
-    public ApnProfileType getApnProfileType() {
-        return ApnProfileType.PROFILE_TYPE_OMH;
+    @Override // com.android.internal.telephony.dataconnection.ApnSetting
+    public boolean canHandleType(String serviceType) {
+        return (this.mServiceTypeMasks & ApnProfileTypeModem.getApnProfileTypeModem(serviceType).getid()) != 0;
+    }
+
+    @Override // com.android.internal.telephony.dataconnection.ApnSetting
+    public ApnSetting.ApnProfileType getApnProfileType() {
+        return ApnSetting.ApnProfileType.PROFILE_TYPE_OMH;
+    }
+
+    @Override // com.android.internal.telephony.dataconnection.ApnSetting
+    public String toShortString() {
+        return "ApnProfile OMH";
+    }
+
+    @Override // com.android.internal.telephony.dataconnection.ApnSetting
+    public String toHash() {
+        return toString();
+    }
+
+    @Override // com.android.internal.telephony.dataconnection.ApnSetting
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(super.toString()).append(this.profileId).append(", ").append(this.mPriority);
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public void setApnProfileTypeModem(ApnProfileTypeModem modemProfile) {
+        this.mApnProfileModem = modemProfile;
     }
 
     public ApnProfileTypeModem getApnProfileTypeModem() {
         return this.mApnProfileModem;
     }
 
-    public int getPriority() {
-        return this.mPriority;
+    public void setPriority(int priority) {
+        this.mPriority = priority;
     }
 
-    public int getProfileId() {
-        return this.profileId;
+    public boolean isPriorityHigher(int priority) {
+        return isValidPriority(priority) && this.mPriority < priority;
     }
 
-    public boolean isPriorityHigher(int i) {
-        return isValidPriority(i) && this.mPriority < i;
-    }
-
-    public boolean isPriorityLower(int i) {
-        return isValidPriority(i) && this.mPriority > i;
+    public boolean isPriorityLower(int priority) {
+        return isValidPriority(priority) && this.mPriority > priority;
     }
 
     public boolean isValidPriority() {
         return isValidPriority(this.mPriority);
     }
 
-    public void setApnProfileTypeModem(ApnProfileTypeModem apnProfileTypeModem) {
-        this.mApnProfileModem = apnProfileTypeModem;
+    private boolean isValidPriority(int priority) {
+        return priority >= 0 && priority <= 255;
     }
 
-    public void setPriority(int i) {
-        this.mPriority = i;
+    @Override // com.android.internal.telephony.dataconnection.ApnSetting
+    public int getProfileId() {
+        return this.profileId;
     }
 
-    public String toHash() {
-        return toString();
+    public int getPriority() {
+        return this.mPriority;
     }
 
-    public String toShortString() {
-        return "ApnProfile OMH";
-    }
-
-    public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(super.toString()).append(this.profileId).append(", ").append(this.mPriority);
-        stringBuilder.append("]");
-        return stringBuilder.toString();
+    public void addServiceType(ApnProfileTypeModem modemProfile) {
+        this.mServiceTypeMasks |= modemProfile.getid();
+        ArrayList<String> serviceTypes = new ArrayList<>();
+        ApnProfileTypeModem[] arr$ = ApnProfileTypeModem.values();
+        for (ApnProfileTypeModem apt : arr$) {
+            if ((this.mServiceTypeMasks & apt.getid()) != 0) {
+                serviceTypes.add(apt.getDataServiceType());
+            }
+        }
+        this.types = (String[]) serviceTypes.toArray(new String[0]);
     }
 }

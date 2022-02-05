@@ -2,52 +2,20 @@ package com.android.internal.telephony.uicc;
 
 import android.telephony.Rlog;
 import com.android.internal.telephony.SmsHeader;
-import com.android.internal.telephony.uicc.IccCardStatus.PinState;
+import com.android.internal.telephony.uicc.IccCardStatus;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class IccCardApplicationStatus {
     public String aid;
     public String app_label;
     public AppState app_state;
     public AppType app_type;
     public PersoSubState perso_substate;
-    public PinState pin1;
+    public IccCardStatus.PinState pin1;
     public int pin1_replaced;
-    public PinState pin2;
+    public IccCardStatus.PinState pin2;
 
-    public enum AppState {
-        APPSTATE_UNKNOWN,
-        APPSTATE_DETECTED,
-        APPSTATE_PIN,
-        APPSTATE_PUK,
-        APPSTATE_SUBSCRIPTION_PERSO,
-        APPSTATE_READY;
-
-        /* Access modifiers changed, original: 0000 */
-        public boolean isAppNotReady() {
-            return this == APPSTATE_UNKNOWN || this == APPSTATE_DETECTED;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public boolean isAppReady() {
-            return this == APPSTATE_READY;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public boolean isPinRequired() {
-            return this == APPSTATE_PIN;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public boolean isPukRequired() {
-            return this == APPSTATE_PUK;
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public boolean isSubscriptionPersoEnabled() {
-            return this == APPSTATE_SUBSCRIPTION_PERSO;
-        }
-    }
-
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum AppType {
         APPTYPE_UNKNOWN,
         APPTYPE_SIM,
@@ -57,6 +25,37 @@ public class IccCardApplicationStatus {
         APPTYPE_ISIM
     }
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public enum AppState {
+        APPSTATE_UNKNOWN,
+        APPSTATE_DETECTED,
+        APPSTATE_PIN,
+        APPSTATE_PUK,
+        APPSTATE_SUBSCRIPTION_PERSO,
+        APPSTATE_READY;
+
+        boolean isPinRequired() {
+            return this == APPSTATE_PIN;
+        }
+
+        boolean isPukRequired() {
+            return this == APPSTATE_PUK;
+        }
+
+        boolean isSubscriptionPersoEnabled() {
+            return this == APPSTATE_SUBSCRIPTION_PERSO;
+        }
+
+        boolean isAppReady() {
+            return this == APPSTATE_READY;
+        }
+
+        boolean isAppNotReady() {
+            return this == APPSTATE_UNKNOWN || this == APPSTATE_DETECTED;
+        }
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum PersoSubState {
         PERSOSUBSTATE_UNKNOWN,
         PERSOSUBSTATE_IN_PROGRESS,
@@ -84,39 +83,13 @@ public class IccCardApplicationStatus {
         PERSOSUBSTATE_RUIM_SERVICE_PROVIDER_PUK,
         PERSOSUBSTATE_RUIM_RUIM_PUK;
 
-        /* Access modifiers changed, original: 0000 */
-        public boolean isPersoSubStateUnknown() {
+        boolean isPersoSubStateUnknown() {
             return this == PERSOSUBSTATE_UNKNOWN;
         }
     }
 
-    private void loge(String str) {
-        Rlog.e("IccCardApplicationStatus", str);
-    }
-
-    public AppState AppStateFromRILInt(int i) {
-        switch (i) {
-            case 0:
-                return AppState.APPSTATE_UNKNOWN;
-            case 1:
-                return AppState.APPSTATE_DETECTED;
-            case 2:
-                return AppState.APPSTATE_PIN;
-            case 3:
-                return AppState.APPSTATE_PUK;
-            case 4:
-                return AppState.APPSTATE_SUBSCRIPTION_PERSO;
-            case 5:
-                return AppState.APPSTATE_READY;
-            default:
-                AppState appState = AppState.APPSTATE_UNKNOWN;
-                loge("AppStateFromRILInt: bad state: " + i + " use APPSTATE_UNKNOWN");
-                return appState;
-        }
-    }
-
-    public AppType AppTypeFromRILInt(int i) {
-        switch (i) {
+    public AppType AppTypeFromRILInt(int type) {
+        switch (type) {
             case 0:
                 return AppType.APPTYPE_UNKNOWN;
             case 1:
@@ -130,14 +103,35 @@ public class IccCardApplicationStatus {
             case 5:
                 return AppType.APPTYPE_ISIM;
             default:
-                AppType appType = AppType.APPTYPE_UNKNOWN;
-                loge("AppTypeFromRILInt: bad RIL_AppType: " + i + " use APPTYPE_UNKNOWN");
-                return appType;
+                AppType newType = AppType.APPTYPE_UNKNOWN;
+                loge("AppTypeFromRILInt: bad RIL_AppType: " + type + " use APPTYPE_UNKNOWN");
+                return newType;
         }
     }
 
-    public PersoSubState PersoSubstateFromRILInt(int i) {
-        switch (i) {
+    public AppState AppStateFromRILInt(int state) {
+        switch (state) {
+            case 0:
+                return AppState.APPSTATE_UNKNOWN;
+            case 1:
+                return AppState.APPSTATE_DETECTED;
+            case 2:
+                return AppState.APPSTATE_PIN;
+            case 3:
+                return AppState.APPSTATE_PUK;
+            case 4:
+                return AppState.APPSTATE_SUBSCRIPTION_PERSO;
+            case 5:
+                return AppState.APPSTATE_READY;
+            default:
+                AppState newState = AppState.APPSTATE_UNKNOWN;
+                loge("AppStateFromRILInt: bad state: " + state + " use APPSTATE_UNKNOWN");
+                return newState;
+        }
+    }
+
+    public PersoSubState PersoSubstateFromRILInt(int substate) {
+        switch (substate) {
             case 0:
                 return PersoSubState.PERSOSUBSTATE_UNKNOWN;
             case 1:
@@ -186,47 +180,51 @@ public class IccCardApplicationStatus {
                 return PersoSubState.PERSOSUBSTATE_RUIM_CORPORATE_PUK;
             case 23:
                 return PersoSubState.PERSOSUBSTATE_RUIM_SERVICE_PROVIDER_PUK;
-            case SmsHeader.ELT_ID_STANDARD_WVG_OBJECT /*24*/:
+            case SmsHeader.ELT_ID_STANDARD_WVG_OBJECT /* 24 */:
                 return PersoSubState.PERSOSUBSTATE_RUIM_RUIM_PUK;
             default:
-                PersoSubState persoSubState = PersoSubState.PERSOSUBSTATE_UNKNOWN;
-                loge("PersoSubstateFromRILInt: bad substate: " + i + " use PERSOSUBSTATE_UNKNOWN");
-                return persoSubState;
+                PersoSubState newSubState = PersoSubState.PERSOSUBSTATE_UNKNOWN;
+                loge("PersoSubstateFromRILInt: bad substate: " + substate + " use PERSOSUBSTATE_UNKNOWN");
+                return newSubState;
         }
     }
 
-    public PinState PinStateFromRILInt(int i) {
-        switch (i) {
+    public IccCardStatus.PinState PinStateFromRILInt(int state) {
+        switch (state) {
             case 0:
-                return PinState.PINSTATE_UNKNOWN;
+                return IccCardStatus.PinState.PINSTATE_UNKNOWN;
             case 1:
-                return PinState.PINSTATE_ENABLED_NOT_VERIFIED;
+                return IccCardStatus.PinState.PINSTATE_ENABLED_NOT_VERIFIED;
             case 2:
-                return PinState.PINSTATE_ENABLED_VERIFIED;
+                return IccCardStatus.PinState.PINSTATE_ENABLED_VERIFIED;
             case 3:
-                return PinState.PINSTATE_DISABLED;
+                return IccCardStatus.PinState.PINSTATE_DISABLED;
             case 4:
-                return PinState.PINSTATE_ENABLED_BLOCKED;
+                return IccCardStatus.PinState.PINSTATE_ENABLED_BLOCKED;
             case 5:
-                return PinState.PINSTATE_ENABLED_PERM_BLOCKED;
+                return IccCardStatus.PinState.PINSTATE_ENABLED_PERM_BLOCKED;
             default:
-                PinState pinState = PinState.PINSTATE_UNKNOWN;
-                loge("PinStateFromRILInt: bad pin state: " + i + " use PINSTATE_UNKNOWN");
-                return pinState;
+                IccCardStatus.PinState newPinState = IccCardStatus.PinState.PINSTATE_UNKNOWN;
+                loge("PinStateFromRILInt: bad pin state: " + state + " use PINSTATE_UNKNOWN");
+                return newPinState;
         }
     }
 
     public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("{").append(this.app_type).append(",").append(this.app_state);
+        StringBuilder sb = new StringBuilder();
+        sb.append("{").append(this.app_type).append(",").append(this.app_state);
         if (this.app_state == AppState.APPSTATE_SUBSCRIPTION_PERSO) {
-            stringBuilder.append(",").append(this.perso_substate);
+            sb.append(",").append(this.perso_substate);
         }
         if (this.app_type == AppType.APPTYPE_CSIM || this.app_type == AppType.APPTYPE_USIM || this.app_type == AppType.APPTYPE_ISIM) {
-            stringBuilder.append(",pin1=").append(this.pin1);
-            stringBuilder.append(",pin2=").append(this.pin2);
+            sb.append(",pin1=").append(this.pin1);
+            sb.append(",pin2=").append(this.pin2);
         }
-        stringBuilder.append("}");
-        return stringBuilder.toString();
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private void loge(String s) {
+        Rlog.e("IccCardApplicationStatus", s);
     }
 }

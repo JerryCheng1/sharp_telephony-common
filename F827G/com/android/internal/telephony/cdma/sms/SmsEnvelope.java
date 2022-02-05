@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cdma.sms;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class SmsEnvelope {
     public static final int MESSAGE_TYPE_ACKNOWLEDGE = 2;
     public static final int MESSAGE_TYPE_BROADCAST = 1;

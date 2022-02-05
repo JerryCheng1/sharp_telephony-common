@@ -1,5 +1,6 @@
 package com.android.internal.telephony.cat;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public enum ResultCode {
     OK(0),
     PRFRMD_WITH_PARTIAL_COMPREHENSION(1),
@@ -41,20 +42,21 @@ public enum ResultCode {
     
     private int mCode;
 
-    private ResultCode(int i) {
-        this.mCode = i;
-    }
-
-    public static ResultCode fromInt(int i) {
-        for (ResultCode resultCode : values()) {
-            if (resultCode.mCode == i) {
-                return resultCode;
-            }
-        }
-        return null;
+    ResultCode(int code) {
+        this.mCode = code;
     }
 
     public int value() {
         return this.mCode;
+    }
+
+    public static ResultCode fromInt(int value) {
+        ResultCode[] arr$ = values();
+        for (ResultCode r : arr$) {
+            if (r.mCode == value) {
+                return r;
+            }
+        }
+        return null;
     }
 }

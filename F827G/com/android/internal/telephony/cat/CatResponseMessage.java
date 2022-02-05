@@ -1,53 +1,55 @@
 package com.android.internal.telephony.cat;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class CatResponseMessage {
-    byte[] mAddedInfo = null;
-    int mAdditionalInfo = 0;
-    CommandDetails mCmdDet = null;
-    int mEventValue = -1;
-    boolean mIncludeAdditionalInfo = false;
+    CommandDetails mCmdDet;
     ResultCode mResCode = ResultCode.OK;
-    boolean mUsersConfirm = false;
-    String mUsersInput = null;
     int mUsersMenuSelection = 0;
+    String mUsersInput = null;
     boolean mUsersYesNoSelection = false;
+    boolean mUsersConfirm = false;
+    boolean mIncludeAdditionalInfo = false;
+    int mAdditionalInfo = 0;
+    int mEventValue = -1;
+    byte[] mAddedInfo = null;
 
-    public CatResponseMessage(CatCmdMessage catCmdMessage) {
-        this.mCmdDet = catCmdMessage.mCmdDet;
+    public CatResponseMessage(CatCmdMessage cmdMsg) {
+        this.mCmdDet = null;
+        this.mCmdDet = cmdMsg.mCmdDet;
     }
 
-    /* Access modifiers changed, original: 0000 */
+    public void setResultCode(ResultCode resCode) {
+        this.mResCode = resCode;
+    }
+
+    public void setMenuSelection(int selection) {
+        this.mUsersMenuSelection = selection;
+    }
+
+    public void setInput(String input) {
+        this.mUsersInput = input;
+    }
+
+    public void setEventDownload(int event, byte[] addedInfo) {
+        this.mEventValue = event;
+        this.mAddedInfo = addedInfo;
+    }
+
+    public void setYesNo(boolean yesNo) {
+        this.mUsersYesNoSelection = yesNo;
+    }
+
+    public void setConfirmation(boolean confirm) {
+        this.mUsersConfirm = confirm;
+    }
+
+    public void setAdditionalInfo(int info) {
+        this.mIncludeAdditionalInfo = true;
+        this.mAdditionalInfo = info;
+    }
+
+    /* JADX INFO: Access modifiers changed from: package-private */
     public CommandDetails getCmdDetails() {
         return this.mCmdDet;
-    }
-
-    public void setAdditionalInfo(int i) {
-        this.mIncludeAdditionalInfo = true;
-        this.mAdditionalInfo = i;
-    }
-
-    public void setConfirmation(boolean z) {
-        this.mUsersConfirm = z;
-    }
-
-    public void setEventDownload(int i, byte[] bArr) {
-        this.mEventValue = i;
-        this.mAddedInfo = bArr;
-    }
-
-    public void setInput(String str) {
-        this.mUsersInput = str;
-    }
-
-    public void setMenuSelection(int i) {
-        this.mUsersMenuSelection = i;
-    }
-
-    public void setResultCode(ResultCode resultCode) {
-        this.mResCode = resultCode;
-    }
-
-    public void setYesNo(boolean z) {
-        this.mUsersYesNoSelection = z;
     }
 }

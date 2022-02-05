@@ -3,18 +3,20 @@ package com.android.internal.telephony.cat;
 import android.graphics.Bitmap;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 import java.util.ArrayList;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class Menu implements Parcelable {
-    public static final Creator<Menu> CREATOR = new Creator<Menu>() {
-        public Menu createFromParcel(Parcel parcel) {
-            return new Menu(parcel, null);
+    public static final Parcelable.Creator<Menu> CREATOR = new Parcelable.Creator<Menu>() { // from class: com.android.internal.telephony.cat.Menu.1
+        @Override // android.os.Parcelable.Creator
+        public Menu createFromParcel(Parcel in) {
+            return new Menu(in);
         }
 
-        public Menu[] newArray(int i) {
-            return new Menu[i];
+        @Override // android.os.Parcelable.Creator
+        public Menu[] newArray(int size) {
+            return new Menu[size];
         }
     };
     public int defaultItem;
@@ -41,51 +43,46 @@ public class Menu implements Parcelable {
         this.presentationType = PresentationType.NAVIGATION_OPTIONS;
     }
 
-    private Menu(Parcel parcel) {
+    private Menu(Parcel in) {
         boolean z = true;
-        this.title = parcel.readString();
-        this.titleIcon = (Bitmap) parcel.readParcelable(null);
+        this.title = in.readString();
+        this.titleIcon = (Bitmap) in.readParcelable(null);
         this.items = new ArrayList();
-        int readInt = parcel.readInt();
-        for (int i = 0; i < readInt; i++) {
-            this.items.add((Item) parcel.readParcelable(null));
+        int size = in.readInt();
+        for (int i = 0; i < size; i++) {
+            this.items.add((Item) in.readParcelable(null));
         }
-        this.defaultItem = parcel.readInt();
-        this.softKeyPreferred = parcel.readInt() == 1;
-        this.helpAvailable = parcel.readInt() == 1;
-        this.titleIconSelfExplanatory = parcel.readInt() == 1;
-        if (parcel.readInt() != 1) {
-            z = false;
-        }
-        this.itemsIconSelfExplanatory = z;
-        this.presentationType = PresentationType.values()[parcel.readInt()];
+        this.defaultItem = in.readInt();
+        this.softKeyPreferred = in.readInt() == 1;
+        this.helpAvailable = in.readInt() == 1;
+        this.titleIconSelfExplanatory = in.readInt() == 1;
+        this.itemsIconSelfExplanatory = in.readInt() != 1 ? false : z;
+        this.presentationType = PresentationType.values()[in.readInt()];
     }
 
-    /* synthetic */ Menu(Parcel parcel, AnonymousClass1 anonymousClass1) {
-        this(parcel);
-    }
-
+    @Override // android.os.Parcelable
     public int describeContents() {
         return 0;
     }
 
-    public void writeToParcel(Parcel parcel, int i) {
-        int i2 = 1;
-        parcel.writeString(this.title);
-        parcel.writeParcelable(this.titleIcon, i);
+    @Override // android.os.Parcelable
+    public void writeToParcel(Parcel dest, int flags) {
+        int i = 1;
+        dest.writeString(this.title);
+        dest.writeParcelable(this.titleIcon, flags);
         int size = this.items.size();
-        parcel.writeInt(size);
-        for (int i3 = 0; i3 < size; i3++) {
-            parcel.writeParcelable((Parcelable) this.items.get(i3), i);
+        dest.writeInt(size);
+        for (int i2 = 0; i2 < size; i2++) {
+            dest.writeParcelable(this.items.get(i2), flags);
         }
-        parcel.writeInt(this.defaultItem);
-        parcel.writeInt(this.softKeyPreferred ? 1 : 0);
-        parcel.writeInt(this.helpAvailable ? 1 : 0);
-        parcel.writeInt(this.titleIconSelfExplanatory ? 1 : 0);
+        dest.writeInt(this.defaultItem);
+        dest.writeInt(this.softKeyPreferred ? 1 : 0);
+        dest.writeInt(this.helpAvailable ? 1 : 0);
+        dest.writeInt(this.titleIconSelfExplanatory ? 1 : 0);
         if (!this.itemsIconSelfExplanatory) {
-            i2 = 0;
+            i = 0;
         }
-        parcel.writeInt(i2);
-        parcel.writeInt(this.presentationType.ordinal());
+        dest.writeInt(i);
+        dest.writeInt(this.presentationType.ordinal());
     }
 }

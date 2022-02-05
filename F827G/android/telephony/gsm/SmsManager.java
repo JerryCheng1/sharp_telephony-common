@@ -7,6 +7,7 @@ import android.util.SeempLog;
 import java.util.ArrayList;
 
 @Deprecated
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class SmsManager {
     @Deprecated
     public static final int RESULT_ERROR_GENERIC_FAILURE = 1;
@@ -30,10 +31,6 @@ public final class SmsManager {
     private android.telephony.SmsManager mSmsMgrProxy = android.telephony.SmsManager.getDefault();
 
     @Deprecated
-    private SmsManager() {
-    }
-
-    @Deprecated
     public static final SmsManager getDefault() {
         if (sInstance == null) {
             sInstance = new SmsManager();
@@ -42,24 +39,60 @@ public final class SmsManager {
     }
 
     @Deprecated
-    public final boolean copyMessageToSim(byte[] bArr, byte[] bArr2, int i) {
+    private SmsManager() {
+    }
+
+    @Deprecated
+    public final void sendTextMessage(String destinationAddress, String scAddress, String text, PendingIntent sentIntent, PendingIntent deliveryIntent) {
+        if (SeempJavaFilter.check("android.telephony.gsm.SmsManager", "sendTextMessage").booleanValue()) {
+            SeempLog.record("android.telephony.gsm.SmsManager|sendTextMessage|destinationAddress," + (destinationAddress == null ? "null" : destinationAddress) + " scAddress," + (scAddress == null ? "null" : scAddress) + " text,null|--end");
+        }
+        this.mSmsMgrProxy.sendTextMessage(destinationAddress, scAddress, text, sentIntent, deliveryIntent);
+    }
+
+    @Deprecated
+    public final ArrayList<String> divideMessage(String text) {
+        return this.mSmsMgrProxy.divideMessage(text);
+    }
+
+    @Deprecated
+    public final void sendMultipartTextMessage(String destinationAddress, String scAddress, ArrayList<String> parts, ArrayList<PendingIntent> sentIntents, ArrayList<PendingIntent> deliveryIntents) {
+        if (SeempJavaFilter.check("android.telephony.SmsManager", "sendMultipartTextMessage").booleanValue()) {
+            SeempLog.record("android.telephony.SmsManager|sendMultipartTextMessage|destinationAddress," + (destinationAddress == null ? "null" : destinationAddress) + " scAddress," + (scAddress == null ? "null" : scAddress) + "|--end");
+        }
+        this.mSmsMgrProxy.sendMultipartTextMessage(destinationAddress, scAddress, parts, sentIntents, deliveryIntents);
+    }
+
+    @Deprecated
+    public final void sendDataMessage(String destinationAddress, String scAddress, short destinationPort, byte[] data, PendingIntent sentIntent, PendingIntent deliveryIntent) {
+        if (SeempJavaFilter.check("android.telephony.SmsManager", "sendDataMessage").booleanValue()) {
+            SeempLog.record("android.telephony.SmsManager|sendDataMessage|destinationAddress," + (destinationAddress == null ? "null" : destinationAddress) + " scAddress," + (scAddress == null ? "null" : scAddress) + "|--end");
+        }
+        this.mSmsMgrProxy.sendDataMessage(destinationAddress, scAddress, destinationPort, data, sentIntent, deliveryIntent);
+    }
+
+    @Deprecated
+    public final boolean copyMessageToSim(byte[] smsc, byte[] pdu, int status) {
         if (SeempJavaFilter.check("android.telephony.gsm.SmsManager", "copyMessageToSim").booleanValue()) {
             SeempLog.record("android.telephony.gsm.SmsManager|copyMessageToSim|--end");
         }
-        return this.mSmsMgrProxy.copyMessageToIcc(bArr, bArr2, i);
+        return this.mSmsMgrProxy.copyMessageToIcc(smsc, pdu, status);
     }
 
     @Deprecated
-    public final boolean deleteMessageFromSim(int i) {
+    public final boolean deleteMessageFromSim(int messageIndex) {
         if (SeempJavaFilter.check("android.telephony.gsm.SmsManager", "deleteMessageFromSim").booleanValue()) {
             SeempLog.record("android.telephony.gsm.SmsManager|deleteMessageFromSim|--end");
         }
-        return this.mSmsMgrProxy.deleteMessageFromIcc(i);
+        return this.mSmsMgrProxy.deleteMessageFromIcc(messageIndex);
     }
 
     @Deprecated
-    public final ArrayList<String> divideMessage(String str) {
-        return this.mSmsMgrProxy.divideMessage(str);
+    public final boolean updateMessageOnSim(int messageIndex, int newStatus, byte[] pdu) {
+        if (SeempJavaFilter.check("android.telephony.gsm.SmsManager", "updateMessageOnSim").booleanValue()) {
+            SeempLog.record("android.telephony.gsm.SmsManager|updateMessageOnSim|--end");
+        }
+        return this.mSmsMgrProxy.updateMessageOnIcc(messageIndex, newStatus, pdu);
     }
 
     @Deprecated
@@ -68,37 +101,5 @@ public final class SmsManager {
             SeempLog.record("android.telephony.gsm.SmsManager|getAllMessagesFromSim|--end");
         }
         return android.telephony.SmsManager.getDefault().getAllMessagesFromIcc();
-    }
-
-    @Deprecated
-    public final void sendDataMessage(String str, String str2, short s, byte[] bArr, PendingIntent pendingIntent, PendingIntent pendingIntent2) {
-        if (SeempJavaFilter.check("android.telephony.SmsManager", "sendDataMessage").booleanValue()) {
-            SeempLog.record("android.telephony.SmsManager|sendDataMessage|destinationAddress," + (str == null ? "null" : str) + " " + "scAddress," + (str2 == null ? "null" : str2) + "|--end");
-        }
-        this.mSmsMgrProxy.sendDataMessage(str, str2, s, bArr, pendingIntent, pendingIntent2);
-    }
-
-    @Deprecated
-    public final void sendMultipartTextMessage(String str, String str2, ArrayList<String> arrayList, ArrayList<PendingIntent> arrayList2, ArrayList<PendingIntent> arrayList3) {
-        if (SeempJavaFilter.check("android.telephony.SmsManager", "sendMultipartTextMessage").booleanValue()) {
-            SeempLog.record("android.telephony.SmsManager|sendMultipartTextMessage|destinationAddress," + (str == null ? "null" : str) + " " + "scAddress," + (str2 == null ? "null" : str2) + "|--end");
-        }
-        this.mSmsMgrProxy.sendMultipartTextMessage(str, str2, arrayList, arrayList2, arrayList3);
-    }
-
-    @Deprecated
-    public final void sendTextMessage(String str, String str2, String str3, PendingIntent pendingIntent, PendingIntent pendingIntent2) {
-        if (SeempJavaFilter.check("android.telephony.gsm.SmsManager", "sendTextMessage").booleanValue()) {
-            SeempLog.record("android.telephony.gsm.SmsManager|sendTextMessage|destinationAddress," + (str == null ? "null" : str) + " " + "scAddress," + (str2 == null ? "null" : str2) + " " + "text," + "null" + "|--end");
-        }
-        this.mSmsMgrProxy.sendTextMessage(str, str2, str3, pendingIntent, pendingIntent2);
-    }
-
-    @Deprecated
-    public final boolean updateMessageOnSim(int i, int i2, byte[] bArr) {
-        if (SeempJavaFilter.check("android.telephony.gsm.SmsManager", "updateMessageOnSim").booleanValue()) {
-            SeempLog.record("android.telephony.gsm.SmsManager|updateMessageOnSim|--end");
-        }
-        return this.mSmsMgrProxy.updateMessageOnIcc(i, i2, bArr);
     }
 }

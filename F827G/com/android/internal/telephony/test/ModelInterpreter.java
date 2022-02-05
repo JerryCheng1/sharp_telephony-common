@@ -11,12 +11,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class ModelInterpreter implements Runnable, SimulatedRadioControl {
     static final int CONNECTING_PAUSE_MSEC = 500;
     static final String LOG_TAG = "ModelInterpreter";
     static final int MAX_CALLS = 6;
     static final int PROGRESS_CALL_STATE = 1;
-    static final String[][] sDefaultResponses;
+    static final String[][] sDefaultResponses = {new String[]{"E0Q0V1", null}, new String[]{"+CMEE=2", null}, new String[]{"+CREG=2", null}, new String[]{"+CGREG=2", null}, new String[]{"+CCWA=1", null}, new String[]{"+COPS=0", null}, new String[]{"+CFUN=1", null}, new String[]{"+CGMI", "+CGMI: Android Model AT Interpreter\r"}, new String[]{"+CGMM", "+CGMM: Android Model AT Interpreter\r"}, new String[]{"+CGMR", "+CGMR: 1.0\r"}, new String[]{"+CGSN", "000000000000000\r"}, new String[]{"+CIMI", "320720000000000\r"}, new String[]{"+CSCS=?", "+CSCS: (\"HEX\",\"UCS2\")\r"}, new String[]{"+CFUN?", "+CFUN: 1\r"}, new String[]{"+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?", "+COPS: 0,0,\"Android\"\r+COPS: 0,1,\"Android\"\r+COPS: 0,2,\"310995\"\r"}, new String[]{"+CREG?", "+CREG: 2,5, \"0113\", \"6614\"\r"}, new String[]{"+CGREG?", "+CGREG: 2,0\r"}, new String[]{"+CSQ", "+CSQ: 16,99\r"}, new String[]{"+CNMI?", "+CNMI: 1,2,2,1,1\r"}, new String[]{"+CLIR?", "+CLIR: 1,3\r"}, new String[]{"%CPVWI=2", "%CPVWI: 0\r"}, new String[]{"+CUSD=1,\"#646#\"", "+CUSD=0,\"You have used 23 minutes\"\r"}, new String[]{"+CRSM=176,12258,0,0,10", "+CRSM: 144,0,981062200050259429F6\r"}, new String[]{"+CRSM=192,12258,0,0,15", "+CRSM: 144,0,0000000A2FE204000FF55501020000\r"}, new String[]{"+CRSM=192,28474,0,0,15", "+CRSM: 144,0,0000005a6f3a040011f5220102011e\r"}, new String[]{"+CRSM=178,28474,1,4,30", "+CRSM: 144,0,437573746f6d65722043617265ffffff07818100398799f7ffffffffffff\r"}, new String[]{"+CRSM=178,28474,2,4,30", "+CRSM: 144,0,566f696365204d61696cffffffffffff07918150367742f3ffffffffffff\r"}, new String[]{"+CRSM=178,28474,3,4,30", "+CRSM: 144,0,4164676a6dffffffffffffffffffffff0b918188551512c221436587ff01\r"}, new String[]{"+CRSM=178,28474,4,4,30", "+CRSM: 144,0,810101c1ffffffffffffffffffffffff068114455245f8ffffffffffffff\r"}, new String[]{"+CRSM=192,28490,0,0,15", "+CRSM: 144,0,000000416f4a040011f5550102010d\r"}, new String[]{"+CRSM=178,28490,1,4,13", "+CRSM: 144,0,0206092143658709ffffffffff\r"}};
     private String mFinalResponse;
     HandlerThread mHandlerThread;
     InputStream mIn;
@@ -27,71 +28,18 @@ public class ModelInterpreter implements Runnable, SimulatedRadioControl {
     ServerSocket mSS;
     SimulatedGsmCallState mSimulatedCallState;
 
-    static {
-        String[] strArr = new String[]{"E0Q0V1", null};
-        String[] strArr2 = new String[]{"+CMEE=2", null};
-        String[] strArr3 = new String[]{"+CREG=2", null};
-        String[] strArr4 = new String[]{"+CGREG=2", null};
-        String[] strArr5 = new String[]{"+CCWA=1", null};
-        String[] strArr6 = new String[]{"+COPS=0", null};
-        String[] strArr7 = new String[]{"+CFUN=1", null};
-        String[] strArr8 = new String[]{"+CGMM", "+CGMM: Android Model AT Interpreter\r"};
-        String[] strArr9 = new String[]{"+CGMR", "+CGMR: 1.0\r"};
-        String[] strArr10 = new String[]{"+CGSN", "000000000000000\r"};
-        String[] strArr11 = new String[]{"+CSCS=?", "+CSCS: (\"HEX\",\"UCS2\")\r"};
-        String[] strArr12 = new String[]{"+CFUN?", "+CFUN: 1\r"};
-        String[] strArr13 = new String[]{"+CGREG?", "+CGREG: 2,0\r"};
-        String[] strArr14 = new String[]{"+CSQ", "+CSQ: 16,99\r"};
-        String[] strArr15 = new String[]{"+CNMI?", "+CNMI: 1,2,2,1,1\r"};
-        String[] strArr16 = new String[]{"+CLIR?", "+CLIR: 1,3\r"};
-        String[] strArr17 = new String[]{"%CPVWI=2", "%CPVWI: 0\r"};
-        String[] strArr18 = new String[]{"+CUSD=1,\"#646#\"", "+CUSD=0,\"You have used 23 minutes\"\r"};
-        String[] strArr19 = new String[]{"+CRSM=176,12258,0,0,10", "+CRSM: 144,0,981062200050259429F6\r"};
-        String[] strArr20 = new String[]{"+CRSM=192,12258,0,0,15", "+CRSM: 144,0,0000000A2FE204000FF55501020000\r"};
-        String[] strArr21 = new String[]{"+CRSM=192,28474,0,0,15", "+CRSM: 144,0,0000005a6f3a040011f5220102011e\r"};
-        String[] strArr22 = new String[]{"+CRSM=178,28474,1,4,30", "+CRSM: 144,0,437573746f6d65722043617265ffffff07818100398799f7ffffffffffff\r"};
-        String[] strArr23 = new String[]{"+CRSM=178,28474,2,4,30", "+CRSM: 144,0,566f696365204d61696cffffffffffff07918150367742f3ffffffffffff\r"};
-        String[] strArr24 = new String[]{"+CRSM=178,28490,1,4,13", "+CRSM: 144,0,0206092143658709ffffffffff\r"};
-        r25 = new String[31][];
-        r25[7] = new String[]{"+CGMI", "+CGMI: Android Model AT Interpreter\r"};
-        r25[8] = strArr8;
-        r25[9] = strArr9;
-        r25[10] = strArr10;
-        r25[11] = new String[]{"+CIMI", "320720000000000\r"};
-        r25[12] = strArr11;
-        r25[13] = strArr12;
-        r25[14] = new String[]{"+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?", "+COPS: 0,0,\"Android\"\r+COPS: 0,1,\"Android\"\r+COPS: 0,2,\"310995\"\r"};
-        r25[15] = new String[]{"+CREG?", "+CREG: 2,5, \"0113\", \"6614\"\r"};
-        r25[16] = strArr13;
-        r25[17] = strArr14;
-        r25[18] = strArr15;
-        r25[19] = strArr16;
-        r25[20] = strArr17;
-        r25[21] = strArr18;
-        r25[22] = strArr19;
-        r25[23] = strArr20;
-        r25[24] = strArr21;
-        r25[25] = strArr22;
-        r25[26] = strArr23;
-        r25[27] = new String[]{"+CRSM=178,28474,3,4,30", "+CRSM: 144,0,4164676a6dffffffffffffffffffffff0b918188551512c221436587ff01\r"};
-        r25[28] = new String[]{"+CRSM=178,28474,4,4,30", "+CRSM: 144,0,810101c1ffffffffffffffffffffffff068114455245f8ffffffffffffff\r"};
-        r25[29] = new String[]{"+CRSM=192,28490,0,0,15", "+CRSM: 144,0,000000416f4a040011f5550102010d\r"};
-        r25[30] = strArr24;
-        sDefaultResponses = r25;
-    }
-
-    public ModelInterpreter(InputStream inputStream, OutputStream outputStream) {
+    public ModelInterpreter(InputStream in, OutputStream out) {
         this.mPausedResponseMonitor = new Object();
-        this.mIn = inputStream;
-        this.mOut = outputStream;
+        this.mIn = in;
+        this.mOut = out;
         init();
     }
 
-    public ModelInterpreter(InetSocketAddress inetSocketAddress) throws IOException {
+    public ModelInterpreter(InetSocketAddress sa) throws IOException {
         this.mPausedResponseMonitor = new Object();
         this.mSS = new ServerSocket();
         this.mSS.setReuseAddress(true);
-        this.mSS.bind(inetSocketAddress);
+        this.mSS.bind(sa);
         init();
     }
 
@@ -102,186 +50,141 @@ public class ModelInterpreter implements Runnable, SimulatedRadioControl {
         this.mSimulatedCallState = new SimulatedGsmCallState(this.mHandlerThread.getLooper());
     }
 
-    private void onAnswer() throws InterpreterEx {
-        if (!this.mSimulatedCallState.onAnswer()) {
-            throw new InterpreterEx("ERROR");
+    @Override // java.lang.Runnable
+    public void run() {
+        while (true) {
+            if (this.mSS != null) {
+                try {
+                    Socket s = this.mSS.accept();
+                    try {
+                        this.mIn = s.getInputStream();
+                        this.mOut = s.getOutputStream();
+                        Rlog.i(LOG_TAG, "New connection accepted");
+                    } catch (IOException ex) {
+                        Rlog.w(LOG_TAG, "IOException on accepted socket(); re-listening", ex);
+                    }
+                } catch (IOException ex2) {
+                    Rlog.w(LOG_TAG, "IOException on socket.accept(); stopping", ex2);
+                    return;
+                }
+            }
+            this.mLineReader = new LineReader(this.mIn);
+            println("Welcome");
+            while (true) {
+                String line = this.mLineReader.getNextLine();
+                if (line == null) {
+                    break;
+                }
+                synchronized (this.mPausedResponseMonitor) {
+                    while (this.mPausedResponseCount > 0) {
+                        try {
+                            this.mPausedResponseMonitor.wait();
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                }
+                synchronized (this) {
+                    try {
+                        try {
+                            this.mFinalResponse = "OK";
+                            processLine(line);
+                            println(this.mFinalResponse);
+                        } catch (InterpreterEx ex3) {
+                            println(ex3.mResult);
+                        }
+                    } catch (RuntimeException ex4) {
+                        ex4.printStackTrace();
+                        println("ERROR");
+                    }
+                }
+            }
+            Rlog.i(LOG_TAG, "Disconnected");
+            if (this.mSS == null) {
+                return;
+            }
         }
     }
 
-    private void onCHLD(String str) throws InterpreterEx {
-        char c = 0;
-        char charAt = str.charAt(6);
-        if (str.length() >= 8) {
-            c = str.charAt(7);
-        }
-        if (!this.mSimulatedCallState.onChld(charAt, c)) {
-            throw new InterpreterEx("ERROR");
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerRing(String number) {
+        synchronized (this) {
+            if (this.mSimulatedCallState.triggerRing(number)) {
+                println("RING");
+            }
         }
     }
 
-    private void onCLCC() {
-        List clccLines = this.mSimulatedCallState.getClccLines();
-        int size = clccLines.size();
-        for (int i = 0; i < size; i++) {
-            println((String) clccLines.get(i));
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void progressConnectingCallState() {
+        this.mSimulatedCallState.progressConnectingCallState();
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void progressConnectingToActive() {
+        this.mSimulatedCallState.progressConnectingToActive();
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void setAutoProgressConnectingCall(boolean b) {
+        this.mSimulatedCallState.setAutoProgressConnectingCall(b);
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void setNextDialFailImmediately(boolean b) {
+        this.mSimulatedCallState.setNextDialFailImmediately(b);
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void setNextCallFailCause(int gsmCause) {
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerHangupForeground() {
+        if (this.mSimulatedCallState.triggerHangupForeground()) {
+            println("NO CARRIER");
         }
     }
 
-    private void onDial(String str) throws InterpreterEx {
-        if (!this.mSimulatedCallState.onDial(str.substring(1))) {
-            throw new InterpreterEx("ERROR");
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerHangupBackground() {
+        if (this.mSimulatedCallState.triggerHangupBackground()) {
+            println("NO CARRIER");
         }
     }
 
-    private void onHangup() throws InterpreterEx {
-        if (this.mSimulatedCallState.onAnswer()) {
-            this.mFinalResponse = "NO CARRIER";
-            return;
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerHangupAll() {
+        if (this.mSimulatedCallState.triggerHangupAll()) {
+            println("NO CARRIER");
         }
-        throw new InterpreterEx("ERROR");
     }
 
-    private void onSMSSend(String str) {
-        print("> ");
-        this.mLineReader.getNextLineCtrlZ();
-        println("+CMGS: 1");
+    public void sendUnsolicited(String unsol) {
+        synchronized (this) {
+            println(unsol);
+        }
     }
 
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerSsn(int a, int b) {
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerIncomingUssd(String statusCode, String message) {
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerIncomingSMS(String message) {
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
     public void pauseResponses() {
         synchronized (this.mPausedResponseMonitor) {
             this.mPausedResponseCount++;
         }
     }
 
-    /* Access modifiers changed, original: 0000 */
-    public void print(String str) {
-        synchronized (this) {
-            try {
-                this.mOut.write(str.getBytes("US-ASCII"));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void println(String str) {
-        synchronized (this) {
-            try {
-                this.mOut.write(str.getBytes("US-ASCII"));
-                this.mOut.write(13);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    /* JADX WARNING: Removed duplicated region for block: B:45:0x0017 A:{SYNTHETIC} */
-    /* JADX WARNING: Removed duplicated region for block: B:38:0x0076 A:{SYNTHETIC} */
-    public void processLine(java.lang.String r8) throws com.android.internal.telephony.test.InterpreterEx {
-        /*
-        r7 = this;
-        r3 = 1;
-        r1 = 0;
-        r4 = r7.splitCommands(r8);
-        r0 = r1;
-    L_0x0007:
-        r2 = r4.length;
-        if (r0 >= r2) goto L_0x0081;
-    L_0x000a:
-        r5 = r4[r0];
-        r2 = "A";
-        r2 = r5.equals(r2);
-        if (r2 == 0) goto L_0x001a;
-    L_0x0014:
-        r7.onAnswer();
-    L_0x0017:
-        r0 = r0 + 1;
-        goto L_0x0007;
-    L_0x001a:
-        r2 = "H";
-        r2 = r5.equals(r2);
-        if (r2 == 0) goto L_0x0026;
-    L_0x0022:
-        r7.onHangup();
-        goto L_0x0017;
-    L_0x0026:
-        r2 = "+CHLD=";
-        r2 = r5.startsWith(r2);
-        if (r2 == 0) goto L_0x0032;
-    L_0x002e:
-        r7.onCHLD(r5);
-        goto L_0x0017;
-    L_0x0032:
-        r2 = "+CLCC";
-        r2 = r5.equals(r2);
-        if (r2 == 0) goto L_0x003e;
-    L_0x003a:
-        r7.onCLCC();
-        goto L_0x0017;
-    L_0x003e:
-        r2 = "D";
-        r2 = r5.startsWith(r2);
-        if (r2 == 0) goto L_0x004a;
-    L_0x0046:
-        r7.onDial(r5);
-        goto L_0x0017;
-    L_0x004a:
-        r2 = "+CMGS=";
-        r2 = r5.startsWith(r2);
-        if (r2 == 0) goto L_0x0056;
-    L_0x0052:
-        r7.onSMSSend(r5);
-        goto L_0x0017;
-    L_0x0056:
-        r2 = r1;
-    L_0x0057:
-        r6 = sDefaultResponses;
-        r6 = r6.length;
-        if (r2 >= r6) goto L_0x0082;
-    L_0x005c:
-        r6 = sDefaultResponses;
-        r6 = r6[r2];
-        r6 = r6[r1];
-        r6 = r5.equals(r6);
-        if (r6 == 0) goto L_0x007e;
-    L_0x0068:
-        r5 = sDefaultResponses;
-        r2 = r5[r2];
-        r2 = r2[r3];
-        if (r2 == 0) goto L_0x0073;
-    L_0x0070:
-        r7.println(r2);
-    L_0x0073:
-        r2 = r3;
-    L_0x0074:
-        if (r2 != 0) goto L_0x0017;
-    L_0x0076:
-        r0 = new com.android.internal.telephony.test.InterpreterEx;
-        r1 = "ERROR";
-        r0.<init>(r1);
-        throw r0;
-    L_0x007e:
-        r2 = r2 + 1;
-        goto L_0x0057;
-    L_0x0081:
-        return;
-    L_0x0082:
-        r2 = r1;
-        goto L_0x0074;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.test.ModelInterpreter.processLine(java.lang.String):void");
-    }
-
-    public void progressConnectingCallState() {
-        this.mSimulatedCallState.progressConnectingCallState();
-    }
-
-    public void progressConnectingToActive() {
-        this.mSimulatedCallState.progressConnectingToActive();
-    }
-
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
     public void resumeResponses() {
         synchronized (this.mPausedResponseMonitor) {
             this.mPausedResponseCount--;
@@ -291,77 +194,117 @@ public class ModelInterpreter implements Runnable, SimulatedRadioControl {
         }
     }
 
-    public void run() {
-        while (true) {
-            if (this.mSS != null) {
-                try {
-                    Socket accept = this.mSS.accept();
-                    try {
-                        this.mIn = accept.getInputStream();
-                        this.mOut = accept.getOutputStream();
-                        Rlog.i(LOG_TAG, "New connection accepted");
-                    } catch (IOException e) {
-                        Rlog.w(LOG_TAG, "IOException on accepted socket(); re-listening", e);
-                    }
-                } catch (IOException e2) {
-                    Rlog.w(LOG_TAG, "IOException on socket.accept(); stopping", e2);
-                    return;
-                }
-            }
-            this.mLineReader = new LineReader(this.mIn);
-            println("Welcome");
-            while (true) {
-                String nextLine = this.mLineReader.getNextLine();
-                if (nextLine == null) {
-                    Rlog.i(LOG_TAG, "Disconnected");
-                    if (this.mSS == null) {
-                        return;
-                    }
-                } else {
-                    synchronized (this.mPausedResponseMonitor) {
-                        while (this.mPausedResponseCount > 0) {
-                            try {
-                                this.mPausedResponseMonitor.wait();
-                            } catch (InterruptedException e3) {
-                            }
-                        }
-                    }
-                    synchronized (this) {
-                        try {
-                            this.mFinalResponse = "OK";
-                            processLine(nextLine);
-                            println(this.mFinalResponse);
-                        } catch (InterpreterEx e4) {
-                            println(e4.mResult);
-                        } catch (RuntimeException e5) {
-                            e5.printStackTrace();
-                            println("ERROR");
-                        }
-                    }
-                }
-            }
-        }
-        while (true) {
+    private void onAnswer() throws InterpreterEx {
+        if (!this.mSimulatedCallState.onAnswer()) {
+            throw new InterpreterEx("ERROR");
         }
     }
 
-    public void sendUnsolicited(String str) {
+    private void onHangup() throws InterpreterEx {
+        if (!this.mSimulatedCallState.onAnswer()) {
+            throw new InterpreterEx("ERROR");
+        }
+        this.mFinalResponse = "NO CARRIER";
+    }
+
+    private void onCHLD(String command) throws InterpreterEx {
+        char c1 = 0;
+        char c0 = command.charAt(6);
+        if (command.length() >= 8) {
+            c1 = command.charAt(7);
+        }
+        if (!this.mSimulatedCallState.onChld(c0, c1)) {
+            throw new InterpreterEx("ERROR");
+        }
+    }
+
+    private void onDial(String command) throws InterpreterEx {
+        if (!this.mSimulatedCallState.onDial(command.substring(1))) {
+            throw new InterpreterEx("ERROR");
+        }
+    }
+
+    private void onCLCC() {
+        List<String> lines = this.mSimulatedCallState.getClccLines();
+        int s = lines.size();
+        for (int i = 0; i < s; i++) {
+            println(lines.get(i));
+        }
+    }
+
+    private void onSMSSend(String command) {
+        print("> ");
+        this.mLineReader.getNextLineCtrlZ();
+        println("+CMGS: 1");
+    }
+
+    void processLine(String line) throws InterpreterEx {
+        String[] commands = splitCommands(line);
+        for (String command : commands) {
+            if (command.equals("A")) {
+                onAnswer();
+            } else if (command.equals("H")) {
+                onHangup();
+            } else if (command.startsWith("+CHLD=")) {
+                onCHLD(command);
+            } else if (command.equals("+CLCC")) {
+                onCLCC();
+            } else if (command.startsWith("D")) {
+                onDial(command);
+            } else if (command.startsWith("+CMGS=")) {
+                onSMSSend(command);
+            } else {
+                boolean found = false;
+                int j = 0;
+                while (true) {
+                    if (j >= sDefaultResponses.length) {
+                        break;
+                    } else if (command.equals(sDefaultResponses[j][0])) {
+                        String r = sDefaultResponses[j][1];
+                        if (r != null) {
+                            println(r);
+                        }
+                        found = true;
+                    } else {
+                        j++;
+                    }
+                }
+                if (!found) {
+                    throw new InterpreterEx("ERROR");
+                }
+            }
+        }
+    }
+
+    String[] splitCommands(String line) throws InterpreterEx {
+        if (line.startsWith("AT")) {
+            return line.length() == 2 ? new String[0] : new String[]{line.substring(2)};
+        }
+        throw new InterpreterEx("ERROR");
+    }
+
+    void println(String s) {
         synchronized (this) {
-            println(str);
+            try {
+                this.mOut.write(s.getBytes("US-ASCII"));
+                this.mOut.write(13);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
-    public void setAutoProgressConnectingCall(boolean z) {
-        this.mSimulatedCallState.setAutoProgressConnectingCall(z);
+    void print(String s) {
+        synchronized (this) {
+            try {
+                this.mOut.write(s.getBytes("US-ASCII"));
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
     }
 
-    public void setNextCallFailCause(int i) {
-    }
-
-    public void setNextDialFailImmediately(boolean z) {
-        this.mSimulatedCallState.setNextDialFailImmediately(z);
-    }
-
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
     public void shutdown() {
         Looper looper = this.mHandlerThread.getLooper();
         if (looper != null) {
@@ -375,51 +318,5 @@ public class ModelInterpreter implements Runnable, SimulatedRadioControl {
             this.mOut.close();
         } catch (IOException e2) {
         }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public String[] splitCommands(String str) throws InterpreterEx {
-        if (!str.startsWith("AT")) {
-            throw new InterpreterEx("ERROR");
-        } else if (str.length() == 2) {
-            return new String[0];
-        } else {
-            return new String[]{str.substring(2)};
-        }
-    }
-
-    public void triggerHangupAll() {
-        if (this.mSimulatedCallState.triggerHangupAll()) {
-            println("NO CARRIER");
-        }
-    }
-
-    public void triggerHangupBackground() {
-        if (this.mSimulatedCallState.triggerHangupBackground()) {
-            println("NO CARRIER");
-        }
-    }
-
-    public void triggerHangupForeground() {
-        if (this.mSimulatedCallState.triggerHangupForeground()) {
-            println("NO CARRIER");
-        }
-    }
-
-    public void triggerIncomingSMS(String str) {
-    }
-
-    public void triggerIncomingUssd(String str, String str2) {
-    }
-
-    public void triggerRing(String str) {
-        synchronized (this) {
-            if (this.mSimulatedCallState.triggerRing(str)) {
-                println("RING");
-            }
-        }
-    }
-
-    public void triggerSsn(int i, int i2) {
     }
 }

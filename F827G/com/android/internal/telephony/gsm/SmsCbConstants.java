@@ -1,5 +1,6 @@
 package com.android.internal.telephony.gsm;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsCbConstants {
     public static final int ETWS_WARNING_TYPE_EARTHQUAKE = 0;
     public static final int ETWS_WARNING_TYPE_EARTHQUAKE_AND_TSUNAMI = 2;

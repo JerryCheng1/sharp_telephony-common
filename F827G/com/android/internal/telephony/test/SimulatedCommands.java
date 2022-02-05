@@ -7,9 +7,7 @@ import android.os.Message;
 import android.telephony.Rlog;
 import com.android.internal.telephony.BaseCommands;
 import com.android.internal.telephony.CommandException;
-import com.android.internal.telephony.CommandException.Error;
 import com.android.internal.telephony.CommandsInterface;
-import com.android.internal.telephony.CommandsInterface.RadioState;
 import com.android.internal.telephony.UUSInfo;
 import com.android.internal.telephony.cdma.CdmaSmsBroadcastConfigInfo;
 import com.android.internal.telephony.dataconnection.DataProfile;
@@ -17,19 +15,15 @@ import com.android.internal.telephony.gsm.SmsBroadcastConfigInfo;
 import com.android.internal.telephony.gsm.SuppServiceNotification;
 import java.util.ArrayList;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class SimulatedCommands extends BaseCommands implements CommandsInterface, SimulatedRadioControl {
     private static final String DEFAULT_SIM_PIN2_CODE = "5678";
     private static final String DEFAULT_SIM_PIN_CODE = "1234";
-    private static final SimFdnState INITIAL_FDN_STATE = SimFdnState.NONE;
-    private static final SimLockState INITIAL_LOCK_STATE = SimLockState.NONE;
     private static final String LOG_TAG = "SimulatedCommands";
     private static final String SIM_PUK2_CODE = "87654321";
     private static final String SIM_PUK_CODE = "12345678";
-    HandlerThread mHandlerThread = new HandlerThread(LOG_TAG);
     int mNetworkType;
-    int mNextCallFailCause = 16;
     int mPausedResponseCount;
-    ArrayList<Message> mPausedResponses = new ArrayList();
     String mPin2Code;
     int mPin2UnlockAttempts;
     String mPinCode;
@@ -40,10 +34,16 @@ public final class SimulatedCommands extends BaseCommands implements CommandsInt
     boolean mSimFdnEnabled;
     SimFdnState mSimFdnEnabledState;
     boolean mSimLockEnabled;
-    SimLockState mSimLockedState;
+    private static final SimLockState INITIAL_LOCK_STATE = SimLockState.NONE;
+    private static final SimFdnState INITIAL_FDN_STATE = SimFdnState.NONE;
     boolean mSsnNotifyOn = false;
-    SimulatedGsmCallState simulatedCallState;
+    ArrayList<Message> mPausedResponses = new ArrayList<>();
+    int mNextCallFailCause = 16;
+    HandlerThread mHandlerThread = new HandlerThread(LOG_TAG);
+    SimulatedGsmCallState simulatedCallState = new SimulatedGsmCallState(this.mHandlerThread.getLooper());
+    SimLockState mSimLockedState = INITIAL_LOCK_STATE;
 
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     private enum SimFdnState {
         NONE,
         REQUIRE_PIN2,
@@ -51,529 +51,824 @@ public final class SimulatedCommands extends BaseCommands implements CommandsInt
         SIM_PERM_LOCKED
     }
 
-    private enum SimLockState {
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public enum SimLockState {
         NONE,
         REQUIRE_PIN,
         REQUIRE_PUK,
         SIM_PERM_LOCKED
     }
 
+    /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
     public SimulatedCommands() {
-        boolean z = true;
         super(null);
+        boolean z = true;
         this.mHandlerThread.start();
-        this.simulatedCallState = new SimulatedGsmCallState(this.mHandlerThread.getLooper());
-        setRadioState(RadioState.RADIO_OFF);
-        this.mSimLockedState = INITIAL_LOCK_STATE;
+        setRadioState(CommandsInterface.RadioState.RADIO_OFF);
         this.mSimLockEnabled = this.mSimLockedState != SimLockState.NONE;
         this.mPinCode = DEFAULT_SIM_PIN_CODE;
         this.mSimFdnEnabledState = INITIAL_FDN_STATE;
-        if (this.mSimFdnEnabledState == SimFdnState.NONE) {
-            z = false;
-        }
-        this.mSimFdnEnabled = z;
+        this.mSimFdnEnabled = this.mSimFdnEnabledState == SimFdnState.NONE ? false : z;
         this.mPin2Code = DEFAULT_SIM_PIN2_CODE;
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIccCardStatus(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPin(String pin, Message result) {
+        if (this.mSimLockedState != SimLockState.REQUIRE_PIN) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: wrong state, state=" + this.mSimLockedState);
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        } else if (pin != null && pin.equals(this.mPinCode)) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: success!");
+            this.mPinUnlockAttempts = 0;
+            this.mSimLockedState = SimLockState.NONE;
+            this.mIccStatusChangedRegistrants.notifyRegistrants();
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            this.mPinUnlockAttempts++;
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: failed! attempt=" + this.mPinUnlockAttempts);
+            if (this.mPinUnlockAttempts >= 3) {
+                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: set state to REQUIRE_PUK");
+                this.mSimLockedState = SimLockState.REQUIRE_PUK;
+            }
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPuk(String puk, String newPin, Message result) {
+        if (this.mSimLockedState != SimLockState.REQUIRE_PUK) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: wrong state, state=" + this.mSimLockedState);
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        } else if (puk != null && puk.equals(SIM_PUK_CODE)) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: success!");
+            this.mSimLockedState = SimLockState.NONE;
+            this.mPukUnlockAttempts = 0;
+            this.mIccStatusChangedRegistrants.notifyRegistrants();
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            this.mPukUnlockAttempts++;
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: failed! attempt=" + this.mPukUnlockAttempts);
+            if (this.mPukUnlockAttempts >= 10) {
+                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: set state to SIM_PERM_LOCKED");
+                this.mSimLockedState = SimLockState.SIM_PERM_LOCKED;
+            }
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPin2(String pin2, Message result) {
+        if (this.mSimFdnEnabledState != SimFdnState.REQUIRE_PIN2) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: wrong state, state=" + this.mSimFdnEnabledState);
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        } else if (pin2 != null && pin2.equals(this.mPin2Code)) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: success!");
+            this.mPin2UnlockAttempts = 0;
+            this.mSimFdnEnabledState = SimFdnState.NONE;
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            this.mPin2UnlockAttempts++;
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: failed! attempt=" + this.mPin2UnlockAttempts);
+            if (this.mPin2UnlockAttempts >= 3) {
+                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: set state to REQUIRE_PUK2");
+                this.mSimFdnEnabledState = SimFdnState.REQUIRE_PUK2;
+            }
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPuk2(String puk2, String newPin2, Message result) {
+        if (this.mSimFdnEnabledState != SimFdnState.REQUIRE_PUK2) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: wrong state, state=" + this.mSimLockedState);
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        } else if (puk2 != null && puk2.equals(SIM_PUK2_CODE)) {
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: success!");
+            this.mSimFdnEnabledState = SimFdnState.NONE;
+            this.mPuk2UnlockAttempts = 0;
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            this.mPuk2UnlockAttempts++;
+            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: failed! attempt=" + this.mPuk2UnlockAttempts);
+            if (this.mPuk2UnlockAttempts >= 10) {
+                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: set state to SIM_PERM_LOCKED");
+                this.mSimFdnEnabledState = SimFdnState.SIM_PERM_LOCKED;
+            }
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPin(String oldPin, String newPin, Message result) {
+        if (oldPin != null && oldPin.equals(this.mPinCode)) {
+            this.mPinCode = newPin;
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            Rlog.i(LOG_TAG, "[SimCmd] changeIccPin: pin failed!");
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPin2(String oldPin2, String newPin2, Message result) {
+        if (oldPin2 != null && oldPin2.equals(this.mPin2Code)) {
+            this.mPin2Code = newPin2;
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            Rlog.i(LOG_TAG, "[SimCmd] changeIccPin2: pin2 failed!");
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.PASSWORD_INCORRECT));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeBarringPassword(String facility, String oldPwd, String newPwd, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setSuppServiceNotifications(boolean enable, Message result) {
+        resultSuccess(result, null);
+        if (enable && this.mSsnNotifyOn) {
+            Rlog.w(LOG_TAG, "Supp Service Notifications already enabled!");
+        }
+        this.mSsnNotifyOn = enable;
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryFacilityLock(String facility, String pin, int serviceClass, Message result) {
+        queryFacilityLockForApp(facility, pin, serviceClass, null, result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryFacilityLockForApp(String facility, String pin, int serviceClass, String appId, Message result) {
+        int i = 1;
+        if (facility == null || !facility.equals(CommandsInterface.CB_FACILITY_BA_SIM)) {
+            if (facility == null || !facility.equals(CommandsInterface.CB_FACILITY_BA_FD)) {
+                unimplemented(result);
+            } else if (result != null) {
+                int[] r = new int[1];
+                if (!this.mSimFdnEnabled) {
+                    i = 0;
+                }
+                r[0] = i;
+                Rlog.i(LOG_TAG, "[SimCmd] queryFacilityLock: FDN is " + (r[0] == 0 ? "disabled" : "enabled"));
+                AsyncResult.forMessage(result, r, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            int[] r2 = new int[1];
+            if (!this.mSimLockEnabled) {
+                i = 0;
+            }
+            r2[0] = i;
+            Rlog.i(LOG_TAG, "[SimCmd] queryFacilityLock: SIM is " + (r2[0] == 0 ? "unlocked" : "locked"));
+            AsyncResult.forMessage(result, r2, (Throwable) null);
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setFacilityLock(String facility, boolean lockEnabled, String pin, int serviceClass, Message result) {
+        setFacilityLockForApp(facility, lockEnabled, pin, serviceClass, null, result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setFacilityLockForApp(String facility, boolean lockEnabled, String pin, int serviceClass, String appId, Message result) {
+        if (facility == null || !facility.equals(CommandsInterface.CB_FACILITY_BA_SIM)) {
+            if (facility == null || !facility.equals(CommandsInterface.CB_FACILITY_BA_FD)) {
+                unimplemented(result);
+            } else if (pin != null && pin.equals(this.mPin2Code)) {
+                Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin2 is valid");
+                this.mSimFdnEnabled = lockEnabled;
+                if (result != null) {
+                    AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                    result.sendToTarget();
+                }
+            } else if (result != null) {
+                Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin2 failed!");
+                AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.GENERIC_FAILURE));
+                result.sendToTarget();
+            }
+        } else if (pin != null && pin.equals(this.mPinCode)) {
+            Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin is valid");
+            this.mSimLockEnabled = lockEnabled;
+            if (result != null) {
+                AsyncResult.forMessage(result, (Object) null, (Throwable) null);
+                result.sendToTarget();
+            }
+        } else if (result != null) {
+            Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin failed!");
+            AsyncResult.forMessage(result, (Object) null, new CommandException(CommandException.Error.GENERIC_FAILURE));
+            result.sendToTarget();
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyDepersonalization(String netpin, String type, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCurrentCalls(Message result) {
+        if (this.mState != CommandsInterface.RadioState.RADIO_ON || isSimLocked()) {
+            resultFail(result, new CommandException(CommandException.Error.RADIO_NOT_AVAILABLE));
+        } else {
+            resultSuccess(result, this.simulatedCallState.getDriverCalls());
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    @Deprecated
+    public void getPDPContextList(Message result) {
+        getDataCallList(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getDataCallList(Message result) {
+        resultSuccess(result, new ArrayList(0));
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void dial(String address, int clirMode, Message result) {
+        this.simulatedCallState.onDial(address);
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void dial(String address, int clirMode, UUSInfo uusInfo, Message result) {
+        this.simulatedCallState.onDial(address);
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMSI(Message result) {
+        getIMSIForApp(null, result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMSIForApp(String aid, Message result) {
+        resultSuccess(result, "012345678901234");
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMEI(Message result) {
+        resultSuccess(result, "012345678901234");
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getIMEISV(Message result) {
+        resultSuccess(result, "99");
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void hangupConnection(int gsmIndex, Message result) {
+        if (!this.simulatedCallState.onChld('1', (char) (gsmIndex + 48))) {
+            Rlog.i("GSM", "[SimCmd] hangupConnection: resultFail");
+            resultFail(result, new RuntimeException("Hangup Error"));
+            return;
+        }
+        Rlog.i("GSM", "[SimCmd] hangupConnection: resultSuccess");
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void hangupWaitingOrBackground(Message result) {
+        if (!this.simulatedCallState.onChld('0', (char) 0)) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void hangupForegroundResumeBackground(Message result) {
+        if (!this.simulatedCallState.onChld('1', (char) 0)) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void switchWaitingOrHoldingAndActive(Message result) {
+        if (!this.simulatedCallState.onChld('2', (char) 0)) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void conference(Message result) {
+        if (!this.simulatedCallState.onChld('3', (char) 0)) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void explicitCallTransfer(Message result) {
+        if (!this.simulatedCallState.onChld('4', (char) 0)) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void separateConnection(int gsmIndex, Message result) {
+        if (!this.simulatedCallState.onChld('2', (char) (gsmIndex + 48))) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acceptCall(Message result) {
+        if (!this.simulatedCallState.onAnswer()) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void rejectCall(Message result) {
+        if (!this.simulatedCallState.onChld('0', (char) 0)) {
+            resultFail(result, new RuntimeException("Hangup Error"));
+        } else {
+            resultSuccess(result, null);
+        }
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getLastCallFailCause(Message result) {
+        resultSuccess(result, new int[]{this.mNextCallFailCause});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    @Deprecated
+    public void getLastPdpFailCause(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getLastDataCallFailCause(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setMute(boolean enableMute, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getMute(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getSignalStrength(Message result) {
+        resultSuccess(result, new int[]{23, 0});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setBandMode(int bandMode, Message result) {
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryAvailableBandMode(Message result) {
+        resultSuccess(result, new int[]{4, 2, 3, 4});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendTerminalResponse(String contents, Message response) {
+        resultSuccess(response, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendEnvelope(String contents, Message response) {
+        resultSuccess(response, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendEnvelopeWithStatus(String contents, Message response) {
+        resultSuccess(response, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void handleCallSetupRequestFromSim(boolean accept, Message response) {
+        resultSuccess(response, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getVoiceRegistrationState(Message result) {
+        resultSuccess(result, new String[]{"5", null, null, null, null, null, null, null, null, null, null, null, null, null});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getDataRegistrationState(Message result) {
+        resultSuccess(result, new String[]{"5", null, null, "2"});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getOperator(Message result) {
+        resultSuccess(result, new String[]{"El Telco Loco", "Telco Loco", "001001"});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendDtmf(char c, Message result) {
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void startDtmf(char c, Message result) {
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void stopDtmf(Message result) {
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendBurstDtmf(String dtmfString, int on, int off, Message result) {
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendSMS(String smscPDU, String pdu, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void sendSMSExpectMore(String smscPDU, String pdu, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void deleteSmsOnSim(int index, Message response) {
+        Rlog.d(LOG_TAG, "Delete message at index " + index);
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void deleteSmsOnRuim(int index, Message response) {
+        Rlog.d(LOG_TAG, "Delete RUIM message at index " + index);
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void writeSmsToSim(int status, String smsc, String pdu, Message response) {
+        Rlog.d(LOG_TAG, "Write SMS to SIM with status " + status);
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void writeSmsToRuim(int status, String pdu, Message response) {
+        Rlog.d(LOG_TAG, "Write SMS to RUIM with status " + status);
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setupDataCall(String radioTechnology, String profile, String apn, String user, String password, String authType, String protocol, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void deactivateDataCall(int cid, int reason, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setPreferredNetworkType(int networkType, Message result) {
+        this.mNetworkType = networkType;
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getPreferredNetworkType(Message result) {
+        resultSuccess(result, new int[]{this.mNetworkType});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getNeighboringCids(Message result) {
+        int[] ret = new int[7];
+        ret[0] = 6;
+        for (int i = 1; i < 7; i++) {
+            ret[i] = i;
+        }
+        resultSuccess(result, ret);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setLocationUpdates(boolean enable, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getSmscAddress(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setSmscAddress(String address, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void reportSmsMemoryStatus(boolean available, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void reportStkServiceIsRunning(Message result) {
+        resultSuccess(result, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCdmaSubscriptionSource(Message result) {
+        unimplemented(result);
     }
 
     private boolean isSimLocked() {
         return this.mSimLockedState != SimLockState.NONE;
     }
 
-    private void resultFail(Message message, Throwable th) {
-        if (message != null) {
-            AsyncResult.forMessage(message).exception = th;
-            if (this.mPausedResponseCount > 0) {
-                this.mPausedResponses.add(message);
-            } else {
-                message.sendToTarget();
-            }
-        }
-    }
-
-    private void resultSuccess(Message message, Object obj) {
-        if (message != null) {
-            AsyncResult.forMessage(message).result = obj;
-            if (this.mPausedResponseCount > 0) {
-                this.mPausedResponses.add(message);
-            } else {
-                message.sendToTarget();
-            }
-        }
-    }
-
-    private void unimplemented(Message message) {
-        if (message != null) {
-            AsyncResult.forMessage(message).exception = new RuntimeException("Unimplemented");
-            if (this.mPausedResponseCount > 0) {
-                this.mPausedResponses.add(message);
-            } else {
-                message.sendToTarget();
-            }
-        }
-    }
-
-    public void acceptCall(Message message) {
-        if (this.simulatedCallState.onAnswer()) {
-            resultSuccess(message, null);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setRadioPower(boolean on, Message result) {
+        if (on) {
+            setRadioState(CommandsInterface.RadioState.RADIO_ON);
         } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
+            setRadioState(CommandsInterface.RadioState.RADIO_OFF);
         }
     }
 
-    public void acknowledgeIncomingGsmSmsWithPdu(boolean z, String str, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acknowledgeLastIncomingGsmSms(boolean success, int cause, Message result) {
+        unimplemented(result);
     }
 
-    public void acknowledgeLastIncomingCdmaSms(boolean z, int i, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acknowledgeLastIncomingCdmaSms(boolean success, int cause, Message result) {
+        unimplemented(result);
     }
 
-    public void acknowledgeLastIncomingGsmSms(boolean z, int i, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void acknowledgeIncomingGsmSmsWithPdu(boolean success, String ackPdu, Message result) {
+        unimplemented(result);
     }
 
-    public void cancelPendingUssd(Message message) {
-        resultSuccess(message, null);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void iccIO(int command, int fileid, String path, int p1, int p2, int p3, String data, String pin2, Message response) {
+        iccIOForApp(command, fileid, path, p1, p2, p3, data, pin2, null, response);
     }
 
-    public void changeBarringPassword(String str, String str2, String str3, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void iccIOForApp(int command, int fileid, String path, int p1, int p2, int p3, String data, String pin2, String aid, Message result) {
+        unimplemented(result);
     }
 
-    public void changeIccPin(String str, String str2, Message message) {
-        if (str != null && str.equals(this.mPinCode)) {
-            this.mPinCode = str2;
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            Rlog.i(LOG_TAG, "[SimCmd] changeIccPin: pin failed!");
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCLIP(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCLIR(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCLIR(int clirMode, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCallWaiting(int serviceClass, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCallWaiting(boolean enable, int serviceClass, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCallForward(int action, int cfReason, int serviceClass, String number, int timeSeconds, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCallForwardStatus(int cfReason, int serviceClass, String number, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setNetworkSelectionModeAutomatic(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void exitEmergencyCallbackMode(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setNetworkSelectionModeManual(String operatorNumeric, Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getNetworkSelectionMode(Message result) {
+        resultSuccess(result, new int[]{0});
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getAvailableNetworks(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getBasebandVersion(Message result) {
+        resultSuccess(result, LOG_TAG);
+    }
+
+    public void triggerIncomingStkCcAlpha(String alphaString) {
+        if (this.mCatCcAlphaRegistrant != null) {
+            this.mCatCcAlphaRegistrant.notifyResult(alphaString);
         }
     }
 
-    public void changeIccPin2(String str, String str2, Message message) {
-        if (str != null && str.equals(this.mPin2Code)) {
-            this.mPin2Code = str2;
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            Rlog.i(LOG_TAG, "[SimCmd] changeIccPin2: pin2 failed!");
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
+    public void sendStkCcAplha(String alphaString) {
+        triggerIncomingStkCcAlpha(alphaString);
+    }
+
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerIncomingUssd(String statusCode, String message) {
+        if (this.mUSSDRegistrant != null) {
+            this.mUSSDRegistrant.notifyResult(new String[]{statusCode, message});
         }
     }
 
-    public void changeIccPin2ForApp(String str, String str2, String str3, Message message) {
-        unimplemented(message);
-    }
-
-    public void changeIccPinForApp(String str, String str2, String str3, Message message) {
-        unimplemented(message);
-    }
-
-    public void conference(Message message) {
-        if (this.simulatedCallState.onChld('3', 0)) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
-        }
-    }
-
-    public void deactivateDataCall(int i, int i2, Message message) {
-        unimplemented(message);
-    }
-
-    public void deleteSmsOnRuim(int i, Message message) {
-        Rlog.d(LOG_TAG, "Delete RUIM message at index " + i);
-        unimplemented(message);
-    }
-
-    public void deleteSmsOnSim(int i, Message message) {
-        Rlog.d(LOG_TAG, "Delete message at index " + i);
-        unimplemented(message);
-    }
-
-    public void dial(String str, int i, Message message) {
-        this.simulatedCallState.onDial(str);
-        resultSuccess(message, null);
-    }
-
-    public void dial(String str, int i, UUSInfo uUSInfo, Message message) {
-        this.simulatedCallState.onDial(str);
-        resultSuccess(message, null);
-    }
-
-    public void exitEmergencyCallbackMode(Message message) {
-        unimplemented(message);
-    }
-
-    public void explicitCallTransfer(Message message) {
-        if (this.simulatedCallState.onChld('4', 0)) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
-        }
-    }
-
-    public void forceDataDormancy(Message message) {
-        unimplemented(message);
-    }
-
-    public void getAtr(Message message) {
-        unimplemented(message);
-    }
-
-    public void getAvailableNetworks(Message message) {
-        unimplemented(message);
-    }
-
-    public void getBasebandVersion(Message message) {
-        resultSuccess(message, LOG_TAG);
-    }
-
-    public void getCDMASubscription(Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
-    }
-
-    public void getCLIR(Message message) {
-        unimplemented(message);
-    }
-
-    public void getCdmaBroadcastConfig(Message message) {
-        unimplemented(message);
-    }
-
-    public void getCdmaSubscriptionSource(Message message) {
-        unimplemented(message);
-    }
-
-    public void getCellInfoList(Message message) {
-        unimplemented(message);
-    }
-
-    public void getCurrentCalls(Message message) {
-        if (this.mState != RadioState.RADIO_ON || isSimLocked()) {
-            resultFail(message, new CommandException(Error.RADIO_NOT_AVAILABLE));
-        } else {
-            resultSuccess(message, this.simulatedCallState.getDriverCalls());
-        }
-    }
-
-    public void getDataCallList(Message message) {
-        resultSuccess(message, new ArrayList(0));
-    }
-
-    public void getDataRegistrationState(Message message) {
-        resultSuccess(message, new String[]{"5", null, null, "2"});
-    }
-
-    public void getDeviceIdentity(Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
-    }
-
-    public void getGsmBroadcastConfig(Message message) {
-        unimplemented(message);
-    }
-
-    public void getHardwareConfig(Message message) {
-        unimplemented(message);
-    }
-
-    public void getIMEI(Message message) {
-        resultSuccess(message, "012345678901234");
-    }
-
-    public void getIMEISV(Message message) {
-        resultSuccess(message, "99");
-    }
-
-    public void getIMSI(Message message) {
-        getIMSIForApp(null, message);
-    }
-
-    public void getIMSIForApp(String str, Message message) {
-        resultSuccess(message, "012345678901234");
-    }
-
-    public void getIccCardStatus(Message message) {
-        unimplemented(message);
-    }
-
-    public void getImsRegistrationState(Message message) {
-        unimplemented(message);
-    }
-
-    public void getLastCallFailCause(Message message) {
-        resultSuccess(message, new int[]{this.mNextCallFailCause});
-    }
-
-    public void getLastDataCallFailCause(Message message) {
-        unimplemented(message);
-    }
-
-    @Deprecated
-    public void getLastPdpFailCause(Message message) {
-        unimplemented(message);
-    }
-
-    public void getMute(Message message) {
-        unimplemented(message);
-    }
-
-    public void getNeighboringCids(Message message) {
-        int[] iArr = new int[7];
-        iArr[0] = 6;
-        for (int i = 1; i < 7; i++) {
-            iArr[i] = i;
-        }
-        resultSuccess(message, iArr);
-    }
-
-    public void getNetworkSelectionMode(Message message) {
-        resultSuccess(message, new int[]{0});
-    }
-
-    public void getOperator(Message message) {
-        resultSuccess(message, new String[]{"El Telco Loco", "Telco Loco", "001001"});
-    }
-
-    @Deprecated
-    public void getPDPContextList(Message message) {
-        getDataCallList(message);
-    }
-
-    public void getPreferredNetworkType(Message message) {
-        resultSuccess(message, new int[]{this.mNetworkType});
-    }
-
-    public void getPreferredNetworkTypeWithOptimizeSetting(Message message) {
-        byte b = (byte) this.mNetworkType;
-        int i = this.mRatModeOptimizeSetting ? 1 : 0;
-        resultSuccess(message, new byte[]{b, (byte) i});
-    }
-
-    public void getPreferredVoicePrivacy(Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
-    }
-
-    public void getSignalStrength(Message message) {
-        resultSuccess(message, new int[]{23, 0});
-    }
-
-    public void getSmscAddress(Message message) {
-        unimplemented(message);
-    }
-
-    public void getVoiceRadioTechnology(Message message) {
-        unimplemented(message);
-    }
-
-    public void getVoiceRegistrationState(Message message) {
-        resultSuccess(message, new String[]{"5", null, null, null, null, null, null, null, null, null, null, null, null, null});
-    }
-
-    public void handleCallSetupRequestFromSim(boolean z, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void hangupConnection(int i, Message message) {
-        if (this.simulatedCallState.onChld('1', (char) (i + 48))) {
-            Rlog.i("GSM", "[SimCmd] hangupConnection: resultSuccess");
-            resultSuccess(message, null);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendUSSD(String ussdString, Message result) {
+        if (ussdString.equals("#646#")) {
+            resultSuccess(result, null);
+            triggerIncomingUssd("0", "You have NNN minutes remaining.");
             return;
         }
-        Rlog.i("GSM", "[SimCmd] hangupConnection: resultFail");
-        resultFail(message, new RuntimeException("Hangup Error"));
+        resultSuccess(result, null);
+        triggerIncomingUssd("0", "All Done");
     }
 
-    public void hangupForegroundResumeBackground(Message message) {
-        if (this.simulatedCallState.onChld('1', 0)) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void cancelPendingUssd(Message response) {
+        resultSuccess(response, null);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void resetRadio(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void invokeOemRilRequestRaw(byte[] data, Message response) {
+        if (response != null) {
+            AsyncResult.forMessage(response).result = data;
+            response.sendToTarget();
         }
     }
 
-    public void hangupWaitingOrBackground(Message message) {
-        if (this.simulatedCallState.onChld('0', 0)) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void invokeOemRilRequestStrings(String[] strings, Message response) {
+        if (response != null) {
+            AsyncResult.forMessage(response).result = strings;
+            response.sendToTarget();
         }
     }
 
-    public void iccCloseLogicalChannel(int i, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerRing(String number) {
+        this.simulatedCallState.triggerRing(number);
+        this.mCallStateRegistrants.notifyRegistrants();
     }
 
-    public void iccIO(int i, int i2, String str, int i3, int i4, int i5, String str2, String str3, Message message) {
-        iccIOForApp(i, i2, str, i3, i4, i5, str2, str3, null, message);
-    }
-
-    public void iccIOForApp(int i, int i2, String str, int i3, int i4, int i5, String str2, String str3, String str4, Message message) {
-        unimplemented(message);
-    }
-
-    public void iccOpenLogicalChannel(String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void iccTransmitApduBasicChannel(int i, int i2, int i3, int i4, int i5, String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void iccTransmitApduLogicalChannel(int i, int i2, int i3, int i4, int i5, int i6, String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void invokeOemRilRequestRaw(byte[] bArr, Message message) {
-        if (message != null) {
-            AsyncResult.forMessage(message).result = bArr;
-            message.sendToTarget();
-        }
-    }
-
-    public void invokeOemRilRequestStrings(String[] strArr, Message message) {
-        if (message != null) {
-            AsyncResult.forMessage(message).result = strArr;
-            message.sendToTarget();
-        }
-    }
-
-    public void nvReadItem(int i, Message message) {
-        unimplemented(message);
-    }
-
-    public void nvResetConfig(int i, Message message) {
-        unimplemented(message);
-    }
-
-    public void nvWriteCdmaPrl(byte[] bArr, Message message) {
-        unimplemented(message);
-    }
-
-    public void nvWriteItem(int i, String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void pauseResponses() {
-        this.mPausedResponseCount++;
-    }
-
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
     public void progressConnectingCallState() {
         this.simulatedCallState.progressConnectingCallState();
         this.mCallStateRegistrants.notifyRegistrants();
     }
 
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
     public void progressConnectingToActive() {
         this.simulatedCallState.progressConnectingToActive();
         this.mCallStateRegistrants.notifyRegistrants();
     }
 
-    public void queryAvailableBandMode(Message message) {
-        resultSuccess(message, new int[]{4, 2, 3, 4});
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void setAutoProgressConnectingCall(boolean b) {
+        this.simulatedCallState.setAutoProgressConnectingCall(b);
     }
 
-    public void queryCLIP(Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void setNextDialFailImmediately(boolean b) {
+        this.simulatedCallState.setNextDialFailImmediately(b);
     }
 
-    public void queryCallForwardStatus(int i, int i2, String str, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void setNextCallFailCause(int gsmCause) {
+        this.mNextCallFailCause = gsmCause;
     }
 
-    public void queryCallWaiting(int i, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerHangupForeground() {
+        this.simulatedCallState.triggerHangupForeground();
+        this.mCallStateRegistrants.notifyRegistrants();
     }
 
-    public void queryCdmaRoamingPreference(Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerHangupBackground() {
+        this.simulatedCallState.triggerHangupBackground();
+        this.mCallStateRegistrants.notifyRegistrants();
     }
 
-    public void queryFacilityLock(String str, String str2, int i, Message message) {
-        queryFacilityLockForApp(str, str2, i, null, message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerSsn(int type, int code) {
+        SuppServiceNotification not = new SuppServiceNotification();
+        not.notificationType = type;
+        not.code = code;
+        this.mSsnRegistrant.notifyRegistrant(new AsyncResult((Object) null, not, (Throwable) null));
     }
 
-    public void queryFacilityLockForApp(String str, String str2, int i, String str3, Message message) {
-        int i2 = 1;
-        int[] iArr;
-        if (str == null || !str.equals(CommandsInterface.CB_FACILITY_BA_SIM)) {
-            if (str == null || !str.equals(CommandsInterface.CB_FACILITY_BA_FD)) {
-                unimplemented(message);
-            } else if (message != null) {
-                iArr = new int[1];
-                if (!this.mSimFdnEnabled) {
-                    i2 = 0;
-                }
-                iArr[0] = i2;
-                Rlog.i(LOG_TAG, "[SimCmd] queryFacilityLock: FDN is " + (iArr[0] == 0 ? "disabled" : "enabled"));
-                AsyncResult.forMessage(message, iArr, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            iArr = new int[1];
-            if (!this.mSimLockEnabled) {
-                i2 = 0;
-            }
-            iArr[0] = i2;
-            Rlog.i(LOG_TAG, "[SimCmd] queryFacilityLock: SIM is " + (iArr[0] == 0 ? "unlocked" : "locked"));
-            AsyncResult.forMessage(message, iArr, null);
-            message.sendToTarget();
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void shutdown() {
+        setRadioState(CommandsInterface.RadioState.RADIO_UNAVAILABLE);
+        Looper looper = this.mHandlerThread.getLooper();
+        if (looper != null) {
+            looper.quit();
         }
     }
 
-    public void queryTTYMode(Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerHangupAll() {
+        this.simulatedCallState.triggerHangupAll();
+        this.mCallStateRegistrants.notifyRegistrants();
     }
 
-    public void rejectCall(Message message) {
-        if (this.simulatedCallState.onChld('0', 0)) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
-        }
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void triggerIncomingSMS(String message) {
     }
 
-    public void reportSmsMemoryStatus(boolean z, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
+    public void pauseResponses() {
+        this.mPausedResponseCount++;
     }
 
-    public void reportStkServiceIsRunning(Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void requestIccSimAuthentication(int i, String str, String str2, Message message) {
-        unimplemented(message);
-    }
-
-    public void requestIsimAuthentication(String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void requestShutdown(Message message) {
-        setRadioState(RadioState.RADIO_UNAVAILABLE);
-    }
-
-    public void resetRadio(Message message) {
-        unimplemented(message);
-    }
-
+    @Override // com.android.internal.telephony.test.SimulatedRadioControl
     public void resumeResponses() {
         this.mPausedResponseCount--;
         if (this.mPausedResponseCount == 0) {
-            int size = this.mPausedResponses.size();
-            for (int i = 0; i < size; i++) {
-                ((Message) this.mPausedResponses.get(i)).sendToTarget();
+            int s = this.mPausedResponses.size();
+            for (int i = 0; i < s; i++) {
+                this.mPausedResponses.get(i).sendToTarget();
             }
             this.mPausedResponses.clear();
             return;
@@ -581,430 +876,291 @@ public final class SimulatedCommands extends BaseCommands implements CommandsInt
         Rlog.e("GSM", "SimulatedCommands.resumeResponses < 0");
     }
 
-    public void sendBurstDtmf(String str, int i, int i2, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void sendCDMAFeatureCode(String str, Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
-    }
-
-    public void sendCdmaSms(byte[] bArr, Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-    }
-
-    public void sendDtmf(char c, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void sendEnvelope(String str, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void sendEnvelopeWithStatus(String str, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void sendImsCdmaSms(byte[] bArr, int i, int i2, Message message) {
-        unimplemented(message);
-    }
-
-    public void sendImsGsmSms(String str, String str2, int i, int i2, Message message) {
-        unimplemented(message);
-    }
-
-    public void sendSMS(String str, String str2, Message message) {
-        unimplemented(message);
-    }
-
-    public void sendSMSExpectMore(String str, String str2, Message message) {
-        unimplemented(message);
-    }
-
-    public void sendStkCcAplha(String str) {
-        triggerIncomingStkCcAlpha(str);
-    }
-
-    public void sendTerminalResponse(String str, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void sendUSSD(String str, Message message) {
-        if (str.equals("#646#")) {
-            resultSuccess(message, null);
-            triggerIncomingUssd("0", "You have NNN minutes remaining.");
-            return;
-        }
-        resultSuccess(message, null);
-        triggerIncomingUssd("0", "All Done");
-    }
-
-    public void separateConnection(int i, Message message) {
-        if (this.simulatedCallState.onChld('2', (char) (i + 48))) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
-        }
-    }
-
-    public void setAutoProgressConnectingCall(boolean z) {
-        this.simulatedCallState.setAutoProgressConnectingCall(z);
-    }
-
-    public void setBandMode(int i, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void setCLIR(int i, Message message) {
-        unimplemented(message);
-    }
-
-    public void setCallForward(int i, int i2, int i3, String str, int i4, Message message) {
-        unimplemented(message);
-    }
-
-    public void setCallWaiting(boolean z, int i, Message message) {
-        unimplemented(message);
-    }
-
-    public void setCdmaBroadcastActivation(boolean z, Message message) {
-        unimplemented(message);
-    }
-
-    public void setCdmaBroadcastConfig(CdmaSmsBroadcastConfigInfo[] cdmaSmsBroadcastConfigInfoArr, Message message) {
-        unimplemented(message);
-    }
-
-    public void setCdmaRoamingPreference(int i, Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
-    }
-
-    public void setCdmaSubscriptionSource(int i, Message message) {
-        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
-    }
-
-    public void setCellInfoListRate(int i, Message message) {
-        unimplemented(message);
-    }
-
-    public void setDataProfile(DataProfile[] dataProfileArr, Message message) {
-    }
-
-    public void setFacilityLock(String str, boolean z, String str2, int i, Message message) {
-        setFacilityLockForApp(str, z, str2, i, null, message);
-    }
-
-    public void setFacilityLockForApp(String str, boolean z, String str2, int i, String str3, Message message) {
-        if (str == null || !str.equals(CommandsInterface.CB_FACILITY_BA_SIM)) {
-            if (str == null || !str.equals(CommandsInterface.CB_FACILITY_BA_FD)) {
-                unimplemented(message);
-            } else if (str2 != null && str2.equals(this.mPin2Code)) {
-                Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin2 is valid");
-                this.mSimFdnEnabled = z;
-                if (message != null) {
-                    AsyncResult.forMessage(message, null, null);
-                    message.sendToTarget();
-                }
-            } else if (message != null) {
-                Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin2 failed!");
-                AsyncResult.forMessage(message, null, new CommandException(Error.GENERIC_FAILURE));
-                message.sendToTarget();
+    private void unimplemented(Message result) {
+        if (result != null) {
+            AsyncResult.forMessage(result).exception = new RuntimeException("Unimplemented");
+            if (this.mPausedResponseCount > 0) {
+                this.mPausedResponses.add(result);
+            } else {
+                result.sendToTarget();
             }
-        } else if (str2 != null && str2.equals(this.mPinCode)) {
-            Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin is valid");
-            this.mSimLockEnabled = z;
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
+        }
+    }
+
+    private void resultSuccess(Message result, Object ret) {
+        if (result != null) {
+            AsyncResult.forMessage(result).result = ret;
+            if (this.mPausedResponseCount > 0) {
+                this.mPausedResponses.add(result);
+            } else {
+                result.sendToTarget();
             }
-        } else if (message != null) {
-            Rlog.i(LOG_TAG, "[SimCmd] setFacilityLock: pin failed!");
-            AsyncResult.forMessage(message, null, new CommandException(Error.GENERIC_FAILURE));
-            message.sendToTarget();
         }
     }
 
-    public void setGsmBroadcastActivation(boolean z, Message message) {
-        unimplemented(message);
+    private void resultFail(Message result, Throwable tr) {
+        if (result != null) {
+            AsyncResult.forMessage(result).exception = tr;
+            if (this.mPausedResponseCount > 0) {
+                this.mPausedResponses.add(result);
+            } else {
+                result.sendToTarget();
+            }
+        }
     }
 
-    public void setGsmBroadcastConfig(SmsBroadcastConfigInfo[] smsBroadcastConfigInfoArr, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getDeviceIdentity(Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
     }
 
-    public void setInitialAttachApn(String str, String str2, int i, String str3, String str4, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCDMASubscription(Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
     }
 
-    public void setLocationUpdates(boolean z, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaSubscriptionSource(int cdmaSubscriptionType, Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
     }
 
-    public void setMute(boolean z, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryCdmaRoamingPreference(Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
     }
 
-    public void setNetworkSelectionModeAutomatic(Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaRoamingPreference(int cdmaRoamingType, Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
     }
 
-    public void setNetworkSelectionModeManual(String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void setNextCallFailCause(int i) {
-        this.mNextCallFailCause = i;
-    }
-
-    public void setNextDialFailImmediately(boolean z) {
-        this.simulatedCallState.setNextDialFailImmediately(z);
-    }
-
-    public void setPhoneType(int i) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setPhoneType(int phoneType) {
         Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
     }
 
-    public void setPreferredNetworkType(int i, Message message) {
-        this.mNetworkType = i;
-        resultSuccess(message, null);
-    }
-
-    public void setPreferredVoicePrivacy(boolean z, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getPreferredVoicePrivacy(Message result) {
         Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
-        unimplemented(message);
+        unimplemented(result);
     }
 
-    public void setRadioPower(boolean z, Message message) {
-        if (z) {
-            setRadioState(RadioState.RADIO_ON);
-        } else {
-            setRadioState(RadioState.RADIO_OFF);
-        }
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setPreferredVoicePrivacy(boolean enable, Message result) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(result);
     }
 
-    public void setRatModeOptimizeSetting(boolean z, Message message) {
-        this.mRatModeOptimizeSetting = z;
-        resultSuccess(message, null);
-    }
-
-    public void setSmscAddress(String str, Message message) {
-        unimplemented(message);
-    }
-
-    public void setSuppServiceNotifications(boolean z, Message message) {
-        resultSuccess(message, null);
-        if (z && this.mSsnNotifyOn) {
-            Rlog.w(LOG_TAG, "Supp Service Notifications already enabled!");
-        }
-        this.mSsnNotifyOn = z;
-    }
-
-    public void setTTYMode(int i, Message message) {
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setTTYMode(int ttyMode, Message response) {
         Rlog.w(LOG_TAG, "Not implemented in SimulatedCommands");
-        unimplemented(message);
+        unimplemented(response);
     }
 
-    public void setupDataCall(String str, String str2, String str3, String str4, String str5, String str6, String str7, Message message) {
-        unimplemented(message);
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void queryTTYMode(Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
     }
 
-    public void shutdown() {
-        setRadioState(RadioState.RADIO_UNAVAILABLE);
-        Looper looper = this.mHandlerThread.getLooper();
-        if (looper != null) {
-            looper.quit();
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendCDMAFeatureCode(String FeatureCode, Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendCdmaSms(byte[] pdu, Message response) {
+        Rlog.w(LOG_TAG, "CDMA not implemented in SimulatedCommands");
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaBroadcastActivation(boolean activate, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCdmaBroadcastConfig(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCdmaBroadcastConfig(CdmaSmsBroadcastConfigInfo[] configs, Message response) {
+        unimplemented(response);
+    }
+
+    public void forceDataDormancy(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setGsmBroadcastActivation(boolean activate, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setGsmBroadcastConfig(SmsBroadcastConfigInfo[] config, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getGsmBroadcastConfig(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPinForApp(String pin, String aid, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPukForApp(String puk, String newPin, String aid, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPin2ForApp(String pin2, String aid, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void supplyIccPuk2ForApp(String puk2, String newPin2, String aid, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPinForApp(String oldPin, String newPin, String aidPtr, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void changeIccPin2ForApp(String oldPin2, String newPin2, String aidPtr, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void requestIsimAuthentication(String nonce, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void requestIccSimAuthentication(int authContext, String data, String aid, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getVoiceRadioTechnology(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getCellInfoList(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setCellInfoListRate(int rateInMillis, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void setInitialAttachApn(String apn, String protocol, int authType, String username, String password, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void setDataProfile(DataProfile[] dps, Message result) {
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getImsRegistrationState(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendImsCdmaSms(byte[] pdu, int retry, int messageRef, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void sendImsGsmSms(String smscPDU, String pdu, int retry, int messageRef, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void iccOpenLogicalChannel(String AID, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void iccCloseLogicalChannel(int channel, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void iccTransmitApduLogicalChannel(int channel, int cla, int instruction, int p1, int p2, int p3, String data, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void iccTransmitApduBasicChannel(int cla, int instruction, int p1, int p2, int p3, String data, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void getAtr(Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvReadItem(int itemID, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvWriteItem(int itemID, String itemValue, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvWriteCdmaPrl(byte[] preferredRoamingList, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void nvResetConfig(int resetType, Message response) {
+        unimplemented(response);
+    }
+
+    @Override // com.android.internal.telephony.CommandsInterface
+    public void getHardwareConfig(Message result) {
+        unimplemented(result);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void requestShutdown(Message result) {
+        setRadioState(CommandsInterface.RadioState.RADIO_UNAVAILABLE);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void setRatModeOptimizeSetting(boolean enable, Message response) {
+        this.mRatModeOptimizeSetting = enable;
+        resultSuccess(response, null);
+    }
+
+    @Override // com.android.internal.telephony.BaseCommands, com.android.internal.telephony.CommandsInterface
+    public void getPreferredNetworkTypeWithOptimizeSetting(Message response) {
+        int i = 0;
+        byte[] ret = new byte[2];
+        ret[0] = (byte) this.mNetworkType;
+        if (this.mRatModeOptimizeSetting) {
+            i = 1;
         }
-    }
-
-    public void startDtmf(char c, Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void stopDtmf(Message message) {
-        resultSuccess(message, null);
-    }
-
-    public void supplyDepersonalization(String str, String str2, Message message) {
-        unimplemented(message);
-    }
-
-    public void supplyIccPin(String str, Message message) {
-        if (this.mSimLockedState != SimLockState.REQUIRE_PIN) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: wrong state, state=" + this.mSimLockedState);
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        } else if (str != null && str.equals(this.mPinCode)) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: success!");
-            this.mPinUnlockAttempts = 0;
-            this.mSimLockedState = SimLockState.NONE;
-            this.mIccStatusChangedRegistrants.notifyRegistrants();
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            this.mPinUnlockAttempts++;
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: failed! attempt=" + this.mPinUnlockAttempts);
-            if (this.mPinUnlockAttempts >= 3) {
-                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin: set state to REQUIRE_PUK");
-                this.mSimLockedState = SimLockState.REQUIRE_PUK;
-            }
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        }
-    }
-
-    public void supplyIccPin2(String str, Message message) {
-        if (this.mSimFdnEnabledState != SimFdnState.REQUIRE_PIN2) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: wrong state, state=" + this.mSimFdnEnabledState);
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        } else if (str != null && str.equals(this.mPin2Code)) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: success!");
-            this.mPin2UnlockAttempts = 0;
-            this.mSimFdnEnabledState = SimFdnState.NONE;
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            this.mPin2UnlockAttempts++;
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: failed! attempt=" + this.mPin2UnlockAttempts);
-            if (this.mPin2UnlockAttempts >= 3) {
-                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPin2: set state to REQUIRE_PUK2");
-                this.mSimFdnEnabledState = SimFdnState.REQUIRE_PUK2;
-            }
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        }
-    }
-
-    public void supplyIccPin2ForApp(String str, String str2, Message message) {
-        unimplemented(message);
-    }
-
-    public void supplyIccPinForApp(String str, String str2, Message message) {
-        unimplemented(message);
-    }
-
-    public void supplyIccPuk(String str, String str2, Message message) {
-        if (this.mSimLockedState != SimLockState.REQUIRE_PUK) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: wrong state, state=" + this.mSimLockedState);
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        } else if (str != null && str.equals(SIM_PUK_CODE)) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: success!");
-            this.mSimLockedState = SimLockState.NONE;
-            this.mPukUnlockAttempts = 0;
-            this.mIccStatusChangedRegistrants.notifyRegistrants();
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            this.mPukUnlockAttempts++;
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: failed! attempt=" + this.mPukUnlockAttempts);
-            if (this.mPukUnlockAttempts >= 10) {
-                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk: set state to SIM_PERM_LOCKED");
-                this.mSimLockedState = SimLockState.SIM_PERM_LOCKED;
-            }
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        }
-    }
-
-    public void supplyIccPuk2(String str, String str2, Message message) {
-        if (this.mSimFdnEnabledState != SimFdnState.REQUIRE_PUK2) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: wrong state, state=" + this.mSimLockedState);
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        } else if (str != null && str.equals(SIM_PUK2_CODE)) {
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: success!");
-            this.mSimFdnEnabledState = SimFdnState.NONE;
-            this.mPuk2UnlockAttempts = 0;
-            if (message != null) {
-                AsyncResult.forMessage(message, null, null);
-                message.sendToTarget();
-            }
-        } else if (message != null) {
-            this.mPuk2UnlockAttempts++;
-            Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: failed! attempt=" + this.mPuk2UnlockAttempts);
-            if (this.mPuk2UnlockAttempts >= 10) {
-                Rlog.i(LOG_TAG, "[SimCmd] supplyIccPuk2: set state to SIM_PERM_LOCKED");
-                this.mSimFdnEnabledState = SimFdnState.SIM_PERM_LOCKED;
-            }
-            AsyncResult.forMessage(message, null, new CommandException(Error.PASSWORD_INCORRECT));
-            message.sendToTarget();
-        }
-    }
-
-    public void supplyIccPuk2ForApp(String str, String str2, String str3, Message message) {
-        unimplemented(message);
-    }
-
-    public void supplyIccPukForApp(String str, String str2, String str3, Message message) {
-        unimplemented(message);
-    }
-
-    public void switchWaitingOrHoldingAndActive(Message message) {
-        if (this.simulatedCallState.onChld('2', 0)) {
-            resultSuccess(message, null);
-        } else {
-            resultFail(message, new RuntimeException("Hangup Error"));
-        }
-    }
-
-    public void triggerHangupAll() {
-        this.simulatedCallState.triggerHangupAll();
-        this.mCallStateRegistrants.notifyRegistrants();
-    }
-
-    public void triggerHangupBackground() {
-        this.simulatedCallState.triggerHangupBackground();
-        this.mCallStateRegistrants.notifyRegistrants();
-    }
-
-    public void triggerHangupForeground() {
-        this.simulatedCallState.triggerHangupForeground();
-        this.mCallStateRegistrants.notifyRegistrants();
-    }
-
-    public void triggerIncomingSMS(String str) {
-    }
-
-    public void triggerIncomingStkCcAlpha(String str) {
-        if (this.mCatCcAlphaRegistrant != null) {
-            this.mCatCcAlphaRegistrant.notifyResult(str);
-        }
-    }
-
-    public void triggerIncomingUssd(String str, String str2) {
-        if (this.mUSSDRegistrant != null) {
-            this.mUSSDRegistrant.notifyResult(new String[]{str, str2});
-        }
-    }
-
-    public void triggerRing(String str) {
-        this.simulatedCallState.triggerRing(str);
-        this.mCallStateRegistrants.notifyRegistrants();
-    }
-
-    public void triggerSsn(int i, int i2) {
-        SuppServiceNotification suppServiceNotification = new SuppServiceNotification();
-        suppServiceNotification.notificationType = i;
-        suppServiceNotification.code = i2;
-        this.mSsnRegistrant.notifyRegistrant(new AsyncResult(null, suppServiceNotification, null));
-    }
-
-    public void writeSmsToRuim(int i, String str, Message message) {
-        Rlog.d(LOG_TAG, "Write SMS to RUIM with status " + i);
-        unimplemented(message);
-    }
-
-    public void writeSmsToSim(int i, String str, String str2, Message message) {
-        Rlog.d(LOG_TAG, "Write SMS to SIM with status " + i);
-        unimplemented(message);
+        ret[1] = (byte) i;
+        resultSuccess(response, ret);
     }
 }

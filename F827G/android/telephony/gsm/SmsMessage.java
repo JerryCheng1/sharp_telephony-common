@@ -1,13 +1,13 @@
 package android.telephony.gsm;
 
 import android.telephony.TelephonyManager;
-import com.android.internal.telephony.GsmAlphabet.TextEncodingDetails;
+import com.android.internal.telephony.GsmAlphabet;
 import com.android.internal.telephony.SmsHeader;
 import com.android.internal.telephony.SmsMessageBase;
-import com.android.internal.telephony.SmsMessageBase.SubmitPduBase;
 import java.util.Arrays;
 
 @Deprecated
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class SmsMessage {
     @Deprecated
     public static final int ENCODING_16BIT = 3;
@@ -29,6 +29,7 @@ public class SmsMessage {
     public SmsMessageBase mWrappedSmsMessage;
 
     @Deprecated
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public enum MessageClass {
         UNKNOWN,
         CLASS_0,
@@ -38,6 +39,7 @@ public class SmsMessage {
     }
 
     @Deprecated
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
     public static class SubmitPdu {
         @Deprecated
         public byte[] encodedMessage;
@@ -45,9 +47,13 @@ public class SmsMessage {
         public byte[] encodedScAddress;
 
         @Deprecated
-        protected SubmitPdu(SubmitPduBase submitPduBase) {
-            this.encodedMessage = submitPduBase.encodedMessage;
-            this.encodedScAddress = submitPduBase.encodedScAddress;
+        public SubmitPdu() {
+        }
+
+        @Deprecated
+        protected SubmitPdu(SmsMessageBase.SubmitPduBase spb) {
+            this.encodedMessage = spb.encodedMessage;
+            this.encodedScAddress = spb.encodedScAddress;
         }
 
         @Deprecated
@@ -61,79 +67,83 @@ public class SmsMessage {
         this(getSmsFacility());
     }
 
-    private SmsMessage(SmsMessageBase smsMessageBase) {
-        this.mWrappedSmsMessage = smsMessageBase;
+    private SmsMessage(SmsMessageBase smb) {
+        this.mWrappedSmsMessage = smb;
     }
 
     @Deprecated
-    public static int[] calculateLength(CharSequence charSequence, boolean z) {
-        TextEncodingDetails calculateLength = com.android.internal.telephony.gsm.SmsMessage.calculateLength(charSequence, z);
-        return new int[]{calculateLength.msgCount, calculateLength.codeUnitCount, calculateLength.codeUnitsRemaining, calculateLength.codeUnitSize};
+    public static SmsMessage createFromPdu(byte[] pdu) {
+        SmsMessageBase wrappedMessage;
+        if (2 == TelephonyManager.getDefault().getCurrentPhoneType()) {
+            wrappedMessage = com.android.internal.telephony.cdma.SmsMessage.createFromPdu(pdu);
+        } else {
+            wrappedMessage = com.android.internal.telephony.gsm.SmsMessage.createFromPdu(pdu);
+        }
+        return new SmsMessage(wrappedMessage);
     }
 
     @Deprecated
-    public static int[] calculateLength(String str, boolean z) {
-        return calculateLength((CharSequence) str, z);
+    public static int getTPLayerLengthForPDU(String pdu) {
+        return 2 == TelephonyManager.getDefault().getCurrentPhoneType() ? com.android.internal.telephony.cdma.SmsMessage.getTPLayerLengthForPDU(pdu) : com.android.internal.telephony.gsm.SmsMessage.getTPLayerLengthForPDU(pdu);
     }
 
     @Deprecated
-    public static SmsMessage createFromPdu(byte[] bArr) {
-        return new SmsMessage(2 == TelephonyManager.getDefault().getCurrentPhoneType() ? com.android.internal.telephony.cdma.SmsMessage.createFromPdu(bArr) : com.android.internal.telephony.gsm.SmsMessage.createFromPdu(bArr));
+    public static int[] calculateLength(CharSequence messageBody, boolean use7bitOnly) {
+        GsmAlphabet.TextEncodingDetails ted = com.android.internal.telephony.gsm.SmsMessage.calculateLength(messageBody, use7bitOnly);
+        return new int[]{ted.msgCount, ted.codeUnitCount, ted.codeUnitsRemaining, ted.codeUnitSize};
     }
 
     @Deprecated
-    private static final SmsMessageBase getSmsFacility() {
-        return 2 == TelephonyManager.getDefault().getCurrentPhoneType() ? new com.android.internal.telephony.cdma.SmsMessage() : new com.android.internal.telephony.gsm.SmsMessage();
+    public static int[] calculateLength(String messageBody, boolean use7bitOnly) {
+        return calculateLength((CharSequence) messageBody, use7bitOnly);
     }
 
     @Deprecated
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z) {
-        return new SubmitPdu(2 == TelephonyManager.getDefault().getCurrentPhoneType() ? com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(str, str2, str3, z, null) : com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(str, str2, str3, z));
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested, byte[] header) {
+        SmsMessageBase.SubmitPduBase spb;
+        if (2 == TelephonyManager.getDefault().getCurrentPhoneType()) {
+            spb = com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, SmsHeader.fromByteArray(header));
+        } else {
+            spb = com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, header);
+        }
+        return new SubmitPdu(spb);
     }
 
     @Deprecated
-    public static SubmitPdu getSubmitPdu(String str, String str2, String str3, boolean z, byte[] bArr) {
-        return new SubmitPdu(2 == TelephonyManager.getDefault().getCurrentPhoneType() ? com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(str, str2, str3, z, SmsHeader.fromByteArray(bArr)) : com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(str, str2, str3, z, bArr));
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, String message, boolean statusReportRequested) {
+        SmsMessageBase.SubmitPduBase spb;
+        if (2 == TelephonyManager.getDefault().getCurrentPhoneType()) {
+            spb = com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested, (SmsHeader) null);
+        } else {
+            spb = com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(scAddress, destinationAddress, message, statusReportRequested);
+        }
+        return new SubmitPdu(spb);
     }
 
     @Deprecated
-    public static SubmitPdu getSubmitPdu(String str, String str2, short s, byte[] bArr, boolean z) {
-        return new SubmitPdu(2 == TelephonyManager.getDefault().getCurrentPhoneType() ? com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(str, str2, (int) s, bArr, z) : com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(str, str2, (int) s, bArr, z));
+    public static SubmitPdu getSubmitPdu(String scAddress, String destinationAddress, short destinationPort, byte[] data, boolean statusReportRequested) {
+        SmsMessageBase.SubmitPduBase spb;
+        if (2 == TelephonyManager.getDefault().getCurrentPhoneType()) {
+            spb = com.android.internal.telephony.cdma.SmsMessage.getSubmitPdu(scAddress, destinationAddress, destinationPort, data, statusReportRequested);
+        } else {
+            spb = com.android.internal.telephony.gsm.SmsMessage.getSubmitPdu(scAddress, destinationAddress, destinationPort, data, statusReportRequested);
+        }
+        return new SubmitPdu(spb);
     }
 
     @Deprecated
-    public static int getTPLayerLengthForPDU(String str) {
-        return 2 == TelephonyManager.getDefault().getCurrentPhoneType() ? com.android.internal.telephony.cdma.SmsMessage.getTPLayerLengthForPDU(str) : com.android.internal.telephony.gsm.SmsMessage.getTPLayerLengthForPDU(str);
+    public String getServiceCenterAddress() {
+        return this.mWrappedSmsMessage.getServiceCenterAddress();
     }
 
     @Deprecated
-    public String getDisplayMessageBody() {
-        return this.mWrappedSmsMessage.getDisplayMessageBody();
+    public String getOriginatingAddress() {
+        return this.mWrappedSmsMessage.getOriginatingAddress();
     }
 
     @Deprecated
     public String getDisplayOriginatingAddress() {
         return this.mWrappedSmsMessage.getDisplayOriginatingAddress();
-    }
-
-    @Deprecated
-    public String getEmailBody() {
-        return this.mWrappedSmsMessage.getEmailBody();
-    }
-
-    @Deprecated
-    public String getEmailFrom() {
-        return this.mWrappedSmsMessage.getEmailFrom();
-    }
-
-    @Deprecated
-    public int getIndexOnIcc() {
-        return this.mWrappedSmsMessage.getIndexOnIcc();
-    }
-
-    @Deprecated
-    public int getIndexOnSim() {
-        return this.mWrappedSmsMessage.getIndexOnIcc();
     }
 
     @Deprecated
@@ -147,18 +157,8 @@ public class SmsMessage {
     }
 
     @Deprecated
-    public String getOriginatingAddress() {
-        return this.mWrappedSmsMessage.getOriginatingAddress();
-    }
-
-    @Deprecated
-    public byte[] getPdu() {
-        return this.mWrappedSmsMessage.getPdu();
-    }
-
-    @Deprecated
-    public int getProtocolIdentifier() {
-        return this.mWrappedSmsMessage.getProtocolIdentifier();
+    public String getDisplayMessageBody() {
+        return this.mWrappedSmsMessage.getDisplayMessageBody();
     }
 
     @Deprecated
@@ -167,43 +167,38 @@ public class SmsMessage {
     }
 
     @Deprecated
-    public String getServiceCenterAddress() {
-        return this.mWrappedSmsMessage.getServiceCenterAddress();
-    }
-
-    @Deprecated
-    public int getStatus() {
-        return this.mWrappedSmsMessage.getStatus();
-    }
-
-    @Deprecated
-    public int getStatusOnIcc() {
-        return this.mWrappedSmsMessage.getStatusOnIcc();
-    }
-
-    @Deprecated
-    public int getStatusOnSim() {
-        return this.mWrappedSmsMessage.getStatusOnIcc();
-    }
-
-    @Deprecated
     public long getTimestampMillis() {
         return this.mWrappedSmsMessage.getTimestampMillis();
     }
 
     @Deprecated
-    public byte[] getUserData() {
-        return this.mWrappedSmsMessage.getUserData();
+    public boolean isEmail() {
+        return this.mWrappedSmsMessage.isEmail();
+    }
+
+    @Deprecated
+    public String getEmailBody() {
+        return this.mWrappedSmsMessage.getEmailBody();
+    }
+
+    @Deprecated
+    public String getEmailFrom() {
+        return this.mWrappedSmsMessage.getEmailFrom();
+    }
+
+    @Deprecated
+    public int getProtocolIdentifier() {
+        return this.mWrappedSmsMessage.getProtocolIdentifier();
+    }
+
+    @Deprecated
+    public boolean isReplace() {
+        return this.mWrappedSmsMessage.isReplace();
     }
 
     @Deprecated
     public boolean isCphsMwiMessage() {
         return this.mWrappedSmsMessage.isCphsMwiMessage();
-    }
-
-    @Deprecated
-    public boolean isEmail() {
-        return this.mWrappedSmsMessage.isEmail();
     }
 
     @Deprecated
@@ -222,8 +217,43 @@ public class SmsMessage {
     }
 
     @Deprecated
-    public boolean isReplace() {
-        return this.mWrappedSmsMessage.isReplace();
+    public byte[] getUserData() {
+        return this.mWrappedSmsMessage.getUserData();
+    }
+
+    @Deprecated
+    public byte[] getPdu() {
+        return this.mWrappedSmsMessage.getPdu();
+    }
+
+    @Deprecated
+    public int getStatusOnSim() {
+        return this.mWrappedSmsMessage.getStatusOnIcc();
+    }
+
+    @Deprecated
+    public int getStatusOnIcc() {
+        return this.mWrappedSmsMessage.getStatusOnIcc();
+    }
+
+    @Deprecated
+    public int getIndexOnSim() {
+        return this.mWrappedSmsMessage.getIndexOnIcc();
+    }
+
+    @Deprecated
+    public int getIndexOnIcc() {
+        return this.mWrappedSmsMessage.getIndexOnIcc();
+    }
+
+    @Deprecated
+    public int getStatus() {
+        return this.mWrappedSmsMessage.getStatus();
+    }
+
+    @Deprecated
+    public boolean isStatusReportMessage() {
+        return this.mWrappedSmsMessage.isStatusReportMessage();
     }
 
     @Deprecated
@@ -232,7 +262,7 @@ public class SmsMessage {
     }
 
     @Deprecated
-    public boolean isStatusReportMessage() {
-        return this.mWrappedSmsMessage.isStatusReportMessage();
+    private static final SmsMessageBase getSmsFacility() {
+        return 2 == TelephonyManager.getDefault().getCurrentPhoneType() ? new com.android.internal.telephony.cdma.SmsMessage() : new com.android.internal.telephony.gsm.SmsMessage();
     }
 }

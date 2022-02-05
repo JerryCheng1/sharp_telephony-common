@@ -9,7 +9,8 @@ import android.os.RegistrantList;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.Rlog;
 import android.telephony.TelephonyManager;
-import com.android.internal.telephony.Call.State;
+import com.android.internal.telephony.Call;
+import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.imsphone.ImsPhone;
 import com.android.internal.telephony.sip.SipPhone;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public final class CallManager {
     private static final boolean DBG = true;
     private static final int EVENT_CALL_WAITING = 108;
@@ -43,650 +45,533 @@ public final class CallManager {
     private static final int EVENT_SUPP_SERVICE_NOTIFY = 121;
     private static final int EVENT_TTY_MODE_RECEIVED = 122;
     private static final int EVENT_UNKNOWN_CONNECTION = 103;
-    private static final CallManager INSTANCE = new CallManager();
     private static final String LOG_TAG = "CallManager";
     private static final boolean VDBG = false;
+    private static final CallManager INSTANCE = new CallManager();
     private static int mActiveSub = -1;
-    protected final RegistrantList mActiveSubChangeRegistrants = new RegistrantList();
-    private final ArrayList<Call> mBackgroundCalls = new ArrayList();
-    protected final RegistrantList mCallWaitingRegistrants = new RegistrantList();
-    protected final RegistrantList mCdmaOtaStatusChangeRegistrants = new RegistrantList();
-    private Phone mDefaultPhone = null;
-    protected final RegistrantList mDisconnectRegistrants = new RegistrantList();
-    protected final RegistrantList mDisplayInfoRegistrants = new RegistrantList();
-    protected final RegistrantList mEcmTimerResetRegistrants = new RegistrantList();
-    private final ArrayList<Connection> mEmptyConnections = new ArrayList();
-    private final ArrayList<Call> mForegroundCalls = new ArrayList();
-    private final HashMap<Phone, CallManagerHandler> mHandlerMap = new HashMap();
-    protected final RegistrantList mInCallVoicePrivacyOffRegistrants = new RegistrantList();
-    protected final RegistrantList mInCallVoicePrivacyOnRegistrants = new RegistrantList();
-    protected final RegistrantList mIncomingRingRegistrants = new RegistrantList();
-    protected final RegistrantList mMmiCompleteRegistrants = new RegistrantList();
-    protected final RegistrantList mMmiInitiateRegistrants = new RegistrantList();
-    protected final RegistrantList mMmiRegistrants = new RegistrantList();
-    protected final RegistrantList mNewRingingConnectionRegistrants = new RegistrantList();
-    protected final RegistrantList mOnHoldToneRegistrants = new RegistrantList();
-    private final ArrayList<Phone> mPhones = new ArrayList();
-    protected final RegistrantList mPostDialCharacterRegistrants = new RegistrantList();
-    protected final RegistrantList mPreciseCallStateRegistrants = new RegistrantList();
-    private Object mRegistrantidentifier = new Object();
-    protected final RegistrantList mResendIncallMuteRegistrants = new RegistrantList();
-    protected final RegistrantList mRingbackToneRegistrants = new RegistrantList();
-    private final ArrayList<Call> mRingingCalls = new ArrayList();
-    protected final RegistrantList mServiceStateChangedRegistrants = new RegistrantList();
-    protected final RegistrantList mSignalInfoRegistrants = new RegistrantList();
+    private final ArrayList<Connection> mEmptyConnections = new ArrayList<>();
+    private final HashMap<Phone, CallManagerHandler> mHandlerMap = new HashMap<>();
     private boolean mSpeedUpAudioForMtCall = false;
+    private Object mRegistrantidentifier = new Object();
+    protected final RegistrantList mPreciseCallStateRegistrants = new RegistrantList();
+    protected final RegistrantList mNewRingingConnectionRegistrants = new RegistrantList();
+    protected final RegistrantList mIncomingRingRegistrants = new RegistrantList();
+    protected final RegistrantList mDisconnectRegistrants = new RegistrantList();
+    protected final RegistrantList mMmiRegistrants = new RegistrantList();
+    protected final RegistrantList mUnknownConnectionRegistrants = new RegistrantList();
+    protected final RegistrantList mRingbackToneRegistrants = new RegistrantList();
+    protected final RegistrantList mOnHoldToneRegistrants = new RegistrantList();
+    protected final RegistrantList mInCallVoicePrivacyOnRegistrants = new RegistrantList();
+    protected final RegistrantList mInCallVoicePrivacyOffRegistrants = new RegistrantList();
+    protected final RegistrantList mCallWaitingRegistrants = new RegistrantList();
+    protected final RegistrantList mDisplayInfoRegistrants = new RegistrantList();
+    protected final RegistrantList mSignalInfoRegistrants = new RegistrantList();
+    protected final RegistrantList mCdmaOtaStatusChangeRegistrants = new RegistrantList();
+    protected final RegistrantList mResendIncallMuteRegistrants = new RegistrantList();
+    protected final RegistrantList mMmiInitiateRegistrants = new RegistrantList();
+    protected final RegistrantList mMmiCompleteRegistrants = new RegistrantList();
+    protected final RegistrantList mEcmTimerResetRegistrants = new RegistrantList();
     protected final RegistrantList mSubscriptionInfoReadyRegistrants = new RegistrantList();
     protected final RegistrantList mSuppServiceFailedRegistrants = new RegistrantList();
-    protected final RegistrantList mSuppServiceNotificationRegistrants = new RegistrantList();
+    protected final RegistrantList mServiceStateChangedRegistrants = new RegistrantList();
+    protected final RegistrantList mPostDialCharacterRegistrants = new RegistrantList();
+    protected final RegistrantList mActiveSubChangeRegistrants = new RegistrantList();
     protected final RegistrantList mTtyModeReceivedRegistrants = new RegistrantList();
-    protected final RegistrantList mUnknownConnectionRegistrants = new RegistrantList();
-
-    private class CallManagerHandler extends Handler {
-        private CallManagerHandler() {
-        }
-
-        public void handleMessage(Message message) {
-            int subId;
-            switch (message.what) {
-                case 100:
-                    CallManager.this.mDisconnectRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_PRECISE_CALL_STATE_CHANGED /*101*/:
-                    CallManager.this.mPreciseCallStateRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_NEW_RINGING_CONNECTION /*102*/:
-                    Connection connection = (Connection) ((AsyncResult) message.obj).result;
-                    subId = connection.getCall().getPhone().getSubId();
-                    if (CallManager.this.getActiveFgCallState(subId).isDialing() || CallManager.this.hasMoreThanOneRingingCall(subId)) {
-                        try {
-                            Rlog.d(CallManager.LOG_TAG, "silently drop incoming call: " + connection.getCall());
-                            connection.getCall().hangup();
-                            return;
-                        } catch (CallStateException e) {
-                            Rlog.w(CallManager.LOG_TAG, "new ringing connection", e);
-                            return;
-                        }
-                    }
-                    CallManager.this.mNewRingingConnectionRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_UNKNOWN_CONNECTION /*103*/:
-                    CallManager.this.mUnknownConnectionRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_INCOMING_RING /*104*/:
-                    if (!CallManager.this.hasActiveFgCall()) {
-                        CallManager.this.mIncomingRingRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                        return;
-                    }
-                    return;
-                case CallManager.EVENT_RINGBACK_TONE /*105*/:
-                    CallManager.this.mRingbackToneRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case 106:
-                    CallManager.this.mInCallVoicePrivacyOnRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_IN_CALL_VOICE_PRIVACY_OFF /*107*/:
-                    CallManager.this.mInCallVoicePrivacyOffRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case 108:
-                    CallManager.this.mCallWaitingRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_DISPLAY_INFO /*109*/:
-                    CallManager.this.mDisplayInfoRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_SIGNAL_INFO /*110*/:
-                    CallManager.this.mSignalInfoRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_CDMA_OTA_STATUS_CHANGE /*111*/:
-                    CallManager.this.mCdmaOtaStatusChangeRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_RESEND_INCALL_MUTE /*112*/:
-                    CallManager.this.mResendIncallMuteRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_MMI_INITIATE /*113*/:
-                    CallManager.this.mMmiInitiateRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_MMI_COMPLETE /*114*/:
-                    CallManager.this.mMmiCompleteRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_ECM_TIMER_RESET /*115*/:
-                    CallManager.this.mEcmTimerResetRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_SUBSCRIPTION_INFO_READY /*116*/:
-                    CallManager.this.mSubscriptionInfoReadyRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_SUPP_SERVICE_FAILED /*117*/:
-                    CallManager.this.mSuppServiceFailedRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_SERVICE_STATE_CHANGED /*118*/:
-                    CallManager.this.mServiceStateChangedRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_POST_DIAL_CHARACTER /*119*/:
-                    int i = 0;
-                    while (true) {
-                        subId = i;
-                        if (subId < CallManager.this.mPostDialCharacterRegistrants.size()) {
-                            Message messageForRegistrant = ((Registrant) CallManager.this.mPostDialCharacterRegistrants.get(subId)).messageForRegistrant();
-                            messageForRegistrant.obj = message.obj;
-                            messageForRegistrant.arg1 = message.arg1;
-                            messageForRegistrant.sendToTarget();
-                            i = subId + 1;
-                        } else {
-                            return;
-                        }
-                    }
-                case CallManager.EVENT_ONHOLD_TONE /*120*/:
-                    CallManager.this.mOnHoldToneRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                case CallManager.EVENT_SUPP_SERVICE_NOTIFY /*121*/:
-                    CallManager.this.mSuppServiceNotificationRegistrants.notifyRegistrants(new AsyncResult(null, message.obj, null));
-                    return;
-                case CallManager.EVENT_TTY_MODE_RECEIVED /*122*/:
-                    CallManager.this.mTtyModeReceivedRegistrants.notifyRegistrants((AsyncResult) message.obj);
-                    return;
-                default:
-                    return;
-            }
-        }
-    }
+    protected final RegistrantList mSuppServiceNotificationRegistrants = new RegistrantList();
+    private final ArrayList<Phone> mPhones = new ArrayList<>();
+    private final ArrayList<Call> mRingingCalls = new ArrayList<>();
+    private final ArrayList<Call> mBackgroundCalls = new ArrayList<>();
+    private final ArrayList<Call> mForegroundCalls = new ArrayList<>();
+    private Phone mDefaultPhone = null;
 
     private CallManager() {
-    }
-
-    private boolean canDial(Phone phone) {
-        int state = phone.getServiceState().getState();
-        int subId = phone.getSubId();
-        boolean hasActiveRingingCall = hasActiveRingingCall();
-        State activeFgCallState = getActiveFgCallState(subId);
-        boolean z = (state == 3 || hasActiveRingingCall || (activeFgCallState != State.ACTIVE && activeFgCallState != State.IDLE && activeFgCallState != State.DISCONNECTED && activeFgCallState != State.ALERTING)) ? false : true;
-        if (!z) {
-            Rlog.d(LOG_TAG, "canDial serviceState=" + state + " hasRingingCall=" + hasActiveRingingCall + " fgCallState=" + activeFgCallState);
-        }
-        return z;
-    }
-
-    private Context getContext() {
-        Phone defaultPhone = getDefaultPhone();
-        return defaultPhone == null ? null : defaultPhone.getContext();
-    }
-
-    private Call getFirstActiveCall(ArrayList<Call> arrayList) {
-        Iterator it = arrayList.iterator();
-        while (it.hasNext()) {
-            Call call = (Call) it.next();
-            if (!call.isIdle()) {
-                return call;
-            }
-        }
-        return null;
-    }
-
-    private Call getFirstActiveCall(ArrayList<Call> arrayList, int i) {
-        Iterator it = arrayList.iterator();
-        while (it.hasNext()) {
-            Call call = (Call) it.next();
-            if (!call.isIdle() && (call.getPhone().getSubId() == i || (call.getPhone() instanceof SipPhone))) {
-                return call;
-            }
-        }
-        return null;
-    }
-
-    private Call getFirstCallOfState(ArrayList<Call> arrayList, State state) {
-        Iterator it = arrayList.iterator();
-        while (it.hasNext()) {
-            Call call = (Call) it.next();
-            if (call.getState() == state) {
-                return call;
-            }
-        }
-        return null;
-    }
-
-    private Call getFirstCallOfState(ArrayList<Call> arrayList, State state, int i) {
-        Iterator it = arrayList.iterator();
-        while (it.hasNext()) {
-            Call call = (Call) it.next();
-            if (call.getState() == state || call.getPhone().getSubId() == i) {
-                return call;
-            }
-            if (call.getPhone() instanceof SipPhone) {
-                return call;
-            }
-        }
-        return null;
-    }
-
-    private Call getFirstNonIdleCall(List<Call> list) {
-        Call call = null;
-        for (Call call2 : list) {
-            if (!call2.isIdle()) {
-                return call2;
-            }
-            if (call2.getState() != State.IDLE && call == null) {
-                call = call2;
-            }
-        }
-        return call;
-    }
-
-    private Call getFirstNonIdleCall(List<Call> list, int i) {
-        Call call = null;
-        for (Call call2 : list) {
-            if (call2.getPhone().getSubId() == i || (call2.getPhone() instanceof SipPhone)) {
-                if (!call2.isIdle()) {
-                    return call2;
-                }
-                if (call2.getState() != State.IDLE && call == null) {
-                    call = call2;
-                }
-            }
-        }
-        return call;
     }
 
     public static CallManager getInstance() {
         return INSTANCE;
     }
 
-    private Phone getPhone(int i) {
-        Iterator it = this.mPhones.iterator();
-        while (it.hasNext()) {
-            Phone phone = (Phone) it.next();
-            if (phone.getSubId() == i && !(phone instanceof ImsPhone)) {
-                return phone;
-            }
-        }
-        return null;
-    }
-
     private static Phone getPhoneBase(Phone phone) {
-        return phone instanceof PhoneProxy ? phone.getForegroundCall().getPhone() : phone;
+        if (phone instanceof PhoneProxy) {
+            return phone.getForegroundCall().getPhone();
+        }
+        return phone;
     }
 
-    private boolean hasMoreThanOneHoldingCall(int i) {
-        Iterator it = this.mBackgroundCalls.iterator();
-        int i2 = 0;
-        while (it.hasNext()) {
-            Call call = (Call) it.next();
-            if (call.getState() == State.HOLDING && (call.getPhone().getSubId() == i || (call.getPhone() instanceof SipPhone))) {
-                int i3 = i2 + 1;
-                if (i3 > 1) {
-                    return true;
-                }
-                i2 = i3;
-            }
-        }
-        return false;
-    }
-
-    private boolean hasMoreThanOneRingingCall() {
-        Iterator it = this.mRingingCalls.iterator();
-        int i = 0;
-        while (it.hasNext()) {
-            if (((Call) it.next()).getState().isRinging()) {
-                int i2 = i + 1;
-                if (i2 > 1) {
-                    return true;
-                }
-                i = i2;
-            }
-        }
-        return false;
-    }
-
-    private boolean hasMoreThanOneRingingCall(int i) {
-        Iterator it = this.mRingingCalls.iterator();
-        int i2 = 0;
-        while (it.hasNext()) {
-            Call call = (Call) it.next();
-            if (call.getState().isRinging() && (call.getPhone().getSubId() == i || (call.getPhone() instanceof SipPhone))) {
-                int i3 = i2 + 1;
-                if (i3 > 1) {
-                    return true;
-                }
-                i2 = i3;
-            }
-        }
-        return false;
-    }
-
-    public static boolean isSamePhone(Phone phone, Phone phone2) {
-        return getPhoneBase(phone) == getPhoneBase(phone2);
-    }
-
-    private void registerForPhoneStates(Phone phone) {
-        int phoneId = phone.getPhoneId();
-        if (((CallManagerHandler) this.mHandlerMap.get(phone)) != null) {
-            Rlog.d(LOG_TAG, "This phone has already been registered.");
-            return;
-        }
-        CallManagerHandler callManagerHandler = new CallManagerHandler();
-        this.mHandlerMap.put(phone, callManagerHandler);
-        phone.registerForPreciseCallStateChanged(callManagerHandler, EVENT_PRECISE_CALL_STATE_CHANGED, this.mRegistrantidentifier);
-        phone.registerForDisconnect(callManagerHandler, 100, this.mRegistrantidentifier);
-        phone.registerForNewRingingConnection(callManagerHandler, EVENT_NEW_RINGING_CONNECTION, this.mRegistrantidentifier);
-        phone.registerForUnknownConnection(callManagerHandler, EVENT_UNKNOWN_CONNECTION, this.mRegistrantidentifier);
-        phone.registerForIncomingRing(callManagerHandler, EVENT_INCOMING_RING, this.mRegistrantidentifier);
-        phone.registerForRingbackTone(callManagerHandler, EVENT_RINGBACK_TONE, this.mRegistrantidentifier);
-        phone.registerForInCallVoicePrivacyOn(callManagerHandler, 106, this.mRegistrantidentifier);
-        phone.registerForInCallVoicePrivacyOff(callManagerHandler, EVENT_IN_CALL_VOICE_PRIVACY_OFF, this.mRegistrantidentifier);
-        phone.registerForDisplayInfo(callManagerHandler, EVENT_DISPLAY_INFO, this.mRegistrantidentifier);
-        phone.registerForSignalInfo(callManagerHandler, EVENT_SIGNAL_INFO, this.mRegistrantidentifier);
-        phone.registerForResendIncallMute(callManagerHandler, EVENT_RESEND_INCALL_MUTE, this.mRegistrantidentifier);
-        phone.registerForMmiInitiate(callManagerHandler, EVENT_MMI_INITIATE, this.mRegistrantidentifier);
-        phone.registerForMmiComplete(callManagerHandler, EVENT_MMI_COMPLETE, this.mRegistrantidentifier);
-        phone.registerForSuppServiceFailed(callManagerHandler, EVENT_SUPP_SERVICE_FAILED, this.mRegistrantidentifier);
-        phone.registerForServiceStateChanged(callManagerHandler, EVENT_SERVICE_STATE_CHANGED, this.mRegistrantidentifier);
-        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 5) {
-            phone.registerForSuppServiceNotification(callManagerHandler, EVENT_SUPP_SERVICE_NOTIFY, Integer.valueOf(phoneId));
-        }
-        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 2 || phone.getPhoneType() == 5) {
-            phone.setOnPostDialCharacter(callManagerHandler, EVENT_POST_DIAL_CHARACTER, null);
-        }
-        if (phone.getPhoneType() == 2) {
-            phone.registerForCdmaOtaStatusChange(callManagerHandler, EVENT_CDMA_OTA_STATUS_CHANGE, null);
-            phone.registerForSubscriptionInfoReady(callManagerHandler, EVENT_SUBSCRIPTION_INFO_READY, null);
-            phone.registerForCallWaiting(callManagerHandler, 108, null);
-            phone.registerForEcmTimerReset(callManagerHandler, EVENT_ECM_TIMER_RESET, null);
-        }
-        if (phone.getPhoneType() == 5) {
-            phone.registerForOnHoldTone(callManagerHandler, EVENT_ONHOLD_TONE, null);
-            phone.registerForSuppServiceFailed(callManagerHandler, EVENT_SUPP_SERVICE_FAILED, null);
-            phone.registerForTtyModeReceived(callManagerHandler, EVENT_TTY_MODE_RECEIVED, null);
-        }
-    }
-
-    private void unregisterForPhoneStates(Phone phone) {
-        CallManagerHandler callManagerHandler = (CallManagerHandler) this.mHandlerMap.get(phone);
-        if (callManagerHandler == null) {
-            Rlog.e(LOG_TAG, "Could not find Phone handler for unregistration");
-            return;
-        }
-        this.mHandlerMap.remove(phone);
-        phone.unregisterForPreciseCallStateChanged(callManagerHandler);
-        phone.unregisterForDisconnect(callManagerHandler);
-        phone.unregisterForNewRingingConnection(callManagerHandler);
-        phone.unregisterForUnknownConnection(callManagerHandler);
-        phone.unregisterForIncomingRing(callManagerHandler);
-        phone.unregisterForRingbackTone(callManagerHandler);
-        phone.unregisterForInCallVoicePrivacyOn(callManagerHandler);
-        phone.unregisterForInCallVoicePrivacyOff(callManagerHandler);
-        phone.unregisterForDisplayInfo(callManagerHandler);
-        phone.unregisterForSignalInfo(callManagerHandler);
-        phone.unregisterForResendIncallMute(callManagerHandler);
-        phone.unregisterForMmiInitiate(callManagerHandler);
-        phone.unregisterForMmiComplete(callManagerHandler);
-        phone.unregisterForSuppServiceFailed(callManagerHandler);
-        phone.unregisterForServiceStateChanged(callManagerHandler);
-        phone.unregisterForTtyModeReceived(callManagerHandler);
-        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 5) {
-            phone.unregisterForSuppServiceNotification(callManagerHandler);
-        }
-        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 2 || phone.getPhoneType() == 5) {
-            phone.setOnPostDialCharacter(null, EVENT_POST_DIAL_CHARACTER, null);
-        }
-        if (phone.getPhoneType() == 2) {
-            phone.unregisterForCdmaOtaStatusChange(callManagerHandler);
-            phone.unregisterForSubscriptionInfoReady(callManagerHandler);
-            phone.unregisterForCallWaiting(callManagerHandler);
-            phone.unregisterForEcmTimerReset(callManagerHandler);
-        }
-        if (phone.getPhoneType() == 5) {
-            phone.unregisterForOnHoldTone(callManagerHandler);
-            phone.unregisterForSuppServiceFailed(callManagerHandler);
-        }
-    }
-
-    public void acceptCall(Call call) throws CallStateException {
-        int i = 1;
-        Phone phone = call.getPhone();
-        if (hasActiveFgCall()) {
-            Phone phone2 = getActiveFgCall().getPhone();
-            int i2 = !phone2.getBackgroundCall().isIdle() ? 1 : 0;
-            if (phone2 != phone) {
-                i = 0;
-            }
-            if (i != 0 && i2 != 0) {
-                getActiveFgCall().hangup();
-            } else if (i == 0 && i2 == 0) {
-                phone2.switchHoldingAndActive();
-            } else if (i == 0 && i2 != 0) {
-                getActiveFgCall().hangup();
-            }
-        }
-        phone.acceptCall(0);
-    }
-
-    public boolean canConference(Call call) {
-        Object obj = null;
-        Object phone = hasActiveFgCall() ? getActiveFgCall().getPhone() : null;
-        if (call != null) {
-            obj = call.getPhone();
-        }
-        return obj.getClass().equals(phone.getClass());
-    }
-
-    public boolean canConference(Call call, int i) {
-        Object obj = null;
-        Object phone = hasActiveFgCall(i) ? getActiveFgCall(i).getPhone() : null;
-        if (call != null) {
-            obj = call.getPhone();
-        }
-        return obj.getClass().equals(phone.getClass());
-    }
-
-    public boolean canTransfer(Call call) {
-        Phone phone = null;
-        Phone phone2 = hasActiveFgCall() ? getActiveFgCall().getPhone() : null;
-        if (call != null) {
-            phone = call.getPhone();
-        }
-        return phone == phone2 && phone2.canTransfer();
-    }
-
-    public boolean canTransfer(Call call, int i) {
-        Phone phone = null;
-        Phone phone2 = hasActiveFgCall(i) ? getActiveFgCall(i).getPhone() : null;
-        if (call != null) {
-            phone = call.getPhone();
-        }
-        return phone == phone2 && phone2.canTransfer();
-    }
-
-    public void clearDisconnected() {
-        Iterator it = this.mPhones.iterator();
-        while (it.hasNext()) {
-            ((Phone) it.next()).clearDisconnected();
-        }
-    }
-
-    public void clearDisconnected(int i) {
-        Iterator it = this.mPhones.iterator();
-        while (it.hasNext()) {
-            Phone phone = (Phone) it.next();
-            if (phone.getSubId() == i) {
-                phone.clearDisconnected();
-            }
-        }
-    }
-
-    public void conference(Call call) throws CallStateException {
-        Phone fgPhone = getFgPhone(call.getPhone().getSubId());
-        if (fgPhone == null) {
-            Rlog.d(LOG_TAG, "conference: fgPhone=null");
-        } else if (fgPhone instanceof SipPhone) {
-            ((SipPhone) fgPhone).conference(call);
-        } else if (canConference(call)) {
-            fgPhone.conference();
-        } else {
-            throw new CallStateException("Can't conference foreground and selected background call");
-        }
-    }
-
-    public Connection dial(Phone phone, String str, int i) throws CallStateException {
-        return dial(phone, str, i, 0);
-    }
-
-    public Connection dial(Phone phone, String str, int i, int i2) throws CallStateException {
-        boolean z = true;
-        Phone phoneBase = getPhoneBase(phone);
-        int subId = phone.getSubId();
-        if (canDial(phone)) {
-            if (hasActiveFgCall(subId)) {
-                Phone phone2 = getActiveFgCall(subId).getPhone();
-                boolean z2 = !phone2.getBackgroundCall().isIdle();
-                StringBuilder append = new StringBuilder().append("hasBgCall: ").append(z2).append(" sameChannel:");
-                if (phone2 != phoneBase) {
-                    z = false;
-                }
-                Rlog.d(LOG_TAG, append.append(z).toString());
-                Phone imsPhone = phoneBase.getImsPhone();
-                if (phone2 != phoneBase && (imsPhone == null || imsPhone != phone2)) {
-                    if (z2) {
-                        Rlog.d(LOG_TAG, "Hangup");
-                        getActiveFgCall(subId).hangup();
-                    } else {
-                        Rlog.d(LOG_TAG, "Switch");
-                        phone2.switchHoldingAndActive();
-                    }
-                }
-            }
-            return TelBrand.IS_DCM ? phoneBase.dial(str, i, i2) : phoneBase.dial(str, i);
-        } else if (phoneBase.handleInCallMmiCommands(PhoneNumberUtils.stripSeparators(str))) {
-            return null;
-        } else {
-            throw new CallStateException("cannot dial in current state");
-        }
-    }
-
-    public Connection dial(Phone phone, String str, UUSInfo uUSInfo, int i) throws CallStateException {
-        return dial(phone, str, uUSInfo, i, 0);
-    }
-
-    public Connection dial(Phone phone, String str, UUSInfo uUSInfo, int i, int i2) throws CallStateException {
-        return TelBrand.IS_DCM ? phone.dial(str, uUSInfo, i, i2) : phone.dial(str, uUSInfo, i);
-    }
-
-    public void explicitCallTransfer(Call call) throws CallStateException {
-        if (canTransfer(call)) {
-            call.getPhone().explicitCallTransfer();
-        }
-    }
-
-    public Call getActiveFgCall() {
-        Call firstNonIdleCall = getFirstNonIdleCall(this.mForegroundCalls);
-        return firstNonIdleCall == null ? this.mDefaultPhone == null ? null : this.mDefaultPhone.getForegroundCall() : firstNonIdleCall;
-    }
-
-    public Call getActiveFgCall(int i) {
-        Call firstNonIdleCall = getFirstNonIdleCall(this.mForegroundCalls, i);
-        if (firstNonIdleCall != null) {
-            return firstNonIdleCall;
-        }
-        Phone phone = getPhone(i);
-        return phone == null ? null : phone.getForegroundCall();
-    }
-
-    public State getActiveFgCallState() {
-        Call activeFgCall = getActiveFgCall();
-        return activeFgCall != null ? activeFgCall.getState() : State.IDLE;
-    }
-
-    public State getActiveFgCallState(int i) {
-        Call activeFgCall = getActiveFgCall(i);
-        return activeFgCall != null ? activeFgCall.getState() : State.IDLE;
+    public static boolean isSamePhone(Phone p1, Phone p2) {
+        return getPhoneBase(p1) == getPhoneBase(p2);
     }
 
     public List<Phone> getAllPhones() {
         return Collections.unmodifiableList(this.mPhones);
     }
 
-    public List<Call> getBackgroundCalls() {
-        return Collections.unmodifiableList(this.mBackgroundCalls);
+    private Phone getPhone(int subId) {
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            Phone phone = i$.next();
+            if (phone.getSubId() == subId && !(phone instanceof ImsPhone)) {
+                return phone;
+            }
+        }
+        return null;
     }
 
-    public List<Connection> getBgCallConnections() {
-        Call firstActiveBgCall = getFirstActiveBgCall();
-        return firstActiveBgCall != null ? firstActiveBgCall.getConnections() : this.mEmptyConnections;
+    public PhoneConstants.State getState() {
+        PhoneConstants.State s = PhoneConstants.State.IDLE;
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            Phone phone = i$.next();
+            if (phone.getState() == PhoneConstants.State.RINGING) {
+                s = PhoneConstants.State.RINGING;
+            } else if (phone.getState() == PhoneConstants.State.OFFHOOK && s == PhoneConstants.State.IDLE) {
+                s = PhoneConstants.State.OFFHOOK;
+            }
+        }
+        return s;
     }
 
-    public List<Connection> getBgCallConnections(int i) {
-        Call firstActiveBgCall = getFirstActiveBgCall(i);
-        return firstActiveBgCall != null ? firstActiveBgCall.getConnections() : this.mEmptyConnections;
+    public PhoneConstants.State getState(int subId) {
+        PhoneConstants.State s = PhoneConstants.State.IDLE;
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            Phone phone = i$.next();
+            if (phone.getSubId() == subId) {
+                if (phone.getState() == PhoneConstants.State.RINGING) {
+                    s = PhoneConstants.State.RINGING;
+                } else if (phone.getState() == PhoneConstants.State.OFFHOOK && s == PhoneConstants.State.IDLE) {
+                    s = PhoneConstants.State.OFFHOOK;
+                }
+            }
+        }
+        return s;
     }
 
-    public Phone getBgPhone() {
+    public int getServiceState() {
+        int resultState = 1;
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            int serviceState = i$.next().getServiceState().getState();
+            if (serviceState == 0) {
+                return serviceState;
+            }
+            if (serviceState == 1) {
+                if (resultState == 2 || resultState == 3) {
+                    resultState = serviceState;
+                }
+            } else if (serviceState == 2 && resultState == 3) {
+                resultState = serviceState;
+            }
+        }
+        return resultState;
+    }
+
+    public int getServiceState(int subId) {
+        int resultState = 1;
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            Phone phone = i$.next();
+            if (phone.getSubId() == subId) {
+                int serviceState = phone.getServiceState().getState();
+                if (serviceState == 0) {
+                    return serviceState;
+                }
+                if (serviceState == 1) {
+                    if (resultState == 2 || resultState == 3) {
+                        resultState = serviceState;
+                    }
+                } else if (serviceState == 2 && resultState == 3) {
+                    resultState = serviceState;
+                }
+            }
+        }
+        return resultState;
+    }
+
+    public Phone getPhoneInCall() {
+        if (!getFirstActiveRingingCall().isIdle()) {
+            return getFirstActiveRingingCall().getPhone();
+        }
+        if (!getActiveFgCall().isIdle()) {
+            return getActiveFgCall().getPhone();
+        }
         return getFirstActiveBgCall().getPhone();
     }
 
-    public Phone getBgPhone(int i) {
-        return getFirstActiveBgCall(i).getPhone();
+    public Phone getPhoneInCall(int subId) {
+        if (!getFirstActiveRingingCall(subId).isIdle()) {
+            return getFirstActiveRingingCall(subId).getPhone();
+        }
+        if (!getActiveFgCall(subId).isIdle()) {
+            return getActiveFgCall(subId).getPhone();
+        }
+        return getFirstActiveBgCall(subId).getPhone();
+    }
+
+    public boolean registerPhone(Phone phone) {
+        Phone basePhone = getPhoneBase(phone);
+        if ((TelBrand.IS_SBM || TelBrand.IS_KDDI) && (basePhone instanceof SipPhone)) {
+            unregisterPhone(basePhone);
+        }
+        if (basePhone == null || this.mPhones.contains(basePhone)) {
+            return false;
+        }
+        Rlog.d(LOG_TAG, "registerPhone(" + phone.getPhoneName() + " " + phone + ")");
+        if (this.mPhones.isEmpty()) {
+            this.mDefaultPhone = basePhone;
+        }
+        this.mPhones.add(basePhone);
+        this.mRingingCalls.add(basePhone.getRingingCall());
+        this.mBackgroundCalls.add(basePhone.getBackgroundCall());
+        this.mForegroundCalls.add(basePhone.getForegroundCall());
+        registerForPhoneStates(basePhone);
+        return true;
+    }
+
+    public void unregisterPhone(Phone phone) {
+        Phone basePhone = getPhoneBase(phone);
+        if (basePhone != null && this.mPhones.contains(basePhone)) {
+            Rlog.d(LOG_TAG, "unregisterPhone(" + phone.getPhoneName() + " " + phone + ")");
+            Phone vPhone = basePhone.getImsPhone();
+            if (vPhone != null) {
+                unregisterPhone(vPhone);
+            }
+            this.mPhones.remove(basePhone);
+            this.mRingingCalls.remove(basePhone.getRingingCall());
+            this.mBackgroundCalls.remove(basePhone.getBackgroundCall());
+            this.mForegroundCalls.remove(basePhone.getForegroundCall());
+            unregisterForPhoneStates(basePhone);
+            if (basePhone != this.mDefaultPhone) {
+                return;
+            }
+            if (this.mPhones.isEmpty()) {
+                this.mDefaultPhone = null;
+            } else {
+                this.mDefaultPhone = this.mPhones.get(0);
+            }
+        }
     }
 
     public Phone getDefaultPhone() {
         return this.mDefaultPhone;
     }
 
-    public List<Connection> getFgCallConnections() {
-        Call activeFgCall = getActiveFgCall();
-        return activeFgCall != null ? activeFgCall.getConnections() : this.mEmptyConnections;
-    }
-
-    public List<Connection> getFgCallConnections(int i) {
-        Call activeFgCall = getActiveFgCall(i);
-        return activeFgCall != null ? activeFgCall.getConnections() : this.mEmptyConnections;
-    }
-
-    public Connection getFgCallLatestConnection() {
-        Call activeFgCall = getActiveFgCall();
-        return activeFgCall != null ? activeFgCall.getLatestConnection() : null;
-    }
-
-    public Connection getFgCallLatestConnection(int i) {
-        Call activeFgCall = getActiveFgCall(i);
-        return activeFgCall != null ? activeFgCall.getLatestConnection() : null;
-    }
-
     public Phone getFgPhone() {
         return getActiveFgCall().getPhone();
     }
 
-    public Phone getFgPhone(int i) {
-        return getActiveFgCall(i).getPhone();
+    public Phone getFgPhone(int subId) {
+        return getActiveFgCall(subId).getPhone();
     }
 
-    public Call getFirstActiveBgCall() {
-        Call firstNonIdleCall = getFirstNonIdleCall(this.mBackgroundCalls);
-        return firstNonIdleCall == null ? this.mDefaultPhone == null ? null : this.mDefaultPhone.getBackgroundCall() : firstNonIdleCall;
+    public Phone getBgPhone() {
+        return getFirstActiveBgCall().getPhone();
     }
 
-    public Call getFirstActiveBgCall(int i) {
-        Phone phone = getPhone(i);
-        if (hasMoreThanOneHoldingCall(i)) {
-            return phone.getBackgroundCall();
+    public Phone getBgPhone(int subId) {
+        return getFirstActiveBgCall(subId).getPhone();
+    }
+
+    public Phone getRingingPhone() {
+        return getFirstActiveRingingCall().getPhone();
+    }
+
+    public Phone getRingingPhone(int subId) {
+        return getFirstActiveRingingCall(subId).getPhone();
+    }
+
+    private Context getContext() {
+        Phone defaultPhone = getDefaultPhone();
+        if (defaultPhone == null) {
+            return null;
         }
-        Call firstNonIdleCall = getFirstNonIdleCall(this.mBackgroundCalls, i);
-        return firstNonIdleCall == null ? phone == null ? null : phone.getBackgroundCall() : firstNonIdleCall;
+        return defaultPhone.getContext();
     }
 
-    public Call getFirstActiveRingingCall() {
-        Call firstNonIdleCall = getFirstNonIdleCall(this.mRingingCalls);
-        return firstNonIdleCall == null ? this.mDefaultPhone == null ? null : this.mDefaultPhone.getRingingCall() : firstNonIdleCall;
+    public Object getRegistrantIdentifier() {
+        return this.mRegistrantidentifier;
     }
 
-    public Call getFirstActiveRingingCall(int i) {
-        Phone phone = getPhone(i);
-        Call firstNonIdleCall = getFirstNonIdleCall(this.mRingingCalls, i);
-        return firstNonIdleCall == null ? phone == null ? null : phone.getRingingCall() : firstNonIdleCall;
+    private void registerForPhoneStates(Phone phone) {
+        int phoneId = phone.getPhoneId();
+        if (this.mHandlerMap.get(phone) != null) {
+            Rlog.d(LOG_TAG, "This phone has already been registered.");
+            return;
+        }
+        CallManagerHandler handler = new CallManagerHandler();
+        this.mHandlerMap.put(phone, handler);
+        phone.registerForPreciseCallStateChanged(handler, EVENT_PRECISE_CALL_STATE_CHANGED, this.mRegistrantidentifier);
+        phone.registerForDisconnect(handler, 100, this.mRegistrantidentifier);
+        phone.registerForNewRingingConnection(handler, EVENT_NEW_RINGING_CONNECTION, this.mRegistrantidentifier);
+        phone.registerForUnknownConnection(handler, EVENT_UNKNOWN_CONNECTION, this.mRegistrantidentifier);
+        phone.registerForIncomingRing(handler, EVENT_INCOMING_RING, this.mRegistrantidentifier);
+        phone.registerForRingbackTone(handler, EVENT_RINGBACK_TONE, this.mRegistrantidentifier);
+        phone.registerForInCallVoicePrivacyOn(handler, 106, this.mRegistrantidentifier);
+        phone.registerForInCallVoicePrivacyOff(handler, EVENT_IN_CALL_VOICE_PRIVACY_OFF, this.mRegistrantidentifier);
+        phone.registerForDisplayInfo(handler, EVENT_DISPLAY_INFO, this.mRegistrantidentifier);
+        phone.registerForSignalInfo(handler, EVENT_SIGNAL_INFO, this.mRegistrantidentifier);
+        phone.registerForResendIncallMute(handler, EVENT_RESEND_INCALL_MUTE, this.mRegistrantidentifier);
+        phone.registerForMmiInitiate(handler, EVENT_MMI_INITIATE, this.mRegistrantidentifier);
+        phone.registerForMmiComplete(handler, EVENT_MMI_COMPLETE, this.mRegistrantidentifier);
+        phone.registerForSuppServiceFailed(handler, EVENT_SUPP_SERVICE_FAILED, this.mRegistrantidentifier);
+        phone.registerForServiceStateChanged(handler, EVENT_SERVICE_STATE_CHANGED, this.mRegistrantidentifier);
+        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 5) {
+            phone.registerForSuppServiceNotification(handler, EVENT_SUPP_SERVICE_NOTIFY, Integer.valueOf(phoneId));
+        }
+        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 2 || phone.getPhoneType() == 5) {
+            phone.setOnPostDialCharacter(handler, EVENT_POST_DIAL_CHARACTER, null);
+        }
+        if (phone.getPhoneType() == 2) {
+            phone.registerForCdmaOtaStatusChange(handler, EVENT_CDMA_OTA_STATUS_CHANGE, null);
+            phone.registerForSubscriptionInfoReady(handler, EVENT_SUBSCRIPTION_INFO_READY, null);
+            phone.registerForCallWaiting(handler, 108, null);
+            phone.registerForEcmTimerReset(handler, EVENT_ECM_TIMER_RESET, null);
+        }
+        if (phone.getPhoneType() == 5) {
+            phone.registerForOnHoldTone(handler, EVENT_ONHOLD_TONE, null);
+            phone.registerForSuppServiceFailed(handler, EVENT_SUPP_SERVICE_FAILED, null);
+            phone.registerForTtyModeReceived(handler, EVENT_TTY_MODE_RECEIVED, null);
+        }
     }
 
-    public List<Call> getForegroundCalls() {
-        return Collections.unmodifiableList(this.mForegroundCalls);
+    private void unregisterForPhoneStates(Phone phone) {
+        CallManagerHandler handler = this.mHandlerMap.get(phone);
+        if (handler == null) {
+            Rlog.e(LOG_TAG, "Could not find Phone handler for unregistration");
+            return;
+        }
+        this.mHandlerMap.remove(phone);
+        phone.unregisterForPreciseCallStateChanged(handler);
+        phone.unregisterForDisconnect(handler);
+        phone.unregisterForNewRingingConnection(handler);
+        phone.unregisterForUnknownConnection(handler);
+        phone.unregisterForIncomingRing(handler);
+        phone.unregisterForRingbackTone(handler);
+        phone.unregisterForInCallVoicePrivacyOn(handler);
+        phone.unregisterForInCallVoicePrivacyOff(handler);
+        phone.unregisterForDisplayInfo(handler);
+        phone.unregisterForSignalInfo(handler);
+        phone.unregisterForResendIncallMute(handler);
+        phone.unregisterForMmiInitiate(handler);
+        phone.unregisterForMmiComplete(handler);
+        phone.unregisterForSuppServiceFailed(handler);
+        phone.unregisterForServiceStateChanged(handler);
+        phone.unregisterForTtyModeReceived(handler);
+        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 5) {
+            phone.unregisterForSuppServiceNotification(handler);
+        }
+        if (phone.getPhoneType() == 1 || phone.getPhoneType() == 2 || phone.getPhoneType() == 5) {
+            phone.setOnPostDialCharacter(null, EVENT_POST_DIAL_CHARACTER, null);
+        }
+        if (phone.getPhoneType() == 2) {
+            phone.unregisterForCdmaOtaStatusChange(handler);
+            phone.unregisterForSubscriptionInfoReady(handler);
+            phone.unregisterForCallWaiting(handler);
+            phone.unregisterForEcmTimerReset(handler);
+        }
+        if (phone.getPhoneType() == 5) {
+            phone.unregisterForOnHoldTone(handler);
+            phone.unregisterForSuppServiceFailed(handler);
+        }
     }
 
-    public boolean getMute() {
-        return hasActiveFgCall() ? getActiveFgCall().getPhone().getMute() : hasActiveBgCall() ? getFirstActiveBgCall().getPhone().getMute() : false;
+    public void acceptCall(Call ringingCall) throws CallStateException {
+        boolean hasBgCall;
+        boolean sameChannel = true;
+        Phone ringingPhone = ringingCall.getPhone();
+        if (hasActiveFgCall()) {
+            Phone activePhone = getActiveFgCall().getPhone();
+            if (!activePhone.getBackgroundCall().isIdle()) {
+                hasBgCall = true;
+            } else {
+                hasBgCall = false;
+            }
+            if (activePhone != ringingPhone) {
+                sameChannel = false;
+            }
+            if (sameChannel && hasBgCall) {
+                getActiveFgCall().hangup();
+            } else if (!sameChannel && !hasBgCall) {
+                activePhone.switchHoldingAndActive();
+            } else if (!sameChannel && hasBgCall) {
+                getActiveFgCall().hangup();
+            }
+        }
+        ringingPhone.acceptCall(0);
+    }
+
+    public void rejectCall(Call ringingCall) throws CallStateException {
+        ringingCall.getPhone().rejectCall();
+    }
+
+    public void switchHoldingAndActive(Call heldCall) throws CallStateException {
+        Phone activePhone = null;
+        Phone heldPhone = null;
+        if (hasActiveFgCall()) {
+            activePhone = getActiveFgCall().getPhone();
+        }
+        if (heldCall != null) {
+            heldPhone = heldCall.getPhone();
+        }
+        if (activePhone != null) {
+            activePhone.switchHoldingAndActive();
+        }
+        if (heldPhone != null && heldPhone != activePhone) {
+            heldPhone.switchHoldingAndActive();
+        }
+    }
+
+    public void hangupForegroundResumeBackground(Call heldCall) throws CallStateException {
+        if (hasActiveFgCall()) {
+            Phone foregroundPhone = getFgPhone();
+            if (heldCall == null) {
+                return;
+            }
+            if (foregroundPhone == heldCall.getPhone()) {
+                getActiveFgCall().hangup();
+                return;
+            }
+            getActiveFgCall().hangup();
+            switchHoldingAndActive(heldCall);
+        }
+    }
+
+    public boolean canConference(Call heldCall) {
+        Phone activePhone = null;
+        Phone heldPhone = null;
+        if (hasActiveFgCall()) {
+            activePhone = getActiveFgCall().getPhone();
+        }
+        if (heldCall != null) {
+            heldPhone = heldCall.getPhone();
+        }
+        return heldPhone.getClass().equals(activePhone.getClass());
+    }
+
+    public boolean canConference(Call heldCall, int subId) {
+        Phone activePhone = null;
+        Phone heldPhone = null;
+        if (hasActiveFgCall(subId)) {
+            activePhone = getActiveFgCall(subId).getPhone();
+        }
+        if (heldCall != null) {
+            heldPhone = heldCall.getPhone();
+        }
+        return heldPhone.getClass().equals(activePhone.getClass());
+    }
+
+    public void conference(Call heldCall) throws CallStateException {
+        Phone fgPhone = getFgPhone(heldCall.getPhone().getSubId());
+        if (fgPhone == null) {
+            Rlog.d(LOG_TAG, "conference: fgPhone=null");
+        } else if (fgPhone instanceof SipPhone) {
+            ((SipPhone) fgPhone).conference(heldCall);
+        } else if (canConference(heldCall)) {
+            fgPhone.conference();
+        } else {
+            throw new CallStateException("Can't conference foreground and selected background call");
+        }
+    }
+
+    public Connection dial(Phone phone, String dialString, int videoState) throws CallStateException {
+        return dial(phone, dialString, videoState, 0);
+    }
+
+    public Connection dial(Phone phone, String dialString, int videoState, int prefix) throws CallStateException {
+        Phone basePhone = getPhoneBase(phone);
+        int subId = phone.getSubId();
+        if (canDial(phone)) {
+            if (hasActiveFgCall(subId)) {
+                Phone activePhone = getActiveFgCall(subId).getPhone();
+                boolean hasBgCall = !activePhone.getBackgroundCall().isIdle();
+                Rlog.d(LOG_TAG, "hasBgCall: " + hasBgCall + " sameChannel:" + (activePhone == basePhone));
+                Phone vPhone = basePhone.getImsPhone();
+                if (activePhone != basePhone && (vPhone == null || vPhone != activePhone)) {
+                    if (hasBgCall) {
+                        Rlog.d(LOG_TAG, "Hangup");
+                        getActiveFgCall(subId).hangup();
+                    } else {
+                        Rlog.d(LOG_TAG, "Switch");
+                        activePhone.switchHoldingAndActive();
+                    }
+                }
+            }
+            if (TelBrand.IS_DCM) {
+                return basePhone.dial(dialString, videoState, prefix);
+            }
+            return basePhone.dial(dialString, videoState);
+        } else if (basePhone.handleInCallMmiCommands(PhoneNumberUtils.stripSeparators(dialString))) {
+            return null;
+        } else {
+            throw new CallStateException("cannot dial in current state");
+        }
+    }
+
+    public Connection dial(Phone phone, String dialString, UUSInfo uusInfo, int videoState) throws CallStateException {
+        return dial(phone, dialString, uusInfo, videoState, 0);
+    }
+
+    public Connection dial(Phone phone, String dialString, UUSInfo uusInfo, int videoState, int prefix) throws CallStateException {
+        return TelBrand.IS_DCM ? phone.dial(dialString, uusInfo, videoState, prefix) : phone.dial(dialString, uusInfo, videoState);
+    }
+
+    public void clearDisconnected() {
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            i$.next().clearDisconnected();
+        }
+    }
+
+    public void clearDisconnected(int subId) {
+        Iterator i$ = this.mPhones.iterator();
+        while (i$.hasNext()) {
+            Phone phone = i$.next();
+            if (phone.getSubId() == subId) {
+                phone.clearDisconnected();
+            }
+        }
+    }
+
+    private boolean canDial(Phone phone) {
+        int serviceState = phone.getServiceState().getState();
+        int subId = phone.getSubId();
+        boolean hasRingingCall = hasActiveRingingCall();
+        Call.State fgCallState = getActiveFgCallState(subId);
+        boolean result = serviceState != 3 && !hasRingingCall && (fgCallState == Call.State.ACTIVE || fgCallState == Call.State.IDLE || fgCallState == Call.State.DISCONNECTED || fgCallState == Call.State.ALERTING);
+        if (!result) {
+            Rlog.d(LOG_TAG, "canDial serviceState=" + serviceState + " hasRingingCall=" + hasRingingCall + " fgCallState=" + fgCallState);
+        }
+        return result;
+    }
+
+    public boolean canTransfer(Call heldCall) {
+        Phone activePhone = null;
+        Phone heldPhone = null;
+        if (hasActiveFgCall()) {
+            activePhone = getActiveFgCall().getPhone();
+        }
+        if (heldCall != null) {
+            heldPhone = heldCall.getPhone();
+        }
+        return heldPhone == activePhone && activePhone.canTransfer();
+    }
+
+    public boolean canTransfer(Call heldCall, int subId) {
+        Phone activePhone = null;
+        Phone heldPhone = null;
+        if (hasActiveFgCall(subId)) {
+            activePhone = getActiveFgCall(subId).getPhone();
+        }
+        if (heldCall != null) {
+            heldPhone = heldCall.getPhone();
+        }
+        return heldPhone == activePhone && activePhone.canTransfer();
+    }
+
+    public void explicitCallTransfer(Call heldCall) throws CallStateException {
+        if (canTransfer(heldCall)) {
+            heldCall.getPhone().explicitCallTransfer();
+        }
     }
 
     public List<? extends MmiCode> getPendingMmiCodes(Phone phone) {
@@ -694,291 +579,25 @@ public final class CallManager {
         return null;
     }
 
-    public Phone getPhoneInCall() {
-        return !getFirstActiveRingingCall().isIdle() ? getFirstActiveRingingCall().getPhone() : !getActiveFgCall().isIdle() ? getActiveFgCall().getPhone() : getFirstActiveBgCall().getPhone();
-    }
-
-    public Phone getPhoneInCall(int i) {
-        return !getFirstActiveRingingCall(i).isIdle() ? getFirstActiveRingingCall(i).getPhone() : !getActiveFgCall(i).isIdle() ? getActiveFgCall(i).getPhone() : getFirstActiveBgCall(i).getPhone();
-    }
-
-    public Object getRegistrantIdentifier() {
-        return this.mRegistrantidentifier;
-    }
-
-    public List<Call> getRingingCalls() {
-        return Collections.unmodifiableList(this.mRingingCalls);
-    }
-
-    public Phone getRingingPhone() {
-        return getFirstActiveRingingCall().getPhone();
-    }
-
-    public Phone getRingingPhone(int i) {
-        return getFirstActiveRingingCall(i).getPhone();
-    }
-
-    public int getServiceState() {
-        Iterator it = this.mPhones.iterator();
-        while (it.hasNext()) {
-            int state = ((Phone) it.next()).getServiceState().getState();
-            if (state == 0) {
-                return state;
-            }
-            if (state != 1 && state == 2) {
-            }
-        }
-        return 1;
-    }
-
-    public int getServiceState(int i) {
-        Iterator it = this.mPhones.iterator();
-        while (it.hasNext()) {
-            Phone phone = (Phone) it.next();
-            if (phone.getSubId() == i) {
-                int state = phone.getServiceState().getState();
-                if (state == 0) {
-                    return state;
-                }
-                if (state != 1 && state == 2) {
-                }
-            }
-        }
-        return 1;
-    }
-
-    public PhoneConstants.State getState() {
-        PhoneConstants.State state = PhoneConstants.State.IDLE;
-        Iterator it = this.mPhones.iterator();
-        PhoneConstants.State state2 = state;
-        while (it.hasNext()) {
-            Phone phone = (Phone) it.next();
-            if (phone.getState() == PhoneConstants.State.RINGING) {
-                state2 = PhoneConstants.State.RINGING;
-            } else if (phone.getState() == PhoneConstants.State.OFFHOOK && state2 == PhoneConstants.State.IDLE) {
-                state2 = PhoneConstants.State.OFFHOOK;
-            }
-        }
-        return state2;
-    }
-
-    public PhoneConstants.State getState(int i) {
-        PhoneConstants.State state = PhoneConstants.State.IDLE;
-        Iterator it = this.mPhones.iterator();
-        PhoneConstants.State state2 = state;
-        while (it.hasNext()) {
-            Phone phone = (Phone) it.next();
-            if (phone.getSubId() == i) {
-                if (phone.getState() == PhoneConstants.State.RINGING) {
-                    state2 = PhoneConstants.State.RINGING;
-                } else if (phone.getState() == PhoneConstants.State.OFFHOOK && state2 == PhoneConstants.State.IDLE) {
-                    state2 = PhoneConstants.State.OFFHOOK;
-                }
-            }
-        }
-        return state2;
-    }
-
-    public void hangupForegroundResumeBackground(Call call) throws CallStateException {
-        if (hasActiveFgCall()) {
-            Phone fgPhone = getFgPhone();
-            if (call == null) {
-                return;
-            }
-            if (fgPhone == call.getPhone()) {
-                getActiveFgCall().hangup();
-                return;
-            }
-            getActiveFgCall().hangup();
-            switchHoldingAndActive(call);
-        }
-    }
-
-    public boolean hasActiveBgCall() {
-        return getFirstActiveCall(this.mBackgroundCalls) != null;
-    }
-
-    public boolean hasActiveBgCall(int i) {
-        return getFirstActiveCall(this.mBackgroundCalls, i) != null;
-    }
-
-    public boolean hasActiveFgCall() {
-        return getFirstActiveCall(this.mForegroundCalls) != null;
-    }
-
-    public boolean hasActiveFgCall(int i) {
-        return getFirstActiveCall(this.mForegroundCalls, i) != null;
-    }
-
-    public boolean hasActiveRingingCall() {
-        return getFirstActiveCall(this.mRingingCalls) != null;
-    }
-
-    public boolean hasActiveRingingCall(int i) {
-        return getFirstActiveCall(this.mRingingCalls, i) != null;
-    }
-
-    public boolean hasDisconnectedBgCall() {
-        return getFirstCallOfState(this.mBackgroundCalls, State.DISCONNECTED) != null;
-    }
-
-    public boolean hasDisconnectedBgCall(int i) {
-        return getFirstCallOfState(this.mBackgroundCalls, State.DISCONNECTED, i) != null;
-    }
-
-    public boolean hasDisconnectedFgCall() {
-        return getFirstCallOfState(this.mForegroundCalls, State.DISCONNECTED) != null;
-    }
-
-    public boolean hasDisconnectedFgCall(int i) {
-        return getFirstCallOfState(this.mForegroundCalls, State.DISCONNECTED, i) != null;
-    }
-
-    public void registerForCallWaiting(Handler handler, int i, Object obj) {
-        this.mCallWaitingRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForCdmaOtaStatusChange(Handler handler, int i, Object obj) {
-        this.mCdmaOtaStatusChangeRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForDisconnect(Handler handler, int i, Object obj) {
-        this.mDisconnectRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForDisplayInfo(Handler handler, int i, Object obj) {
-        this.mDisplayInfoRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForEcmTimerReset(Handler handler, int i, Object obj) {
-        this.mEcmTimerResetRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForInCallVoicePrivacyOff(Handler handler, int i, Object obj) {
-        this.mInCallVoicePrivacyOffRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForInCallVoicePrivacyOn(Handler handler, int i, Object obj) {
-        this.mInCallVoicePrivacyOnRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForIncomingRing(Handler handler, int i, Object obj) {
-        this.mIncomingRingRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForMmiComplete(Handler handler, int i, Object obj) {
-        this.mMmiCompleteRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForMmiInitiate(Handler handler, int i, Object obj) {
-        this.mMmiInitiateRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForNewRingingConnection(Handler handler, int i, Object obj) {
-        this.mNewRingingConnectionRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForOnHoldTone(Handler handler, int i, Object obj) {
-        this.mOnHoldToneRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForPostDialCharacter(Handler handler, int i, Object obj) {
-        this.mPostDialCharacterRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForPreciseCallStateChanged(Handler handler, int i, Object obj) {
-        this.mPreciseCallStateRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForResendIncallMute(Handler handler, int i, Object obj) {
-        this.mResendIncallMuteRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForRingbackTone(Handler handler, int i, Object obj) {
-        this.mRingbackToneRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForServiceStateChanged(Handler handler, int i, Object obj) {
-        this.mServiceStateChangedRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSignalInfo(Handler handler, int i, Object obj) {
-        this.mSignalInfoRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSubscriptionChange(Handler handler, int i, Object obj) {
-        this.mActiveSubChangeRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSubscriptionInfoReady(Handler handler, int i, Object obj) {
-        this.mSubscriptionInfoReadyRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSuppServiceFailed(Handler handler, int i, Object obj) {
-        this.mSuppServiceFailedRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForSuppServiceNotification(Handler handler, int i, Object obj) {
-        this.mSuppServiceNotificationRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForTtyModeReceived(Handler handler, int i, Object obj) {
-        this.mTtyModeReceivedRegistrants.addUnique(handler, i, obj);
-    }
-
-    public void registerForUnknownConnection(Handler handler, int i, Object obj) {
-        this.mUnknownConnectionRegistrants.addUnique(handler, i, obj);
-    }
-
-    public boolean registerPhone(Phone phone) {
-        Phone phoneBase = getPhoneBase(phone);
-        if ((TelBrand.IS_SBM || TelBrand.IS_KDDI) && (phoneBase instanceof SipPhone)) {
-            unregisterPhone(phoneBase);
-        }
-        if (phoneBase == null || this.mPhones.contains(phoneBase)) {
-            return false;
-        }
-        Rlog.d(LOG_TAG, "registerPhone(" + phone.getPhoneName() + " " + phone + ")");
-        if (this.mPhones.isEmpty()) {
-            this.mDefaultPhone = phoneBase;
-        }
-        this.mPhones.add(phoneBase);
-        this.mRingingCalls.add(phoneBase.getRingingCall());
-        this.mBackgroundCalls.add(phoneBase.getBackgroundCall());
-        this.mForegroundCalls.add(phoneBase.getForegroundCall());
-        registerForPhoneStates(phoneBase);
-        return true;
-    }
-
-    public void rejectCall(Call call) throws CallStateException {
-        call.getPhone().rejectCall();
-    }
-
-    public boolean sendBurstDtmf(String str, int i, int i2, Message message) {
-        if (!hasActiveFgCall()) {
-            return false;
-        }
-        getActiveFgCall().getPhone().sendBurstDtmf(str, i, i2, message);
-        return true;
-    }
-
-    public boolean sendDtmf(char c) {
-        if (!hasActiveFgCall()) {
-            return false;
-        }
-        getActiveFgCall().getPhone().sendDtmf(c);
-        return true;
-    }
-
-    public boolean sendUssdResponse(Phone phone, String str) {
+    public boolean sendUssdResponse(Phone phone, String ussdMessge) {
         Rlog.e(LOG_TAG, "sendUssdResponse not implemented");
         return false;
     }
 
-    public void setActiveSubscription(int i) {
-        Rlog.d(LOG_TAG, "setActiveSubscription existing:" + mActiveSub + "new = " + i);
-        mActiveSub = i;
-        this.mActiveSubChangeRegistrants.notifyRegistrants(new AsyncResult(null, Integer.valueOf(mActiveSub), null));
+    public void setMute(boolean muted) {
+        if (hasActiveFgCall()) {
+            getActiveFgCall().getPhone().setMute(muted);
+        }
+    }
+
+    public boolean getMute() {
+        if (hasActiveFgCall()) {
+            return getActiveFgCall().getPhone().getMute();
+        }
+        if (hasActiveBgCall()) {
+            return getFirstActiveBgCall().getPhone().getMute();
+        }
+        return false;
     }
 
     public void setEchoSuppressionEnabled() {
@@ -987,10 +606,12 @@ public final class CallManager {
         }
     }
 
-    public void setMute(boolean z) {
-        if (hasActiveFgCall()) {
-            getActiveFgCall().getPhone().setMute(z);
+    public boolean sendDtmf(char c) {
+        if (!hasActiveFgCall()) {
+            return false;
         }
+        getActiveFgCall().getPhone().sendDtmf(c);
+        return true;
     }
 
     public boolean startDtmf(char c) {
@@ -1007,181 +628,661 @@ public final class CallManager {
         }
     }
 
-    public void switchHoldingAndActive(Call call) throws CallStateException {
-        Phone phone = null;
-        Phone phone2 = hasActiveFgCall() ? getActiveFgCall().getPhone() : null;
+    public boolean sendBurstDtmf(String dtmfString, int on, int off, Message onComplete) {
+        if (!hasActiveFgCall()) {
+            return false;
+        }
+        getActiveFgCall().getPhone().sendBurstDtmf(dtmfString, on, off, onComplete);
+        return true;
+    }
+
+    public void registerForDisconnect(Handler h, int what, Object obj) {
+        this.mDisconnectRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForDisconnect(Handler h) {
+        this.mDisconnectRegistrants.remove(h);
+    }
+
+    public void registerForPreciseCallStateChanged(Handler h, int what, Object obj) {
+        this.mPreciseCallStateRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForPreciseCallStateChanged(Handler h) {
+        this.mPreciseCallStateRegistrants.remove(h);
+    }
+
+    public void registerForUnknownConnection(Handler h, int what, Object obj) {
+        this.mUnknownConnectionRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForUnknownConnection(Handler h) {
+        this.mUnknownConnectionRegistrants.remove(h);
+    }
+
+    public void registerForNewRingingConnection(Handler h, int what, Object obj) {
+        this.mNewRingingConnectionRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForNewRingingConnection(Handler h) {
+        this.mNewRingingConnectionRegistrants.remove(h);
+    }
+
+    public void registerForIncomingRing(Handler h, int what, Object obj) {
+        this.mIncomingRingRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForIncomingRing(Handler h) {
+        this.mIncomingRingRegistrants.remove(h);
+    }
+
+    public void registerForRingbackTone(Handler h, int what, Object obj) {
+        this.mRingbackToneRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForRingbackTone(Handler h) {
+        this.mRingbackToneRegistrants.remove(h);
+    }
+
+    public void registerForOnHoldTone(Handler h, int what, Object obj) {
+        this.mOnHoldToneRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForOnHoldTone(Handler h) {
+        this.mOnHoldToneRegistrants.remove(h);
+    }
+
+    public void registerForResendIncallMute(Handler h, int what, Object obj) {
+        this.mResendIncallMuteRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForResendIncallMute(Handler h) {
+        this.mResendIncallMuteRegistrants.remove(h);
+    }
+
+    public void registerForMmiInitiate(Handler h, int what, Object obj) {
+        this.mMmiInitiateRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForMmiInitiate(Handler h) {
+        this.mMmiInitiateRegistrants.remove(h);
+    }
+
+    public void registerForMmiComplete(Handler h, int what, Object obj) {
+        this.mMmiCompleteRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForMmiComplete(Handler h) {
+        this.mMmiCompleteRegistrants.remove(h);
+    }
+
+    public void registerForEcmTimerReset(Handler h, int what, Object obj) {
+        this.mEcmTimerResetRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForEcmTimerReset(Handler h) {
+        this.mEcmTimerResetRegistrants.remove(h);
+    }
+
+    public void registerForServiceStateChanged(Handler h, int what, Object obj) {
+        this.mServiceStateChangedRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForServiceStateChanged(Handler h) {
+        this.mServiceStateChangedRegistrants.remove(h);
+    }
+
+    public void registerForSuppServiceFailed(Handler h, int what, Object obj) {
+        this.mSuppServiceFailedRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForSuppServiceFailed(Handler h) {
+        this.mSuppServiceFailedRegistrants.remove(h);
+    }
+
+    public void registerForInCallVoicePrivacyOn(Handler h, int what, Object obj) {
+        this.mInCallVoicePrivacyOnRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForInCallVoicePrivacyOn(Handler h) {
+        this.mInCallVoicePrivacyOnRegistrants.remove(h);
+    }
+
+    public void registerForSuppServiceNotification(Handler h, int what, Object obj) {
+        this.mSuppServiceNotificationRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForSuppServiceNotification(Handler h) {
+        this.mSuppServiceNotificationRegistrants.remove(h);
+    }
+
+    public void registerForInCallVoicePrivacyOff(Handler h, int what, Object obj) {
+        this.mInCallVoicePrivacyOffRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForInCallVoicePrivacyOff(Handler h) {
+        this.mInCallVoicePrivacyOffRegistrants.remove(h);
+    }
+
+    public void registerForCallWaiting(Handler h, int what, Object obj) {
+        this.mCallWaitingRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForCallWaiting(Handler h) {
+        this.mCallWaitingRegistrants.remove(h);
+    }
+
+    public void registerForSignalInfo(Handler h, int what, Object obj) {
+        this.mSignalInfoRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForSignalInfo(Handler h) {
+        this.mSignalInfoRegistrants.remove(h);
+    }
+
+    public void registerForDisplayInfo(Handler h, int what, Object obj) {
+        this.mDisplayInfoRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForDisplayInfo(Handler h) {
+        this.mDisplayInfoRegistrants.remove(h);
+    }
+
+    public void registerForCdmaOtaStatusChange(Handler h, int what, Object obj) {
+        this.mCdmaOtaStatusChangeRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForCdmaOtaStatusChange(Handler h) {
+        this.mCdmaOtaStatusChangeRegistrants.remove(h);
+    }
+
+    public void registerForSubscriptionInfoReady(Handler h, int what, Object obj) {
+        this.mSubscriptionInfoReadyRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForSubscriptionInfoReady(Handler h) {
+        this.mSubscriptionInfoReadyRegistrants.remove(h);
+    }
+
+    public void registerForSubscriptionChange(Handler h, int what, Object obj) {
+        this.mActiveSubChangeRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForSubscriptionChange(Handler h) {
+        this.mActiveSubChangeRegistrants.remove(h);
+    }
+
+    public void setActiveSubscription(int subscription) {
+        Rlog.d(LOG_TAG, "setActiveSubscription existing:" + mActiveSub + "new = " + subscription);
+        mActiveSub = subscription;
+        this.mActiveSubChangeRegistrants.notifyRegistrants(new AsyncResult((Object) null, Integer.valueOf(mActiveSub), (Throwable) null));
+    }
+
+    public void registerForPostDialCharacter(Handler h, int what, Object obj) {
+        this.mPostDialCharacterRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForPostDialCharacter(Handler h) {
+        this.mPostDialCharacterRegistrants.remove(h);
+    }
+
+    public void registerForTtyModeReceived(Handler h, int what, Object obj) {
+        this.mTtyModeReceivedRegistrants.addUnique(h, what, obj);
+    }
+
+    public void unregisterForTtyModeReceived(Handler h) {
+        this.mTtyModeReceivedRegistrants.remove(h);
+    }
+
+    public List<Call> getRingingCalls() {
+        return Collections.unmodifiableList(this.mRingingCalls);
+    }
+
+    public List<Call> getForegroundCalls() {
+        return Collections.unmodifiableList(this.mForegroundCalls);
+    }
+
+    public List<Call> getBackgroundCalls() {
+        return Collections.unmodifiableList(this.mBackgroundCalls);
+    }
+
+    public boolean hasActiveFgCall() {
+        return getFirstActiveCall(this.mForegroundCalls) != null;
+    }
+
+    public boolean hasActiveFgCall(int subId) {
+        return getFirstActiveCall(this.mForegroundCalls, subId) != null;
+    }
+
+    public boolean hasActiveBgCall() {
+        return getFirstActiveCall(this.mBackgroundCalls) != null;
+    }
+
+    public boolean hasActiveBgCall(int subId) {
+        return getFirstActiveCall(this.mBackgroundCalls, subId) != null;
+    }
+
+    public boolean hasActiveRingingCall() {
+        return getFirstActiveCall(this.mRingingCalls) != null;
+    }
+
+    public boolean hasActiveRingingCall(int subId) {
+        return getFirstActiveCall(this.mRingingCalls, subId) != null;
+    }
+
+    public Call getActiveFgCall() {
+        Call call = getFirstNonIdleCall(this.mForegroundCalls);
         if (call != null) {
-            phone = call.getPhone();
+            return call;
         }
-        if (phone2 != null) {
-            phone2.switchHoldingAndActive();
+        if (this.mDefaultPhone == null) {
+            return null;
         }
-        if (phone != null && phone != phone2) {
-            phone.switchHoldingAndActive();
+        return this.mDefaultPhone.getForegroundCall();
+    }
+
+    public Call getActiveFgCall(int subId) {
+        Call call = getFirstNonIdleCall(this.mForegroundCalls, subId);
+        if (call != null) {
+            return call;
+        }
+        Phone phone = getPhone(subId);
+        if (phone == null) {
+            return null;
+        }
+        return phone.getForegroundCall();
+    }
+
+    private Call getFirstNonIdleCall(List<Call> calls) {
+        Call result = null;
+        for (Call call : calls) {
+            if (!call.isIdle()) {
+                return call;
+            }
+            if (call.getState() != Call.State.IDLE && result == null) {
+                result = call;
+            }
+        }
+        return result;
+    }
+
+    private Call getFirstNonIdleCall(List<Call> calls, int subId) {
+        Call result = null;
+        for (Call call : calls) {
+            if (call.getPhone().getSubId() == subId || (call.getPhone() instanceof SipPhone)) {
+                if (!call.isIdle()) {
+                    return call;
+                }
+                if (call.getState() != Call.State.IDLE && result == null) {
+                    result = call;
+                }
+            }
+        }
+        return result;
+    }
+
+    public Call getFirstActiveBgCall() {
+        Call call = getFirstNonIdleCall(this.mBackgroundCalls);
+        if (call != null) {
+            return call;
+        }
+        if (this.mDefaultPhone == null) {
+            return null;
+        }
+        return this.mDefaultPhone.getBackgroundCall();
+    }
+
+    public Call getFirstActiveBgCall(int subId) {
+        Phone phone = getPhone(subId);
+        if (hasMoreThanOneHoldingCall(subId)) {
+            return phone.getBackgroundCall();
+        }
+        Call call = getFirstNonIdleCall(this.mBackgroundCalls, subId);
+        if (call != null) {
+            return call;
+        }
+        if (phone == null) {
+            return null;
+        }
+        return phone.getBackgroundCall();
+    }
+
+    public Call getFirstActiveRingingCall() {
+        Call call = getFirstNonIdleCall(this.mRingingCalls);
+        if (call != null) {
+            return call;
+        }
+        if (this.mDefaultPhone == null) {
+            return null;
+        }
+        return this.mDefaultPhone.getRingingCall();
+    }
+
+    public Call getFirstActiveRingingCall(int subId) {
+        Phone phone = getPhone(subId);
+        Call call = getFirstNonIdleCall(this.mRingingCalls, subId);
+        if (call != null) {
+            return call;
+        }
+        if (phone == null) {
+            return null;
+        }
+        return phone.getRingingCall();
+    }
+
+    public Call.State getActiveFgCallState() {
+        Call fgCall = getActiveFgCall();
+        return fgCall != null ? fgCall.getState() : Call.State.IDLE;
+    }
+
+    public Call.State getActiveFgCallState(int subId) {
+        Call fgCall = getActiveFgCall(subId);
+        return fgCall != null ? fgCall.getState() : Call.State.IDLE;
+    }
+
+    public List<Connection> getFgCallConnections() {
+        Call fgCall = getActiveFgCall();
+        return fgCall != null ? fgCall.getConnections() : this.mEmptyConnections;
+    }
+
+    public List<Connection> getFgCallConnections(int subId) {
+        Call fgCall = getActiveFgCall(subId);
+        return fgCall != null ? fgCall.getConnections() : this.mEmptyConnections;
+    }
+
+    public List<Connection> getBgCallConnections() {
+        Call bgCall = getFirstActiveBgCall();
+        return bgCall != null ? bgCall.getConnections() : this.mEmptyConnections;
+    }
+
+    public List<Connection> getBgCallConnections(int subId) {
+        Call bgCall = getFirstActiveBgCall(subId);
+        return bgCall != null ? bgCall.getConnections() : this.mEmptyConnections;
+    }
+
+    public Connection getFgCallLatestConnection() {
+        Call fgCall = getActiveFgCall();
+        if (fgCall != null) {
+            return fgCall.getLatestConnection();
+        }
+        return null;
+    }
+
+    public Connection getFgCallLatestConnection(int subId) {
+        Call fgCall = getActiveFgCall(subId);
+        if (fgCall != null) {
+            return fgCall.getLatestConnection();
+        }
+        return null;
+    }
+
+    public boolean hasDisconnectedFgCall() {
+        return getFirstCallOfState(this.mForegroundCalls, Call.State.DISCONNECTED) != null;
+    }
+
+    public boolean hasDisconnectedFgCall(int subId) {
+        return getFirstCallOfState(this.mForegroundCalls, Call.State.DISCONNECTED, subId) != null;
+    }
+
+    public boolean hasDisconnectedBgCall() {
+        return getFirstCallOfState(this.mBackgroundCalls, Call.State.DISCONNECTED) != null;
+    }
+
+    public boolean hasDisconnectedBgCall(int subId) {
+        return getFirstCallOfState(this.mBackgroundCalls, Call.State.DISCONNECTED, subId) != null;
+    }
+
+    private Call getFirstActiveCall(ArrayList<Call> calls) {
+        Iterator i$ = calls.iterator();
+        while (i$.hasNext()) {
+            Call call = i$.next();
+            if (!call.isIdle()) {
+                return call;
+            }
+        }
+        return null;
+    }
+
+    private Call getFirstActiveCall(ArrayList<Call> calls, int subId) {
+        Iterator i$ = calls.iterator();
+        while (i$.hasNext()) {
+            Call call = i$.next();
+            if (!call.isIdle() && (call.getPhone().getSubId() == subId || (call.getPhone() instanceof SipPhone))) {
+                return call;
+            }
+        }
+        return null;
+    }
+
+    private Call getFirstCallOfState(ArrayList<Call> calls, Call.State state) {
+        Iterator i$ = calls.iterator();
+        while (i$.hasNext()) {
+            Call call = i$.next();
+            if (call.getState() == state) {
+                return call;
+            }
+        }
+        return null;
+    }
+
+    /* JADX WARN: Removed duplicated region for block: B:5:0x000a  */
+    /*
+        Code decompiled incorrectly, please refer to instructions dump.
+        To view partially-correct code enable 'Show inconsistent code' option in preferences
+    */
+    private com.android.internal.telephony.Call getFirstCallOfState(java.util.ArrayList<com.android.internal.telephony.Call> r4, com.android.internal.telephony.Call.State r5, int r6) {
+        /*
+            r3 = this;
+            java.util.Iterator r1 = r4.iterator()
+        L_0x0004:
+            boolean r2 = r1.hasNext()
+            if (r2 == 0) goto L_0x0029
+            java.lang.Object r0 = r1.next()
+            com.android.internal.telephony.Call r0 = (com.android.internal.telephony.Call) r0
+            com.android.internal.telephony.Call$State r2 = r0.getState()
+            if (r2 == r5) goto L_0x0028
+            com.android.internal.telephony.Phone r2 = r0.getPhone()
+            int r2 = r2.getSubId()
+            if (r2 == r6) goto L_0x0028
+            com.android.internal.telephony.Phone r2 = r0.getPhone()
+            boolean r2 = r2 instanceof com.android.internal.telephony.sip.SipPhone
+            if (r2 == 0) goto L_0x0004
+        L_0x0028:
+            return r0
+        L_0x0029:
+            r0 = 0
+            goto L_0x0028
+        */
+        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.CallManager.getFirstCallOfState(java.util.ArrayList, com.android.internal.telephony.Call$State, int):com.android.internal.telephony.Call");
+    }
+
+    private boolean hasMoreThanOneRingingCall() {
+        int count = 0;
+        Iterator i$ = this.mRingingCalls.iterator();
+        while (i$.hasNext()) {
+            if (i$.next().getState().isRinging() && (count = count + 1) > 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasMoreThanOneRingingCall(int subId) {
+        int count = 0;
+        Iterator i$ = this.mRingingCalls.iterator();
+        while (i$.hasNext()) {
+            Call call = i$.next();
+            if (call.getState().isRinging() && (call.getPhone().getSubId() == subId || (call.getPhone() instanceof SipPhone))) {
+                count++;
+                if (count > 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean hasMoreThanOneHoldingCall(int subId) {
+        int count = 0;
+        Iterator i$ = this.mBackgroundCalls.iterator();
+        while (i$.hasNext()) {
+            Call call = i$.next();
+            if (call.getState() == Call.State.HOLDING && (call.getPhone().getSubId() == subId || (call.getPhone() instanceof SipPhone))) {
+                count++;
+                if (count > 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class CallManagerHandler extends Handler {
+        private CallManagerHandler() {
+            CallManager.this = r1;
+        }
+
+        @Override // android.os.Handler
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case 100:
+                    CallManager.this.mDisconnectRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_PRECISE_CALL_STATE_CHANGED /* 101 */:
+                    CallManager.this.mPreciseCallStateRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_NEW_RINGING_CONNECTION /* 102 */:
+                    Connection c = (Connection) ((AsyncResult) msg.obj).result;
+                    int subId = c.getCall().getPhone().getSubId();
+                    if (CallManager.this.getActiveFgCallState(subId).isDialing() || CallManager.this.hasMoreThanOneRingingCall(subId)) {
+                        try {
+                            Rlog.d(CallManager.LOG_TAG, "silently drop incoming call: " + c.getCall());
+                            c.getCall().hangup();
+                            return;
+                        } catch (CallStateException e) {
+                            Rlog.w(CallManager.LOG_TAG, "new ringing connection", e);
+                            return;
+                        }
+                    } else {
+                        CallManager.this.mNewRingingConnectionRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                        return;
+                    }
+                case CallManager.EVENT_UNKNOWN_CONNECTION /* 103 */:
+                    CallManager.this.mUnknownConnectionRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_INCOMING_RING /* 104 */:
+                    if (!CallManager.this.hasActiveFgCall()) {
+                        CallManager.this.mIncomingRingRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                        return;
+                    }
+                    return;
+                case CallManager.EVENT_RINGBACK_TONE /* 105 */:
+                    CallManager.this.mRingbackToneRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case 106:
+                    CallManager.this.mInCallVoicePrivacyOnRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_IN_CALL_VOICE_PRIVACY_OFF /* 107 */:
+                    CallManager.this.mInCallVoicePrivacyOffRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case 108:
+                    CallManager.this.mCallWaitingRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_DISPLAY_INFO /* 109 */:
+                    CallManager.this.mDisplayInfoRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_SIGNAL_INFO /* 110 */:
+                    CallManager.this.mSignalInfoRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_CDMA_OTA_STATUS_CHANGE /* 111 */:
+                    CallManager.this.mCdmaOtaStatusChangeRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_RESEND_INCALL_MUTE /* 112 */:
+                    CallManager.this.mResendIncallMuteRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_MMI_INITIATE /* 113 */:
+                    CallManager.this.mMmiInitiateRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_MMI_COMPLETE /* 114 */:
+                    CallManager.this.mMmiCompleteRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_ECM_TIMER_RESET /* 115 */:
+                    CallManager.this.mEcmTimerResetRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_SUBSCRIPTION_INFO_READY /* 116 */:
+                    CallManager.this.mSubscriptionInfoReadyRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_SUPP_SERVICE_FAILED /* 117 */:
+                    CallManager.this.mSuppServiceFailedRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_SERVICE_STATE_CHANGED /* 118 */:
+                    CallManager.this.mServiceStateChangedRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_POST_DIAL_CHARACTER /* 119 */:
+                    for (int i = 0; i < CallManager.this.mPostDialCharacterRegistrants.size(); i++) {
+                        Message notifyMsg = ((Registrant) CallManager.this.mPostDialCharacterRegistrants.get(i)).messageForRegistrant();
+                        notifyMsg.obj = msg.obj;
+                        notifyMsg.arg1 = msg.arg1;
+                        notifyMsg.sendToTarget();
+                    }
+                    return;
+                case CallManager.EVENT_ONHOLD_TONE /* 120 */:
+                    CallManager.this.mOnHoldToneRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                case CallManager.EVENT_SUPP_SERVICE_NOTIFY /* 121 */:
+                    CallManager.this.mSuppServiceNotificationRegistrants.notifyRegistrants(new AsyncResult((Object) null, msg.obj, (Throwable) null));
+                    return;
+                case CallManager.EVENT_TTY_MODE_RECEIVED /* 122 */:
+                    CallManager.this.mTtyModeReceivedRegistrants.notifyRegistrants((AsyncResult) msg.obj);
+                    return;
+                default:
+                    return;
+            }
         }
     }
 
     public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
+        StringBuilder b = new StringBuilder();
         for (int i = 0; i < TelephonyManager.getDefault().getPhoneCount(); i++) {
-            stringBuilder.append("CallManager {");
-            stringBuilder.append("\nstate = " + getState(i));
-            Call activeFgCall = getActiveFgCall(i);
-            if (activeFgCall != null) {
-                stringBuilder.append("\n- Foreground: " + getActiveFgCallState(i));
-                stringBuilder.append(" from " + activeFgCall.getPhone());
-                stringBuilder.append("\n  Conn: ").append(getFgCallConnections(i));
+            b.append("CallManager {");
+            b.append("\nstate = " + getState(i));
+            Call call = getActiveFgCall(i);
+            if (call != null) {
+                b.append("\n- Foreground: " + getActiveFgCallState(i));
+                b.append(" from " + call.getPhone());
+                b.append("\n  Conn: ").append(getFgCallConnections(i));
             }
-            activeFgCall = getFirstActiveBgCall(i);
-            if (activeFgCall != null) {
-                stringBuilder.append("\n- Background: " + activeFgCall.getState());
-                stringBuilder.append(" from " + activeFgCall.getPhone());
-                stringBuilder.append("\n  Conn: ").append(getBgCallConnections(i));
+            Call call2 = getFirstActiveBgCall(i);
+            if (call2 != null) {
+                b.append("\n- Background: " + call2.getState());
+                b.append(" from " + call2.getPhone());
+                b.append("\n  Conn: ").append(getBgCallConnections(i));
             }
-            activeFgCall = getFirstActiveRingingCall(i);
-            if (activeFgCall != null) {
-                stringBuilder.append("\n- Ringing: " + activeFgCall.getState());
-                stringBuilder.append(" from " + activeFgCall.getPhone());
+            Call call3 = getFirstActiveRingingCall(i);
+            if (call3 != null) {
+                b.append("\n- Ringing: " + call3.getState());
+                b.append(" from " + call3.getPhone());
             }
         }
         for (Phone phone : getAllPhones()) {
             if (phone != null) {
-                stringBuilder.append("\nPhone: " + phone + ", name = " + phone.getPhoneName() + ", state = " + phone.getState());
-                Call foregroundCall = phone.getForegroundCall();
-                if (foregroundCall != null) {
-                    stringBuilder.append("\n- Foreground: ").append(foregroundCall);
+                b.append("\nPhone: " + phone + ", name = " + phone.getPhoneName() + ", state = " + phone.getState());
+                Call call4 = phone.getForegroundCall();
+                if (call4 != null) {
+                    b.append("\n- Foreground: ").append(call4);
                 }
-                foregroundCall = phone.getBackgroundCall();
-                if (foregroundCall != null) {
-                    stringBuilder.append(" Background: ").append(foregroundCall);
+                Call call5 = phone.getBackgroundCall();
+                if (call5 != null) {
+                    b.append(" Background: ").append(call5);
                 }
-                Call ringingCall = phone.getRingingCall();
-                if (ringingCall != null) {
-                    stringBuilder.append(" Ringing: ").append(ringingCall);
+                Call call6 = phone.getRingingCall();
+                if (call6 != null) {
+                    b.append(" Ringing: ").append(call6);
                 }
             }
         }
-        stringBuilder.append("\n}");
-        return stringBuilder.toString();
-    }
-
-    public void unregisterForCallWaiting(Handler handler) {
-        this.mCallWaitingRegistrants.remove(handler);
-    }
-
-    public void unregisterForCdmaOtaStatusChange(Handler handler) {
-        this.mCdmaOtaStatusChangeRegistrants.remove(handler);
-    }
-
-    public void unregisterForDisconnect(Handler handler) {
-        this.mDisconnectRegistrants.remove(handler);
-    }
-
-    public void unregisterForDisplayInfo(Handler handler) {
-        this.mDisplayInfoRegistrants.remove(handler);
-    }
-
-    public void unregisterForEcmTimerReset(Handler handler) {
-        this.mEcmTimerResetRegistrants.remove(handler);
-    }
-
-    public void unregisterForInCallVoicePrivacyOff(Handler handler) {
-        this.mInCallVoicePrivacyOffRegistrants.remove(handler);
-    }
-
-    public void unregisterForInCallVoicePrivacyOn(Handler handler) {
-        this.mInCallVoicePrivacyOnRegistrants.remove(handler);
-    }
-
-    public void unregisterForIncomingRing(Handler handler) {
-        this.mIncomingRingRegistrants.remove(handler);
-    }
-
-    public void unregisterForMmiComplete(Handler handler) {
-        this.mMmiCompleteRegistrants.remove(handler);
-    }
-
-    public void unregisterForMmiInitiate(Handler handler) {
-        this.mMmiInitiateRegistrants.remove(handler);
-    }
-
-    public void unregisterForNewRingingConnection(Handler handler) {
-        this.mNewRingingConnectionRegistrants.remove(handler);
-    }
-
-    public void unregisterForOnHoldTone(Handler handler) {
-        this.mOnHoldToneRegistrants.remove(handler);
-    }
-
-    public void unregisterForPostDialCharacter(Handler handler) {
-        this.mPostDialCharacterRegistrants.remove(handler);
-    }
-
-    public void unregisterForPreciseCallStateChanged(Handler handler) {
-        this.mPreciseCallStateRegistrants.remove(handler);
-    }
-
-    public void unregisterForResendIncallMute(Handler handler) {
-        this.mResendIncallMuteRegistrants.remove(handler);
-    }
-
-    public void unregisterForRingbackTone(Handler handler) {
-        this.mRingbackToneRegistrants.remove(handler);
-    }
-
-    public void unregisterForServiceStateChanged(Handler handler) {
-        this.mServiceStateChangedRegistrants.remove(handler);
-    }
-
-    public void unregisterForSignalInfo(Handler handler) {
-        this.mSignalInfoRegistrants.remove(handler);
-    }
-
-    public void unregisterForSubscriptionChange(Handler handler) {
-        this.mActiveSubChangeRegistrants.remove(handler);
-    }
-
-    public void unregisterForSubscriptionInfoReady(Handler handler) {
-        this.mSubscriptionInfoReadyRegistrants.remove(handler);
-    }
-
-    public void unregisterForSuppServiceFailed(Handler handler) {
-        this.mSuppServiceFailedRegistrants.remove(handler);
-    }
-
-    public void unregisterForSuppServiceNotification(Handler handler) {
-        this.mSuppServiceNotificationRegistrants.remove(handler);
-    }
-
-    public void unregisterForTtyModeReceived(Handler handler) {
-        this.mTtyModeReceivedRegistrants.remove(handler);
-    }
-
-    public void unregisterForUnknownConnection(Handler handler) {
-        this.mUnknownConnectionRegistrants.remove(handler);
-    }
-
-    public void unregisterPhone(Phone phone) {
-        Phone phoneBase = getPhoneBase(phone);
-        if (phoneBase != null && this.mPhones.contains(phoneBase)) {
-            Rlog.d(LOG_TAG, "unregisterPhone(" + phone.getPhoneName() + " " + phone + ")");
-            Phone imsPhone = phoneBase.getImsPhone();
-            if (imsPhone != null) {
-                unregisterPhone(imsPhone);
-            }
-            this.mPhones.remove(phoneBase);
-            this.mRingingCalls.remove(phoneBase.getRingingCall());
-            this.mBackgroundCalls.remove(phoneBase.getBackgroundCall());
-            this.mForegroundCalls.remove(phoneBase.getForegroundCall());
-            unregisterForPhoneStates(phoneBase);
-            if (phoneBase != this.mDefaultPhone) {
-                return;
-            }
-            if (this.mPhones.isEmpty()) {
-                this.mDefaultPhone = null;
-            } else {
-                this.mDefaultPhone = (Phone) this.mPhones.get(0);
-            }
-        }
+        b.append("\n}");
+        return b.toString();
     }
 }

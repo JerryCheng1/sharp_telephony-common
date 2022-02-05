@@ -5,13 +5,11 @@ import android.os.Message;
 import android.util.Log;
 import com.android.internal.telephony.Phone;
 import com.android.internal.telephony.PhoneFactory;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OEM_RIL_CDMA_BC;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno;
-import jp.co.sharp.telephony.OemCdmaTelephonyManager.OemCdmaDataConverter;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class OemWcdmaTelephonyManager {
     private static final int CDMA_START = 33554432;
-    private static boolean DEBUG = false;
     public static final int OEM_RIL_REQUEST_WCDMA_GET_B1 = 33554704;
     public static final int OEM_RIL_REQUEST_WCDMA_GET_B11 = 33554716;
     public static final int OEM_RIL_REQUEST_WCDMA_GET_B2 = 33554706;
@@ -29,67 +27,65 @@ public class OemWcdmaTelephonyManager {
     private static final String TAG = "OemWcdmaTelephonyManager";
     public static final int WCDMA_B1 = 1;
     public static final int WCDMA_B8 = 8;
-    private static OemWcdmaTelephonyManager mInstance = null;
     private OemCdmaTelephonyManager mCdmaTelMgr = OemCdmaTelephonyManager.getInstance();
     private Phone mPhone = PhoneFactory.getDefaultPhone();
+    private static boolean DEBUG = false;
+    private static OemWcdmaTelephonyManager mInstance = null;
 
     private OemWcdmaTelephonyManager() {
     }
 
-    public static OemWcdmaTelephonyManager getInstance() {
+    public static synchronized OemWcdmaTelephonyManager getInstance() {
+        OemWcdmaTelephonyManager oemWcdmaTelephonyManager;
         synchronized (OemWcdmaTelephonyManager.class) {
-            try {
-                if (mInstance == null) {
-                    mInstance = new OemWcdmaTelephonyManager();
-                }
-                OemWcdmaTelephonyManager oemWcdmaTelephonyManager = mInstance;
-                return oemWcdmaTelephonyManager;
-            } finally {
-                Object obj = OemWcdmaTelephonyManager.class;
+            if (mInstance == null) {
+                mInstance = new OemWcdmaTelephonyManager();
             }
+            oemWcdmaTelephonyManager = mInstance;
         }
+        return oemWcdmaTelephonyManager;
     }
 
-    private Message obtainMessage(int i) {
-        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(i);
+    private Message obtainMessage(int what) {
+        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(what);
     }
 
-    private Message obtainMessage(int i, Object obj) {
-        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(i, obj);
+    private Message obtainMessage(int what, Object obj) {
+        return this.mCdmaTelMgr.getMsgHandler().obtainMessage(what, obj);
     }
 
-    public OEM_RIL_CDMA_Errno getWcdmaEnablement(Handler handler, int i) {
+    public OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno getWcdmaEnablement(Handler msgH, int index) {
         if (DEBUG) {
-            Log.d(TAG, "getWcdmaEnablement() index:" + i);
+            Log.d(TAG, "getWcdmaEnablement() index:" + index);
         }
-        int i2 = -1;
-        switch (i) {
+        int msgid = -1;
+        switch (index) {
             case 1:
-                i2 = OEM_RIL_REQUEST_WCDMA_GET_B1;
+                msgid = OEM_RIL_REQUEST_WCDMA_GET_B1;
                 break;
             case 8:
-                i2 = OEM_RIL_REQUEST_WCDMA_GET_B8;
+                msgid = OEM_RIL_REQUEST_WCDMA_GET_B8;
                 break;
         }
-        Message obtainMessage = obtainMessage(i2);
-        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaDataConverter.writeHookHeader(i2), obtainMessage, handler);
-        return OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
+        Message msg = obtainMessage(msgid);
+        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaTelephonyManager.OemCdmaDataConverter.writeHookHeader(msgid), msg, msgH);
+        return OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
     }
 
-    public OEM_RIL_CDMA_Errno setWcdmaEnablement(int i, String str, Handler handler, int i2) {
-        int i3 = -1;
-        switch (i2) {
+    public OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno setWcdmaEnablement(int status, String spcLockCode, Handler msgH, int index) {
+        int msgid = -1;
+        switch (index) {
             case 1:
-                i3 = OEM_RIL_REQUEST_WCDMA_SET_B1;
+                msgid = OEM_RIL_REQUEST_WCDMA_SET_B1;
                 break;
             case 8:
-                i3 = OEM_RIL_REQUEST_WCDMA_SET_B8;
+                msgid = OEM_RIL_REQUEST_WCDMA_SET_B8;
                 break;
         }
-        Message obtainMessage = obtainMessage(i3);
-        OEM_RIL_CDMA_BC oem_ril_cdma_bc = new OEM_RIL_CDMA_BC();
-        oem_ril_cdma_bc.status = i;
-        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaDataConverter.BCToByteArr(oem_ril_cdma_bc, i3, str), obtainMessage, handler);
-        return OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
+        Message msg = obtainMessage(msgid);
+        OemCdmaTelephonyManager.OEM_RIL_CDMA_BC bc = new OemCdmaTelephonyManager.OEM_RIL_CDMA_BC();
+        bc.status = status;
+        this.mCdmaTelMgr.invokeOemRilRequestRaw(OemCdmaTelephonyManager.OemCdmaDataConverter.BCToByteArr(bc, msgid, spcLockCode), msg, msgH);
+        return OemCdmaTelephonyManager.OEM_RIL_CDMA_Errno.OEM_RIL_CDMA_SUCCESS;
     }
 }

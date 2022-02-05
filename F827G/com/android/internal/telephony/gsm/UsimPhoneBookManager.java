@@ -1,6 +1,8 @@
 package com.android.internal.telephony.gsm;
 
+import android.os.AsyncResult;
 import android.os.Handler;
+import android.os.Message;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.Rlog;
 import android.text.TextUtils;
@@ -14,7 +16,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import jp.co.sharp.telephony.OemCdmaTelephonyManager;
 
+/* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
 public class UsimPhoneBookManager extends Handler implements IccConstants {
     private static final int ANR_ADDITIONAL_NUMBER_END_ID = 12;
     private static final int ANR_ADDITIONAL_NUMBER_START_ID = 3;
@@ -55,1660 +59,34 @@ public class UsimPhoneBookManager extends Handler implements IccConstants {
     private static final int USIM_TYPE2_TAG = 169;
     private static final int USIM_TYPE3_TAG = 170;
     private AdnRecordCache mAdnCache;
-    private ArrayList<Integer> mAdnLengthList = null;
-    private Map<Integer, ArrayList<byte[]>> mAnrFileRecord;
-    private Map<Integer, ArrayList<Integer>> mAnrFlags;
+    private ArrayList<Integer> mAdnLengthList;
     private ArrayList<Integer>[] mAnrFlagsRecord;
-    private boolean mAnrPresentInIap = false;
-    private int mAnrTagNumberInIap = 0;
-    private Map<Integer, ArrayList<byte[]>> mEmailFileRecord;
-    private Map<Integer, ArrayList<Integer>> mEmailFlags;
     private ArrayList<Integer>[] mEmailFlagsRecord;
+    private IccFileHandler mFh;
+    private int mPendingExtLoads;
+    private Object mLock = new Object();
     private boolean mEmailPresentInIap = false;
     private int mEmailTagNumberInIap = 0;
-    private IccFileHandler mFh;
-    private Map<Integer, ArrayList<byte[]>> mIapFileRecord;
+    private boolean mAnrPresentInIap = false;
+    private int mAnrTagNumberInIap = 0;
     private boolean mIapPresent = false;
-    private Boolean mIsPbrPresent;
-    private Object mLock = new Object();
-    private PbrFile mPbrFile;
-    private int mPendingExtLoads;
-    private ArrayList<AdnRecord> mPhoneBookRecords;
-    private Map<Integer, ArrayList<Integer>> mRecordNums;
-    private boolean mRefreshCache = false;
     private boolean mSuccess = false;
+    private boolean mRefreshCache = false;
+    private ArrayList<AdnRecord> mPhoneBookRecords = new ArrayList<>();
+    private Map<Integer, ArrayList<byte[]>> mIapFileRecord = new HashMap();
+    private Map<Integer, ArrayList<byte[]>> mEmailFileRecord = new HashMap();
+    private Map<Integer, ArrayList<byte[]>> mAnrFileRecord = new HashMap();
+    private Map<Integer, ArrayList<Integer>> mRecordNums = new HashMap();
+    private PbrFile mPbrFile = null;
+    private Map<Integer, ArrayList<Integer>> mAnrFlags = new HashMap();
+    private Map<Integer, ArrayList<Integer>> mEmailFlags = new HashMap();
+    private Boolean mIsPbrPresent = true;
 
-    private class PbrFile {
-        HashMap<Integer, ArrayList<Integer>> mAnrFileIds = new HashMap();
-        HashMap<Integer, ArrayList<Integer>> mEmailFileIds = new HashMap();
-        HashMap<Integer, Map<Integer, Integer>> mFileIds = new HashMap();
-
-        PbrFile(ArrayList<byte[]> arrayList) {
-            Iterator it = arrayList.iterator();
-            int i = 0;
-            while (it.hasNext()) {
-                byte[] bArr = (byte[]) it.next();
-                parseTag(new SimTlv(bArr, 0, bArr.length), i);
-                i++;
-            }
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public void parseEf(SimTlv simTlv, Map<Integer, Integer> map, int i, ArrayList<Integer> arrayList, ArrayList<Integer> arrayList2) {
-            int i2 = 0;
-            do {
-                int tag = simTlv.getTag();
-                if (i == 168 && tag == 193) {
-                    UsimPhoneBookManager.this.mIapPresent = true;
-                }
-                if (i == 169 && UsimPhoneBookManager.this.mIapPresent && tag == UsimPhoneBookManager.USIM_EFEMAIL_TAG) {
-                    UsimPhoneBookManager.this.mEmailPresentInIap = true;
-                    UsimPhoneBookManager.this.mEmailTagNumberInIap = i2;
-                    UsimPhoneBookManager.this.log("parseEf: EmailPresentInIap tag = " + UsimPhoneBookManager.this.mEmailTagNumberInIap);
-                }
-                if (i == 169 && UsimPhoneBookManager.this.mIapPresent && tag == 196) {
-                    UsimPhoneBookManager.this.mAnrPresentInIap = true;
-                    UsimPhoneBookManager.this.mAnrTagNumberInIap = i2;
-                    UsimPhoneBookManager.this.log("parseEf: AnrPresentInIap tag = " + UsimPhoneBookManager.this.mAnrTagNumberInIap);
-                }
-                switch (tag) {
-                    case 192:
-                    case 193:
-                    case 194:
-                    case 195:
-                    case 196:
-                    case 197:
-                    case UsimPhoneBookManager.USIM_EFGRP_TAG /*198*/:
-                    case UsimPhoneBookManager.USIM_EFAAS_TAG /*199*/:
-                    case 200:
-                    case UsimPhoneBookManager.USIM_EFUID_TAG /*201*/:
-                    case UsimPhoneBookManager.USIM_EFEMAIL_TAG /*202*/:
-                    case UsimPhoneBookManager.USIM_EFCCP1_TAG /*203*/:
-                        byte[] data = simTlv.getData();
-                        int i3 = (data[1] & 255) | ((data[0] & 255) << 8);
-                        map.put(Integer.valueOf(tag), Integer.valueOf(i3));
-                        if (i == 168) {
-                            if (tag == 196) {
-                                arrayList.add(Integer.valueOf(i3));
-                            } else if (tag == UsimPhoneBookManager.USIM_EFEMAIL_TAG) {
-                                arrayList2.add(Integer.valueOf(i3));
-                            }
-                        }
-                        Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseEf.put(" + tag + "," + i3 + ") parent tag:" + i);
-                        break;
-                }
-                i2++;
-            } while (simTlv.nextObject());
-        }
-
-        /* Access modifiers changed, original: 0000 */
-        public void parseTag(SimTlv simTlv, int i) {
-            Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseTag: recNum=" + i);
-            HashMap hashMap = new HashMap();
-            ArrayList arrayList = new ArrayList();
-            ArrayList arrayList2 = new ArrayList();
-            do {
-                int tag = simTlv.getTag();
-                switch (tag) {
-                    case 168:
-                    case 169:
-                    case 170:
-                        byte[] data = simTlv.getData();
-                        parseEf(new SimTlv(data, 0, data.length), hashMap, tag, arrayList, arrayList2);
-                        break;
-                }
-            } while (simTlv.nextObject());
-            if (arrayList.size() != 0) {
-                this.mAnrFileIds.put(Integer.valueOf(i), arrayList);
-                Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseTag: recNum=" + i + " ANR file list:" + arrayList);
-            }
-            if (arrayList2.size() != 0) {
-                Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseTag: recNum=" + i + " EMAIL file list:" + arrayList2);
-                this.mEmailFileIds.put(Integer.valueOf(i), arrayList2);
-            }
-            this.mFileIds.put(Integer.valueOf(i), hashMap);
-        }
-    }
-
-    public UsimPhoneBookManager(IccFileHandler iccFileHandler, AdnRecordCache adnRecordCache) {
-        this.mFh = iccFileHandler;
-        this.mPhoneBookRecords = new ArrayList();
-        this.mAdnLengthList = new ArrayList();
-        this.mIapFileRecord = new HashMap();
-        this.mEmailFileRecord = new HashMap();
-        this.mAnrFileRecord = new HashMap();
-        this.mRecordNums = new HashMap();
-        this.mPbrFile = null;
-        this.mAnrFlags = new HashMap();
-        this.mEmailFlags = new HashMap();
-        this.mIsPbrPresent = Boolean.valueOf(true);
-        this.mAdnCache = adnRecordCache;
-    }
-
-    private byte[] buildAnrData(int i, int i2, String str) {
-        byte[] bArr = new byte[i];
-        for (int i3 = 0; i3 < i; i3++) {
-            bArr[i3] = (byte) -1;
-        }
-        if (TextUtils.isEmpty(str)) {
-            log("[buildAnrData] Empty anr record");
-            return bArr;
-        }
-        bArr[0] = (byte) 0;
-        byte[] numberToCalledPartyBCD = PhoneNumberUtils.numberToCalledPartyBCD(str);
-        if (numberToCalledPartyBCD == null) {
-            return null;
-        }
-        if (numberToCalledPartyBCD.length > 11) {
-            log("[buildAnrData] wrong ANR length");
-            return null;
-        }
-        System.arraycopy(numberToCalledPartyBCD, 0, bArr, 2, numberToCalledPartyBCD.length);
-        bArr[1] = (byte) numberToCalledPartyBCD.length;
-        bArr[13] = (byte) -1;
-        bArr[14] = (byte) -1;
-        if (i == 17) {
-            bArr[16] = (byte) ((i2 - getInitIndexBy(getPbrIndexBy(i2))) + 1);
-        }
-        log("buildAnrData: data is" + IccUtils.bytesToHexString(bArr));
-        return bArr;
-    }
-
-    private byte[] buildEmailData(int i, int i2, String str) {
-        byte[] bArr = new byte[i];
-        for (int i3 = 0; i3 < i; i3++) {
-            bArr[i3] = (byte) -1;
-        }
-        if (TextUtils.isEmpty(str)) {
-            log("[buildEmailData] Empty email record");
-            return bArr;
-        }
-        byte[] stringToGsm8BitPacked = GsmAlphabet.stringToGsm8BitPacked(str);
-        if (stringToGsm8BitPacked.length > (this.mEmailPresentInIap ? i - 2 : i)) {
-            log("[buildEmailData] wrong email length");
-            return null;
-        }
-        System.arraycopy(stringToGsm8BitPacked, 0, bArr, 0, stringToGsm8BitPacked.length);
-        if (this.mEmailPresentInIap) {
-            bArr[i - 1] = (byte) ((i2 - getInitIndexBy(getPbrIndexBy(i2))) + 1);
-        }
-        log("buildEmailData: data is" + IccUtils.bytesToHexString(bArr));
-        return bArr;
-    }
-
-    private void createPbrFile(ArrayList<byte[]> arrayList) {
-        if (arrayList == null) {
-            this.mPbrFile = null;
-            this.mIsPbrPresent = Boolean.valueOf(false);
-            return;
-        }
-        this.mPbrFile = new PbrFile(arrayList);
-    }
-
-    private int getAnrRecNumber(int i, int i2, String str) {
-        int pbrIndexBy = getPbrIndexBy(i);
-        int initIndexBy = i - getInitIndexBy(pbrIndexBy);
-        if (!hasRecordIn(this.mAnrFileRecord, pbrIndexBy)) {
-            return -1;
-        }
-        if (!this.mAnrPresentInIap || !hasRecordIn(this.mIapFileRecord, pbrIndexBy)) {
-            return initIndexBy + 1;
-        }
-        byte[] bArr;
-        try {
-            bArr = (byte[]) ((ArrayList) this.mIapFileRecord.get(Integer.valueOf(pbrIndexBy))).get(initIndexBy);
-        } catch (IndexOutOfBoundsException e) {
-            Rlog.e(LOG_TAG, "IndexOutOfBoundsException in getAnrRecNumber");
-            bArr = null;
-        }
-        if (bArr == null || bArr[this.mAnrTagNumberInIap] <= (byte) 0) {
-            int size = ((ArrayList) this.mAnrFileRecord.get(Integer.valueOf(pbrIndexBy))).size();
-            log("getAnrRecNumber: anr record size is :" + size);
-            if (TextUtils.isEmpty(str)) {
-                for (int i3 = 0; i3 < size; i3++) {
-                    if (TextUtils.isEmpty(readAnrRecord(i3, pbrIndexBy, 0))) {
-                        log("getAnrRecNumber: Empty anr record. Anr record num is :" + (i3 + 1));
-                        return i3 + 1;
-                    }
-                }
-            }
-            log("getAnrRecNumber: no anr record index found");
-            return -1;
-        }
-        byte b = bArr[this.mAnrTagNumberInIap];
-        log("getAnrRecNumber: recnum from iap is :" + b);
-        return b;
-    }
-
-    private int getEfidByTag(int i, int i2, int i3) {
-        this.mPbrFile.mFileIds.size();
-        Map map = (Map) this.mPbrFile.mFileIds.get(Integer.valueOf(i));
-        return (map != null && map.containsKey(Integer.valueOf(i2))) ? (this.mEmailPresentInIap || USIM_EFEMAIL_TAG != i2) ? (this.mAnrPresentInIap || 196 != i2) ? ((Integer) map.get(Integer.valueOf(i2))).intValue() : ((Integer) ((ArrayList) this.mPbrFile.mAnrFileIds.get(Integer.valueOf(i))).get(i3)).intValue() : ((Integer) ((ArrayList) this.mPbrFile.mEmailFileIds.get(Integer.valueOf(i))).get(i3)).intValue() : -1;
-    }
-
-    private int getEmailRecNumber(int i, int i2, String str) {
-        int pbrIndexBy = getPbrIndexBy(i);
-        int initIndexBy = i - getInitIndexBy(pbrIndexBy);
-        log("getEmailRecNumber adnRecIndex is: " + i + ", recordIndex is :" + initIndexBy);
-        if (!hasRecordIn(this.mEmailFileRecord, pbrIndexBy)) {
-            log("getEmailRecNumber recordNumber is: " + -1);
-            return -1;
-        } else if (!this.mEmailPresentInIap || !hasRecordIn(this.mIapFileRecord, pbrIndexBy)) {
-            return initIndexBy + 1;
-        } else {
-            byte[] bArr = null;
-            try {
-                bArr = (byte[]) ((ArrayList) this.mIapFileRecord.get(Integer.valueOf(pbrIndexBy))).get(initIndexBy);
-            } catch (IndexOutOfBoundsException e) {
-                Rlog.e(LOG_TAG, "IndexOutOfBoundsException in getEmailRecNumber");
-            }
-            if (bArr == null || bArr[this.mEmailTagNumberInIap] <= (byte) 0) {
-                int size = ((ArrayList) this.mEmailFileRecord.get(Integer.valueOf(pbrIndexBy))).size();
-                log("getEmailRecNumber recsSize is: " + size);
-                if (TextUtils.isEmpty(str)) {
-                    for (int i3 = 0; i3 < size; i3++) {
-                        if (TextUtils.isEmpty(readEmailRecord(i3, pbrIndexBy, 0))) {
-                            log("getEmailRecNumber: Got empty record.Email record num is :" + (i3 + 1));
-                            return i3 + 1;
-                        }
-                    }
-                }
-                log("getEmailRecNumber: no email record index found");
-                return -1;
-            }
-            byte b = bArr[this.mEmailTagNumberInIap];
-            log(" getEmailRecNumber: record is " + IccUtils.bytesToHexString(bArr) + ", the email recordNumber is :" + b);
-            return b;
-        }
-    }
-
-    private int getInitIndexBy(int i) {
-        int i2 = 0;
-        while (i > 0) {
-            i--;
-            i2 = ((Integer) this.mAdnLengthList.get(i - 1)).intValue() + i2;
-        }
-        return i2;
-    }
-
-    private ArrayList<Integer> getValidRecordNums(int i) {
-        return (ArrayList) this.mRecordNums.get(Integer.valueOf(i));
-    }
-
-    private boolean hasRecordIn(Map<Integer, ArrayList<byte[]>> map, int i) {
-        if (map != null && !map.isEmpty() && map.get(Integer.valueOf(i)) != null) {
-            return true;
-        }
-        Rlog.e(LOG_TAG, "record [" + map + "] is empty in pbrIndex" + i);
-        return false;
-    }
-
-    private boolean hasValidRecords(int i) {
-        return ((ArrayList) this.mRecordNums.get(Integer.valueOf(i))).size() > 0;
-    }
-
-    private void log(String str) {
-        Rlog.d(LOG_TAG, str);
-    }
-
-    private void putValidRecNums(int i) {
-        ArrayList arrayList = new ArrayList();
-        log("pbr index is " + i + ", initAdnIndex is " + getInitIndexBy(i));
-        int i2 = 0;
-        while (true) {
-            int i3 = i2;
-            if (i3 >= ((Integer) this.mAdnLengthList.get(i)).intValue()) {
-                break;
-            }
-            arrayList.add(Integer.valueOf(i3 + 1));
-            i2 = i3 + 1;
-        }
-        if (arrayList.size() == 0) {
-            arrayList.add(Integer.valueOf(1));
-        }
-        this.mRecordNums.put(Integer.valueOf(i), arrayList);
-    }
-
-    private void readAdnFileAndWait(int i) {
-        Map map = (Map) this.mPbrFile.mFileIds.get(Integer.valueOf(i));
-        if (map != null && !map.isEmpty()) {
-            int intValue = map.containsKey(Integer.valueOf(194)) ? ((Integer) map.get(Integer.valueOf(194))).intValue() : 0;
-            log("readAdnFileAndWait adn efid is : " + map.get(Integer.valueOf(192)));
-            this.mAdnCache.requestLoadAllAdnLike(((Integer) map.get(Integer.valueOf(192))).intValue(), intValue, getPBPath(((Integer) map.get(Integer.valueOf(192))).intValue()), obtainMessage(2, Integer.valueOf(i)));
-            try {
-                this.mLock.wait();
-            } catch (InterruptedException e) {
-                Rlog.e(LOG_TAG, "Interrupted Exception in readAdnFileAndWait");
-            }
-        }
-    }
-
-    private void readAnrFileAndWait(int i) {
-        if (this.mPbrFile == null) {
-            Rlog.e(LOG_TAG, "mPbrFile is NULL, exiting from readAnrFileAndWait");
-            return;
-        }
-        Map map = (Map) this.mPbrFile.mFileIds.get(Integer.valueOf(i));
-        if (map != null && !map.isEmpty() && map.containsKey(Integer.valueOf(196))) {
-            if (this.mAnrPresentInIap) {
-                readIapFileAndWait(((Integer) map.get(Integer.valueOf(193))).intValue(), i);
-                if (hasRecordIn(this.mIapFileRecord, i)) {
-                    this.mFh.loadEFLinearFixedAll(((Integer) map.get(Integer.valueOf(196))).intValue(), getPBPath(((Integer) map.get(Integer.valueOf(196))).intValue()), obtainMessage(5, Integer.valueOf(i)));
-                    log("readAnrFileAndWait anr efid is : " + map.get(Integer.valueOf(196)));
-                    try {
-                        this.mLock.wait();
-                    } catch (InterruptedException e) {
-                        Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
-                    }
-                } else {
-                    Rlog.e(LOG_TAG, "Error: IAP file is empty");
-                    return;
-                }
-            }
-            Iterator it = ((ArrayList) this.mPbrFile.mAnrFileIds.get(Integer.valueOf(i))).iterator();
-            while (it.hasNext()) {
-                int intValue = ((Integer) it.next()).intValue();
-                this.mFh.loadEFLinearFixedPart(intValue, getPBPath(intValue), getValidRecordNums(i), obtainMessage(5, Integer.valueOf(i)));
-                log("readAnrFileAndWait anr efid is : " + intValue + " recNum:" + i);
-                try {
-                    this.mLock.wait();
-                } catch (InterruptedException e2) {
-                    Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
-                }
-            }
-            if (hasRecordIn(this.mAnrFileRecord, i)) {
-                for (int i2 = 0; i2 < ((ArrayList) this.mAnrFileRecord.get(Integer.valueOf(i))).size(); i2++) {
-                    this.mAnrFlagsRecord[i].add(Integer.valueOf(0));
-                }
-                this.mAnrFlags.put(Integer.valueOf(i), this.mAnrFlagsRecord[i]);
-                updatePhoneAdnRecordWithAnr(i);
-                return;
-            }
-            Rlog.e(LOG_TAG, "Error: Anr file is empty");
-        }
-    }
-
-    private String readAnrRecord(int i, int i2, int i3) {
-        if (!hasRecordIn(this.mAnrFileRecord, i2)) {
-            return null;
-        }
-        try {
-            byte[] bArr = (byte[]) ((ArrayList) this.mAnrFileRecord.get(Integer.valueOf(i2))).get(i + i3);
-            int i4 = bArr[1] & 255;
-            return i4 > 11 ? "" : PhoneNumberUtils.calledPartyBCDToString(bArr, 2, i4);
-        } catch (IndexOutOfBoundsException e) {
-            Rlog.e(LOG_TAG, "Error: Improper ICC card: No anr record for ADN, continuing");
-            return null;
-        }
-    }
-
-    private void readEmailFileAndWait(int i) {
-        Map map = (Map) this.mPbrFile.mFileIds.get(Integer.valueOf(i));
-        if (map != null && map.containsKey(Integer.valueOf(USIM_EFEMAIL_TAG))) {
-            if (this.mEmailPresentInIap) {
-                readIapFileAndWait(((Integer) map.get(Integer.valueOf(193))).intValue(), i);
-                if (hasRecordIn(this.mIapFileRecord, i)) {
-                    this.mFh.loadEFLinearFixedAll(((Integer) map.get(Integer.valueOf(USIM_EFEMAIL_TAG))).intValue(), getPBPath(((Integer) map.get(Integer.valueOf(USIM_EFEMAIL_TAG))).intValue()), obtainMessage(4, Integer.valueOf(i)));
-                    log("readEmailFileAndWait email efid is : " + map.get(Integer.valueOf(USIM_EFEMAIL_TAG)));
-                    try {
-                        this.mLock.wait();
-                    } catch (InterruptedException e) {
-                        Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
-                    }
-                } else {
-                    Rlog.e(LOG_TAG, "Error: IAP file is empty");
-                    return;
-                }
-            }
-            Iterator it = ((ArrayList) this.mPbrFile.mEmailFileIds.get(Integer.valueOf(i))).iterator();
-            while (it.hasNext()) {
-                int intValue = ((Integer) it.next()).intValue();
-                this.mFh.loadEFLinearFixedPart(intValue, getPBPath(intValue), getValidRecordNums(i), obtainMessage(4, Integer.valueOf(i)));
-                log("readEmailFileAndWait email efid is : " + intValue + " recNum:" + i);
-                try {
-                    this.mLock.wait();
-                } catch (InterruptedException e2) {
-                    Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
-                }
-            }
-            if (hasRecordIn(this.mEmailFileRecord, i)) {
-                for (int i2 = 0; i2 < ((ArrayList) this.mEmailFileRecord.get(Integer.valueOf(i))).size(); i2++) {
-                    this.mEmailFlagsRecord[i].add(Integer.valueOf(0));
-                }
-                this.mEmailFlags.put(Integer.valueOf(i), this.mEmailFlagsRecord[i]);
-                updatePhoneAdnRecordWithEmail(i);
-                return;
-            }
-            Rlog.e(LOG_TAG, "Error: Email file is empty");
-        }
-    }
-
-    private String readEmailRecord(int i, int i2, int i3) {
-        if (!hasRecordIn(this.mEmailFileRecord, i2)) {
-            return null;
-        }
-        try {
-            byte[] bArr = (byte[]) ((ArrayList) this.mEmailFileRecord.get(Integer.valueOf(i2))).get(i + i3);
-            return this.mEmailPresentInIap ? IccUtils.adnStringFieldToString(bArr, 0, bArr.length - 2) : IccUtils.adnStringFieldToString(bArr, 0, bArr.length);
-        } catch (IndexOutOfBoundsException e) {
-            return null;
-        }
-    }
-
-    private void readIapFileAndWait(int i, int i2) {
-        log("pbrIndex is " + i2 + ",iap efid is : " + i);
-        this.mFh.loadEFLinearFixedPart(i, getPBPath(i), getValidRecordNums(i2), obtainMessage(3, Integer.valueOf(i2)));
-        try {
-            this.mLock.wait();
-        } catch (InterruptedException e) {
-            Rlog.e(LOG_TAG, "Interrupted Exception in readIapFileAndWait");
-        }
-    }
-
-    private void readPbrFileAndWait() {
-        this.mFh.loadEFLinearFixedAll(IccConstants.EF_PBR, obtainMessage(1));
-        try {
-            this.mLock.wait();
-        } catch (InterruptedException e) {
-            Rlog.e(LOG_TAG, "Interrupted Exception in readAdnFileAndWait");
-        }
-    }
-
-    private void refreshCache() {
-        if (this.mPbrFile != null) {
-            this.mPhoneBookRecords.clear();
-            int size = this.mPbrFile.mFileIds.size();
-            for (int i = 0; i < size; i++) {
-                readAdnFileAndWait(i);
-            }
-        }
-    }
-
-    private boolean updateIapFile(int i, String str, String str2, int i2) {
-        int i3 = -1;
-        int efidByTag = getEfidByTag(getPbrIndexBy(i - 1), 193, 0);
-        this.mSuccess = false;
-        if (efidByTag == -1) {
-            return this.mSuccess;
-        }
-        int anrRecNumber;
-        switch (i2) {
-            case 196:
-                anrRecNumber = getAnrRecNumber(i - 1, this.mPhoneBookRecords.size(), str);
-                break;
-            case USIM_EFEMAIL_TAG /*202*/:
-                anrRecNumber = getEmailRecNumber(i - 1, this.mPhoneBookRecords.size(), str);
-                break;
-            default:
-                anrRecNumber = -1;
-                break;
-        }
-        if (!TextUtils.isEmpty(str2)) {
-            i3 = anrRecNumber;
-        }
-        log("updateIapFile  efid=" + efidByTag + ", recordNumber= " + i3 + ", adnRecNum=" + i);
-        synchronized (this.mLock) {
-            this.mFh.getEFLinearRecordSize(efidByTag, getPBPath(efidByTag), obtainMessage(10, i, i3, Integer.valueOf(i2)));
-            try {
-                this.mLock.wait();
-            } catch (InterruptedException e) {
-                Rlog.e(LOG_TAG, "interrupted while trying to update by search");
-            }
-        }
-        return this.mSuccess;
-    }
-
-    private void updatePhoneAdnRecordWithAnr(int i) {
-        if (hasRecordIn(this.mAnrFileRecord, i)) {
-            int intValue = ((Integer) this.mAdnLengthList.get(i)).intValue();
-            if (this.mAnrPresentInIap && hasRecordIn(this.mIapFileRecord, i)) {
-                int i2 = 0;
-                while (i2 < intValue) {
-                    try {
-                        byte b = ((byte[]) ((ArrayList) this.mIapFileRecord.get(Integer.valueOf(i))).get(i2))[this.mAnrTagNumberInIap];
-                        if (b > (byte) 0) {
-                            String[] strArr = new String[]{readAnrRecord(b - 1, i, 0)};
-                            int initIndexBy = i2 + getInitIndexBy(i);
-                            AdnRecord adnRecord = (AdnRecord) this.mPhoneBookRecords.get(initIndexBy);
-                            if (!(adnRecord == null || TextUtils.isEmpty(strArr[0]))) {
-                                adnRecord.setAdditionalNumbers(strArr);
-                                this.mPhoneBookRecords.set(initIndexBy, adnRecord);
-                                ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i))).set(b - 1, Integer.valueOf(1));
-                            }
-                        }
-                        i2++;
-                    } catch (IndexOutOfBoundsException e) {
-                        Rlog.e(LOG_TAG, "Error: Improper ICC card: No IAP record for ADN, continuing");
-                    }
-                }
-                log("updatePhoneAdnRecordWithAnr: no need to parse type1 ANR file");
-            } else if (!this.mAnrPresentInIap) {
-                parseType1AnrFile(intValue, i);
-            }
-        }
-    }
-
-    private void updatePhoneAdnRecordWithEmail(int i) {
-        if (hasRecordIn(this.mEmailFileRecord, i)) {
-            int intValue = ((Integer) this.mAdnLengthList.get(i)).intValue();
-            if (this.mEmailPresentInIap && hasRecordIn(this.mIapFileRecord, i)) {
-                int i2 = 0;
-                while (i2 < intValue) {
-                    try {
-                        byte b = ((byte[]) ((ArrayList) this.mIapFileRecord.get(Integer.valueOf(i))).get(i2))[this.mEmailTagNumberInIap];
-                        if (b > (byte) 0) {
-                            String[] strArr = new String[]{readEmailRecord(b - 1, i, 0)};
-                            int initIndexBy = i2 + getInitIndexBy(i);
-                            AdnRecord adnRecord = (AdnRecord) this.mPhoneBookRecords.get(initIndexBy);
-                            if (!(adnRecord == null || TextUtils.isEmpty(strArr[0]))) {
-                                adnRecord.setEmails(strArr);
-                                this.mPhoneBookRecords.set(initIndexBy, adnRecord);
-                                ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i))).set(b - 1, Integer.valueOf(1));
-                            }
-                        }
-                        i2++;
-                    } catch (IndexOutOfBoundsException e) {
-                        Rlog.e(LOG_TAG, "Error: Improper ICC card: No IAP record for ADN, continuing");
-                    }
-                }
-                log("updatePhoneAdnRecordWithEmail: no need to parse type1 EMAIL file");
-                return;
-            }
-            int intValue2 = ((Integer) this.mAdnLengthList.get(i)).intValue();
-            if (!this.mEmailPresentInIap) {
-                parseType1EmailFile(intValue2, i);
-            }
-        }
-    }
-
-    public int getAnrCount() {
-        int i = 0;
-        int i2 = 0;
-        while (i2 < this.mAnrFlags.size()) {
-            i2++;
-            i = ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i2))).size() + i;
-        }
-        log("getAnrCount count is: " + i);
-        return i;
-    }
-
-    public int getAnrFilesCountEachAdn() {
-        if (this.mPbrFile == null) {
-            Rlog.e(LOG_TAG, "mPbrFile is NULL, exiting from getAnrFilesCountEachAdn");
-        } else {
-            Map map = (Map) this.mPbrFile.mFileIds.get(Integer.valueOf(0));
-            if (map != null && map.containsKey(Integer.valueOf(196))) {
-                return !this.mAnrPresentInIap ? ((ArrayList) this.mPbrFile.mAnrFileIds.get(Integer.valueOf(0))).size() : 1;
-            }
-        }
-        return 0;
-    }
-
-    public int getEmailCount() {
-        int i = 0;
-        int i2 = 0;
-        while (i2 < this.mEmailFlags.size()) {
-            i2++;
-            i = ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i2))).size() + i;
-        }
-        log("getEmailCount count is: " + i);
-        return i;
-    }
-
-    public int getEmailFilesCountEachAdn() {
-        if (this.mPbrFile == null) {
-            Rlog.e(LOG_TAG, "mPbrFile is NULL, exiting from getEmailFilesCountEachAdn");
-        } else {
-            Map map = (Map) this.mPbrFile.mFileIds.get(Integer.valueOf(0));
-            if (map != null && map.containsKey(Integer.valueOf(USIM_EFEMAIL_TAG))) {
-                return !this.mEmailPresentInIap ? ((ArrayList) this.mPbrFile.mEmailFileIds.get(Integer.valueOf(0))).size() : 1;
-            }
-        }
-        return 0;
-    }
-
-    public int getEmptyAnrNum_Pbrindex(int i) {
-        if (!this.mAnrPresentInIap) {
-            return 1;
-        }
-        if (!this.mAnrFlags.containsKey(Integer.valueOf(i))) {
-            return 0;
-        }
-        int size = ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i))).size();
-        int i2 = 0;
-        int i3 = 0;
-        while (i2 < size) {
-            int i4 = ((Integer) ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i))).get(i2)).intValue() == 0 ? i3 + 1 : i3;
-            i2++;
-            i3 = i4;
-        }
-        return i3;
-    }
-
-    public int getEmptyEmailNum_Pbrindex(int i) {
-        if (!this.mEmailPresentInIap) {
-            return 1;
-        }
-        if (!this.mEmailFlags.containsKey(Integer.valueOf(i))) {
-            return 0;
-        }
-        int size = ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i))).size();
-        int i2 = 0;
-        int i3 = 0;
-        while (i2 < size) {
-            int i4 = ((Integer) ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i))).get(i2)).intValue() == 0 ? i3 + 1 : i3;
-            i2++;
-            i3 = i4;
-        }
-        return i3;
-    }
-
-    public String getPBPath(int i) {
-        return "3F007F105F3A";
-    }
-
-    public int getPbrIndexBy(int i) {
-        int size = this.mAdnLengthList.size();
-        int i2 = 0;
-        int i3 = 0;
-        while (i3 < size) {
-            int intValue = ((Integer) this.mAdnLengthList.get(i3)).intValue() + i2;
-            if (i < intValue) {
-                return i3;
-            }
-            i3++;
-            i2 = intValue;
-        }
-        return -1;
-    }
-
-    public int getSpareAnrCount() {
-        int size = this.mAnrFlags.size();
-        int i = 0;
-        for (int i2 = 0; i2 < size; i2++) {
-            int i3 = i;
-            for (int i4 = 0; i4 < ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i2))).size(); i4++) {
-                if (((Integer) ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i2))).get(i4)).intValue() == 0) {
-                    i3++;
-                }
-            }
-            i = i3;
-        }
-        log("getSpareAnrCount count is" + i);
-        return i;
-    }
-
-    public int getSpareEmailCount() {
-        int size = this.mEmailFlags.size();
-        int i = 0;
-        for (int i2 = 0; i2 < size; i2++) {
-            int i3 = i;
-            for (int i4 = 0; i4 < ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i2))).size(); i4++) {
-                if (((Integer) ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i2))).get(i4)).intValue() == 0) {
-                    i3++;
-                }
-            }
-            i = i3;
-        }
-        log("getSpareEmailCount count is: " + i);
-        return i;
-    }
-
-    public int getUsimAdnCount() {
-        if (this.mPhoneBookRecords == null || this.mPhoneBookRecords.isEmpty()) {
-            return 0;
-        }
-        log("getUsimAdnCount count is" + this.mPhoneBookRecords.size());
-        return this.mPhoneBookRecords.size();
-    }
-
-    /* JADX WARNING: Removed duplicated region for block: B:184:0x042d A:{SYNTHETIC} */
-    /* JADX WARNING: Removed duplicated region for block: B:203:0x04aa A:{SYNTHETIC} */
-    public void handleMessage(android.os.Message r14) {
-        /*
-        r13 = this;
-        r12 = 2;
-        r9 = -1;
-        r5 = 0;
-        r11 = 1;
-        r6 = 0;
-        r0 = r14.what;
-        switch(r0) {
-            case 1: goto L_0x000b;
-            case 2: goto L_0x002c;
-            case 3: goto L_0x0071;
-            case 4: goto L_0x00a1;
-            case 5: goto L_0x011a;
-            case 6: goto L_0x0193;
-            case 7: goto L_0x02a0;
-            case 8: goto L_0x03ad;
-            case 9: goto L_0x0451;
-            case 10: goto L_0x04ce;
-            case 11: goto L_0x05d3;
-            default: goto L_0x000a;
-        };
-    L_0x000a:
-        return;
-    L_0x000b:
-        r0 = "Loading PBR done";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.exception;
-        if (r1 != 0) goto L_0x001f;
-    L_0x0018:
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r13.createPbrFile(r0);
-    L_0x001f:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0029 }
-        r0.notify();	 Catch:{ all -> 0x0029 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0029 }
-        goto L_0x000a;
-    L_0x0029:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0029 }
-        throw r0;
-    L_0x002c:
-        r0 = "Loading USIM ADN records done";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (java.lang.Integer) r1;
-        r2 = r1.intValue();
-        r1 = r0.exception;
-        if (r1 != 0) goto L_0x006b;
-    L_0x0041:
-        r3 = r13.mPhoneBookRecords;
-        r1 = r0.result;
-        r1 = (java.util.ArrayList) r1;
-        r3.addAll(r1);
-        r1 = r13.mAdnLengthList;
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r0 = r0.size();
-        r0 = java.lang.Integer.valueOf(r0);
-        r1.add(r2, r0);
-        r13.putValidRecNums(r2);
-    L_0x005e:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0068 }
-        r0.notify();	 Catch:{ all -> 0x0068 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0068 }
-        goto L_0x000a;
-    L_0x0068:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0068 }
-        throw r0;
-    L_0x006b:
-        r0 = "can't load USIM ADN records";
-        r13.log(r0);
-        goto L_0x005e;
-    L_0x0071:
-        r0 = "Loading USIM IAP records done";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (java.lang.Integer) r1;
-        r1 = r1.intValue();
-        r2 = r0.exception;
-        if (r2 != 0) goto L_0x0093;
-    L_0x0086:
-        r2 = r13.mIapFileRecord;
-        r1 = java.lang.Integer.valueOf(r1);
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r2.put(r1, r0);
-    L_0x0093:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x009e }
-        r0.notify();	 Catch:{ all -> 0x009e }
-        monitor-exit(r1);	 Catch:{ all -> 0x009e }
-        goto L_0x000a;
-    L_0x009e:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x009e }
-        throw r0;
-    L_0x00a1:
-        r0 = "Loading USIM Email records done";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (java.lang.Integer) r1;
-        r2 = r1.intValue();
-        r1 = r0.exception;
-        if (r1 != 0) goto L_0x00fb;
-    L_0x00b6:
-        r1 = r13.mPbrFile;
-        if (r1 == 0) goto L_0x00fb;
-    L_0x00ba:
-        r1 = r13.mEmailFileRecord;
-        r3 = java.lang.Integer.valueOf(r2);
-        r1 = r1.get(r3);
-        r1 = (java.util.ArrayList) r1;
-        if (r1 != 0) goto L_0x0109;
-    L_0x00c8:
-        r1 = r13.mEmailFileRecord;
-        r3 = java.lang.Integer.valueOf(r2);
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r1.put(r3, r0);
-    L_0x00d5:
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "handlemessage EVENT_EMAIL_LOAD_DONE size is: ";
-        r1 = r0.append(r1);
-        r0 = r13.mEmailFileRecord;
-        r2 = java.lang.Integer.valueOf(r2);
-        r0 = r0.get(r2);
-        r0 = (java.util.ArrayList) r0;
-        r0 = r0.size();
-        r0 = r1.append(r0);
-        r0 = r0.toString();
-        r13.log(r0);
-    L_0x00fb:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0106 }
-        r0.notify();	 Catch:{ all -> 0x0106 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0106 }
-        goto L_0x000a;
-    L_0x0106:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0106 }
-        throw r0;
-    L_0x0109:
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r1.addAll(r0);
-        r0 = r13.mEmailFileRecord;
-        r3 = java.lang.Integer.valueOf(r2);
-        r0.put(r3, r1);
-        goto L_0x00d5;
-    L_0x011a:
-        r0 = "Loading USIM Anr records done";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (java.lang.Integer) r1;
-        r2 = r1.intValue();
-        r1 = r0.exception;
-        if (r1 != 0) goto L_0x0174;
-    L_0x012f:
-        r1 = r13.mPbrFile;
-        if (r1 == 0) goto L_0x0174;
-    L_0x0133:
-        r1 = r13.mAnrFileRecord;
-        r3 = java.lang.Integer.valueOf(r2);
-        r1 = r1.get(r3);
-        r1 = (java.util.ArrayList) r1;
-        if (r1 != 0) goto L_0x0182;
-    L_0x0141:
-        r1 = r13.mAnrFileRecord;
-        r3 = java.lang.Integer.valueOf(r2);
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r1.put(r3, r0);
-    L_0x014e:
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r1 = "handlemessage EVENT_ANR_LOAD_DONE size is: ";
-        r1 = r0.append(r1);
-        r0 = r13.mAnrFileRecord;
-        r2 = java.lang.Integer.valueOf(r2);
-        r0 = r0.get(r2);
-        r0 = (java.util.ArrayList) r0;
-        r0 = r0.size();
-        r0 = r1.append(r0);
-        r0 = r0.toString();
-        r13.log(r0);
-    L_0x0174:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x017f }
-        r0.notify();	 Catch:{ all -> 0x017f }
-        monitor-exit(r1);	 Catch:{ all -> 0x017f }
-        goto L_0x000a;
-    L_0x017f:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x017f }
-        throw r0;
-    L_0x0182:
-        r0 = r0.result;
-        r0 = (java.util.ArrayList) r0;
-        r1.addAll(r0);
-        r0 = r13.mAnrFileRecord;
-        r3 = java.lang.Integer.valueOf(r2);
-        r0.put(r3, r1);
-        goto L_0x014e;
-    L_0x0193:
-        r0 = "Loading EF_EMAIL_RECORD_SIZE_DONE";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (java.lang.String) r1;
-        r2 = r1;
-        r2 = (java.lang.String) r2;
-        r1 = r14.arg1;
-        r7 = r1 + -1;
-        r1 = r14.arg2;
-        r3 = ",";
-        r3 = r2.split(r3);
-        r2 = r3.length;
-        if (r2 != r11) goto L_0x01cd;
-    L_0x01b4:
-        r2 = r3[r6];
-        r3 = "";
-        r4 = r3;
-    L_0x01b9:
-        r3 = r0.exception;
-        if (r3 == 0) goto L_0x01d6;
-    L_0x01bd:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x01ca }
-        r0.notify();	 Catch:{ all -> 0x01ca }
-        monitor-exit(r1);	 Catch:{ all -> 0x01ca }
-        goto L_0x000a;
-    L_0x01ca:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x01ca }
-        throw r0;
-    L_0x01cd:
-        r2 = r3.length;
-        if (r2 <= r11) goto L_0x065b;
-    L_0x01d0:
-        r2 = r3[r6];
-        r3 = r3[r11];
-        r4 = r3;
-        goto L_0x01b9;
-    L_0x01d6:
-        r0 = r0.result;
-        r0 = (int[]) r0;
-        r0 = (int[]) r0;
-        r3 = r13.mPhoneBookRecords;
-        r3 = r3.size();
-        r3 = r13.getEmailRecNumber(r7, r3, r2);
-        r2 = r0.length;
-        r8 = 3;
-        if (r2 != r8) goto L_0x01f0;
-    L_0x01ea:
-        r2 = r0[r12];
-        if (r3 > r2) goto L_0x01f0;
-    L_0x01ee:
-        if (r3 > 0) goto L_0x0200;
-    L_0x01f0:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x01fd }
-        r0.notify();	 Catch:{ all -> 0x01fd }
-        monitor-exit(r1);	 Catch:{ all -> 0x01fd }
-        goto L_0x000a;
-    L_0x01fd:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x01fd }
-        throw r0;
-    L_0x0200:
-        r0 = r0[r6];
-        r4 = r13.buildEmailData(r0, r7, r4);
-        if (r4 != 0) goto L_0x0218;
-    L_0x0208:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0215 }
-        r0.notify();	 Catch:{ all -> 0x0215 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0215 }
-        goto L_0x000a;
-    L_0x0215:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0215 }
-        throw r0;
-    L_0x0218:
-        r0 = r13.mEmailPresentInIap;
-        if (r0 != 0) goto L_0x0658;
-    L_0x021c:
-        r0 = r13.mPbrFile;
-        r0 = r0.mEmailFileIds;
-        r2 = r13.getPbrIndexBy(r7);
-        r2 = java.lang.Integer.valueOf(r2);
-        r0 = r0.get(r2);
-        r0 = (java.util.ArrayList) r0;
-        r2 = java.lang.Integer.valueOf(r1);
-        r2 = r0.indexOf(r2);
-        if (r2 != r9) goto L_0x0250;
-    L_0x0238:
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r2 = "wrong efid index:";
-        r0 = r0.append(r2);
-        r0 = r0.append(r1);
-        r0 = r0.toString();
-        r13.log(r0);
-        goto L_0x000a;
-    L_0x0250:
-        r0 = r13.mAdnLengthList;
-        r6 = r13.getPbrIndexBy(r7);
-        r0 = r0.get(r6);
-        r0 = (java.lang.Integer) r0;
-        r0 = r0.intValue();
-        r0 = r0 * r2;
-        r0 = r0 + r3;
-        r6 = new java.lang.StringBuilder;
-        r6.<init>();
-        r8 = "EMAIL index:";
-        r6 = r6.append(r8);
-        r2 = r6.append(r2);
-        r6 = " efid:";
-        r2 = r2.append(r6);
-        r2 = r2.append(r1);
-        r6 = " actual RecNumber:";
-        r2 = r2.append(r6);
-        r2 = r2.append(r0);
-        r2 = r2.toString();
-        r13.log(r2);
-        r6 = r0;
-    L_0x028d:
-        r0 = r13.mFh;
-        r2 = r13.getPBPath(r1);
-        r8 = 8;
-        r6 = r13.obtainMessage(r8, r6, r7, r4);
-        r0.updateEFLinearFixed(r1, r2, r3, r4, r5, r6);
-        r13.mPendingExtLoads = r11;
-        goto L_0x000a;
-    L_0x02a0:
-        r0 = "Loading EF_ANR_RECORD_SIZE_DONE";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (java.lang.String) r1;
-        r2 = r1;
-        r2 = (java.lang.String) r2;
-        r1 = r14.arg1;
-        r7 = r1 + -1;
-        r1 = r14.arg2;
-        r3 = ",";
-        r3 = r2.split(r3);
-        r2 = r3.length;
-        if (r2 != r11) goto L_0x02da;
-    L_0x02c1:
-        r2 = r3[r6];
-        r3 = "";
-        r4 = r3;
-    L_0x02c6:
-        r3 = r0.exception;
-        if (r3 == 0) goto L_0x02e3;
-    L_0x02ca:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x02d7 }
-        r0.notify();	 Catch:{ all -> 0x02d7 }
-        monitor-exit(r1);	 Catch:{ all -> 0x02d7 }
-        goto L_0x000a;
-    L_0x02d7:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x02d7 }
-        throw r0;
-    L_0x02da:
-        r2 = r3.length;
-        if (r2 <= r11) goto L_0x0654;
-    L_0x02dd:
-        r2 = r3[r6];
-        r3 = r3[r11];
-        r4 = r3;
-        goto L_0x02c6;
-    L_0x02e3:
-        r0 = r0.result;
-        r0 = (int[]) r0;
-        r0 = (int[]) r0;
-        r3 = r13.mPhoneBookRecords;
-        r3 = r3.size();
-        r3 = r13.getAnrRecNumber(r7, r3, r2);
-        r2 = r0.length;
-        r8 = 3;
-        if (r2 != r8) goto L_0x02fd;
-    L_0x02f7:
-        r2 = r0[r12];
-        if (r3 > r2) goto L_0x02fd;
-    L_0x02fb:
-        if (r3 > 0) goto L_0x030d;
-    L_0x02fd:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x030a }
-        r0.notify();	 Catch:{ all -> 0x030a }
-        monitor-exit(r1);	 Catch:{ all -> 0x030a }
-        goto L_0x000a;
-    L_0x030a:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x030a }
-        throw r0;
-    L_0x030d:
-        r0 = r0[r6];
-        r4 = r13.buildAnrData(r0, r7, r4);
-        if (r4 != 0) goto L_0x0325;
-    L_0x0315:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0322 }
-        r0.notify();	 Catch:{ all -> 0x0322 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0322 }
-        goto L_0x000a;
-    L_0x0322:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0322 }
-        throw r0;
-    L_0x0325:
-        r0 = r13.mAnrPresentInIap;
-        if (r0 != 0) goto L_0x0651;
-    L_0x0329:
-        r0 = r13.mPbrFile;
-        r0 = r0.mAnrFileIds;
-        r2 = r13.getPbrIndexBy(r7);
-        r2 = java.lang.Integer.valueOf(r2);
-        r0 = r0.get(r2);
-        r0 = (java.util.ArrayList) r0;
-        r2 = java.lang.Integer.valueOf(r1);
-        r2 = r0.indexOf(r2);
-        if (r2 != r9) goto L_0x035d;
-    L_0x0345:
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r2 = "wrong efid index:";
-        r0 = r0.append(r2);
-        r0 = r0.append(r1);
-        r0 = r0.toString();
-        r13.log(r0);
-        goto L_0x000a;
-    L_0x035d:
-        r0 = r13.mAdnLengthList;
-        r6 = r13.getPbrIndexBy(r7);
-        r0 = r0.get(r6);
-        r0 = (java.lang.Integer) r0;
-        r0 = r0.intValue();
-        r0 = r0 * r2;
-        r0 = r0 + r3;
-        r6 = new java.lang.StringBuilder;
-        r6.<init>();
-        r8 = "ANR index:";
-        r6 = r6.append(r8);
-        r2 = r6.append(r2);
-        r6 = " efid:";
-        r2 = r2.append(r6);
-        r2 = r2.append(r1);
-        r6 = " actual RecNumber:";
-        r2 = r2.append(r6);
-        r2 = r2.append(r0);
-        r2 = r2.toString();
-        r13.log(r2);
-        r6 = r0;
-    L_0x039a:
-        r0 = r13.mFh;
-        r2 = r13.getPBPath(r1);
-        r8 = 9;
-        r6 = r13.obtainMessage(r8, r6, r7, r4);
-        r0.updateEFLinearFixed(r1, r2, r3, r4, r5, r6);
-        r13.mPendingExtLoads = r11;
-        goto L_0x000a;
-    L_0x03ad:
-        r0 = "Loading UPDATE_EMAIL_RECORD_DONE";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.exception;
-        if (r1 == 0) goto L_0x03be;
-    L_0x03bc:
-        r13.mSuccess = r6;
-    L_0x03be:
-        r0 = r0.userObj;
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        r3 = r14.arg1;
-        r1 = r14.arg2;
-        r4 = r13.getPbrIndexBy(r1);
-        r1 = "EVENT_UPDATE_EMAIL_RECORD_DONE";
-        r13.log(r1);
-        r13.mPendingExtLoads = r6;
-        r13.mSuccess = r11;
-        r1 = r13.mEmailFileRecord;
-        r2 = java.lang.Integer.valueOf(r4);
-        r1 = r1.get(r2);
-        r1 = (java.util.ArrayList) r1;
-        r2 = r3 + -1;
-        r1.set(r2, r0);
-        r2 = r6;
-    L_0x03e7:
-        r1 = r0.length;
-        if (r2 >= r1) goto L_0x042a;
-    L_0x03ea:
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r5 = "EVENT_UPDATE_EMAIL_RECORD_DONE data = ";
-        r1 = r1.append(r5);
-        r5 = r0[r2];
-        r1 = r1.append(r5);
-        r5 = ",i is ";
-        r1 = r1.append(r5);
-        r1 = r1.append(r2);
-        r1 = r1.toString();
-        r13.log(r1);
-        r1 = r0[r2];
-        if (r1 == r9) goto L_0x0438;
-    L_0x0410:
-        r0 = "EVENT_UPDATE_EMAIL_RECORD_DONE data !=0xff";
-        r13.log(r0);
-        r0 = r13.mEmailFlags;
-        r1 = java.lang.Integer.valueOf(r4);
-        r0 = r0.get(r1);
-        r0 = (java.util.ArrayList) r0;
-        r1 = r3 + -1;
-        r2 = java.lang.Integer.valueOf(r11);
-        r0.set(r1, r2);
-    L_0x042a:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0435 }
-        r0.notify();	 Catch:{ all -> 0x0435 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0435 }
-        goto L_0x000a;
-    L_0x0435:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0435 }
-        throw r0;
-    L_0x0438:
-        r1 = r13.mEmailFlags;
-        r5 = java.lang.Integer.valueOf(r4);
-        r1 = r1.get(r5);
-        r1 = (java.util.ArrayList) r1;
-        r5 = r3 + -1;
-        r7 = java.lang.Integer.valueOf(r6);
-        r1.set(r5, r7);
-        r1 = r2 + 1;
-        r2 = r1;
-        goto L_0x03e7;
-    L_0x0451:
-        r0 = "Loading UPDATE_ANR_RECORD_DONE";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.userObj;
-        r1 = (byte[]) r1;
-        r1 = (byte[]) r1;
-        r3 = r14.arg1;
-        r2 = r14.arg2;
-        r4 = r13.getPbrIndexBy(r2);
-        r0 = r0.exception;
-        if (r0 == 0) goto L_0x0470;
-    L_0x046e:
-        r13.mSuccess = r6;
-    L_0x0470:
-        r0 = "EVENT_UPDATE_ANR_RECORD_DONE";
-        r13.log(r0);
-        r13.mPendingExtLoads = r6;
-        r13.mSuccess = r11;
-        r0 = r13.mAnrFileRecord;
-        r2 = java.lang.Integer.valueOf(r4);
-        r0 = r0.get(r2);
-        r0 = (java.util.ArrayList) r0;
-        r2 = r3 + -1;
-        r0.set(r2, r1);
-        r2 = r6;
-    L_0x048b:
-        r0 = r1.length;
-        if (r2 >= r0) goto L_0x04a7;
-    L_0x048e:
-        r0 = r1[r2];
-        if (r0 == r9) goto L_0x04b5;
-    L_0x0492:
-        r0 = r13.mAnrFlags;
-        r1 = java.lang.Integer.valueOf(r4);
-        r0 = r0.get(r1);
-        r0 = (java.util.ArrayList) r0;
-        r1 = r3 + -1;
-        r2 = java.lang.Integer.valueOf(r11);
-        r0.set(r1, r2);
-    L_0x04a7:
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x04b2 }
-        r0.notify();	 Catch:{ all -> 0x04b2 }
-        monitor-exit(r1);	 Catch:{ all -> 0x04b2 }
-        goto L_0x000a;
-    L_0x04b2:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x04b2 }
-        throw r0;
-    L_0x04b5:
-        r0 = r13.mAnrFlags;
-        r5 = java.lang.Integer.valueOf(r4);
-        r0 = r0.get(r5);
-        r0 = (java.util.ArrayList) r0;
-        r5 = r3 + -1;
-        r7 = java.lang.Integer.valueOf(r6);
-        r0.set(r5, r7);
-        r0 = r2 + 1;
-        r2 = r0;
-        goto L_0x048b;
-    L_0x04ce:
-        r0 = "EVENT_EF_IAP_RECORD_SIZE_DONE";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = (android.os.AsyncResult) r0;
-        r7 = r14.arg2;
-        r1 = r14.arg1;
-        r8 = r1 + -1;
-        r1 = r13.getPbrIndexBy(r8);
-        r2 = 193; // 0xc1 float:2.7E-43 double:9.54E-322;
-        r13.getEfidByTag(r1, r2, r6);
-        r1 = r0.userObj;
-        r1 = (java.lang.Integer) r1;
-        r2 = r1.intValue();
-        r1 = r0.exception;
-        if (r1 == 0) goto L_0x0504;
-    L_0x04f4:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x0501 }
-        r0.notify();	 Catch:{ all -> 0x0501 }
-        monitor-exit(r1);	 Catch:{ all -> 0x0501 }
-        goto L_0x000a;
-    L_0x0501:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x0501 }
-        throw r0;
-    L_0x0504:
-        r3 = r13.getPbrIndexBy(r8);
-        r1 = 193; // 0xc1 float:2.7E-43 double:9.54E-322;
-        r1 = r13.getEfidByTag(r3, r1, r6);
-        r0 = r0.result;
-        r0 = (int[]) r0;
-        r0 = (int[]) r0;
-        r4 = r13.getInitIndexBy(r3);
-        r9 = r8 - r4;
-        r4 = new java.lang.StringBuilder;
-        r4.<init>();
-        r10 = "handleIAP_RECORD_SIZE_DONE adnRecIndex is: ";
-        r4 = r4.append(r10);
-        r4 = r4.append(r8);
-        r10 = ", recordNumber is: ";
-        r4 = r4.append(r10);
-        r4 = r4.append(r7);
-        r10 = ", recordIndex is: ";
-        r4 = r4.append(r10);
-        r4 = r4.append(r9);
-        r4 = r4.toString();
-        r13.log(r4);
-        r4 = r0.length;
-        r10 = 3;
-        if (r4 != r10) goto L_0x0550;
-    L_0x0548:
-        r4 = r9 + 1;
-        r0 = r0[r12];
-        if (r4 > r0) goto L_0x0550;
-    L_0x054e:
-        if (r7 != 0) goto L_0x0560;
-    L_0x0550:
-        r13.mSuccess = r6;
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x055d }
-        r0.notify();	 Catch:{ all -> 0x055d }
-        monitor-exit(r1);	 Catch:{ all -> 0x055d }
-        goto L_0x000a;
-    L_0x055d:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x055d }
-        throw r0;
-    L_0x0560:
-        r0 = r13.mIapFileRecord;
-        r0 = r13.hasRecordIn(r0, r3);
-        if (r0 == 0) goto L_0x000a;
-    L_0x0568:
-        r0 = r13.mIapFileRecord;
-        r3 = java.lang.Integer.valueOf(r3);
-        r0 = r0.get(r3);
-        r0 = (java.util.ArrayList) r0;
-        r0 = r0.get(r9);
-        r0 = (byte[]) r0;
-        r3 = r0.length;
-        r4 = new byte[r3];
-        r3 = r4.length;
-        java.lang.System.arraycopy(r0, r6, r4, r6, r3);
-        switch(r2) {
-            case 196: goto L_0x05cd;
-            case 202: goto L_0x05c7;
-            default: goto L_0x0584;
-        };
-    L_0x0584:
-        r13.mPendingExtLoads = r11;
-        r0 = new java.lang.StringBuilder;
-        r0.<init>();
-        r2 = " IAP  efid= ";
-        r0 = r0.append(r2);
-        r0 = r0.append(r1);
-        r2 = ", update IAP index= ";
-        r0 = r0.append(r2);
-        r0 = r0.append(r9);
-        r2 = " with value= ";
-        r0 = r0.append(r2);
-        r2 = com.android.internal.telephony.uicc.IccUtils.bytesToHexString(r4);
-        r0 = r0.append(r2);
-        r0 = r0.toString();
-        r13.log(r0);
-        r0 = r13.mFh;
-        r2 = r13.getPBPath(r1);
-        r3 = r9 + 1;
-        r6 = 11;
-        r6 = r13.obtainMessage(r6, r8, r7, r4);
-        r0.updateEFLinearFixed(r1, r2, r3, r4, r5, r6);
-        goto L_0x000a;
-    L_0x05c7:
-        r0 = r13.mEmailTagNumberInIap;
-        r2 = (byte) r7;
-        r4[r0] = r2;
-        goto L_0x0584;
-    L_0x05cd:
-        r0 = r13.mAnrTagNumberInIap;
-        r2 = (byte) r7;
-        r4[r0] = r2;
-        goto L_0x0584;
-    L_0x05d3:
-        r0 = "EVENT_UPDATE_IAP_RECORD_DONE";
-        r13.log(r0);
-        r0 = r14.obj;
-        r0 = (android.os.AsyncResult) r0;
-        r0 = (android.os.AsyncResult) r0;
-        r1 = r0.exception;
-        if (r1 == 0) goto L_0x05e4;
-    L_0x05e2:
-        r13.mSuccess = r6;
-    L_0x05e4:
-        r0 = r0.userObj;
-        r0 = (byte[]) r0;
-        r0 = (byte[]) r0;
-        r1 = r14.arg1;
-        r2 = r13.getPbrIndexBy(r1);
-        r3 = r13.getInitIndexBy(r2);
-        r3 = r1 - r3;
-        r4 = new java.lang.StringBuilder;
-        r4.<init>();
-        r5 = "handleMessage EVENT_UPDATE_IAP_RECORD_DONE recordIndex is: ";
-        r4 = r4.append(r5);
-        r4 = r4.append(r3);
-        r5 = ", adnRecIndex is: ";
-        r4 = r4.append(r5);
-        r1 = r4.append(r1);
-        r1 = r1.toString();
-        r13.log(r1);
-        r13.mPendingExtLoads = r6;
-        r13.mSuccess = r11;
-        r1 = r13.mIapFileRecord;
-        r2 = java.lang.Integer.valueOf(r2);
-        r1 = r1.get(r2);
-        r1 = (java.util.ArrayList) r1;
-        r1.set(r3, r0);
-        r1 = new java.lang.StringBuilder;
-        r1.<init>();
-        r2 = "the iap email recordNumber is :";
-        r1 = r1.append(r2);
-        r2 = r13.mEmailTagNumberInIap;
-        r0 = r0[r2];
-        r0 = r1.append(r0);
-        r0 = r0.toString();
-        r13.log(r0);
-        r1 = r13.mLock;
-        monitor-enter(r1);
-        r0 = r13.mLock;	 Catch:{ all -> 0x064e }
-        r0.notify();	 Catch:{ all -> 0x064e }
-        monitor-exit(r1);	 Catch:{ all -> 0x064e }
-        goto L_0x000a;
-    L_0x064e:
-        r0 = move-exception;
-        monitor-exit(r1);	 Catch:{ all -> 0x064e }
-        throw r0;
-    L_0x0651:
-        r6 = r3;
-        goto L_0x039a;
-    L_0x0654:
-        r2 = r5;
-        r4 = r5;
-        goto L_0x02c6;
-    L_0x0658:
-        r6 = r3;
-        goto L_0x028d;
-    L_0x065b:
-        r2 = r5;
-        r4 = r5;
-        goto L_0x01b9;
-        */
-        throw new UnsupportedOperationException("Method not decompiled: com.android.internal.telephony.gsm.UsimPhoneBookManager.handleMessage(android.os.Message):void");
-    }
-
-    public void invalidateCache() {
-        this.mRefreshCache = true;
-    }
-
-    public ArrayList<AdnRecord> loadEfFilesFromUsim() {
-        synchronized (this.mLock) {
-            if (!this.mPhoneBookRecords.isEmpty()) {
-                if (this.mRefreshCache) {
-                    this.mRefreshCache = false;
-                    refreshCache();
-                }
-                ArrayList arrayList = this.mPhoneBookRecords;
-                return arrayList;
-            } else if (this.mIsPbrPresent.booleanValue()) {
-                if (this.mPbrFile == null) {
-                    readPbrFileAndWait();
-                }
-                if (this.mPbrFile == null) {
-                    return null;
-                }
-                int i;
-                int size = this.mPbrFile.mFileIds.size();
-                if (this.mAnrFlagsRecord == null && this.mEmailFlagsRecord == null) {
-                    this.mAnrFlagsRecord = new ArrayList[size];
-                    this.mEmailFlagsRecord = new ArrayList[size];
-                    for (i = 0; i < size; i++) {
-                        this.mAnrFlagsRecord[i] = new ArrayList();
-                        this.mEmailFlagsRecord[i] = new ArrayList();
-                    }
-                }
-                for (i = 0; i < size; i++) {
-                    readAdnFileAndWait(i);
-                    readEmailFileAndWait(i);
-                    readAnrFileAndWait(i);
-                }
-                return this.mPhoneBookRecords;
-            } else {
-                return null;
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void parseType1AnrFile(int i, int i2) {
-        int size = ((ArrayList) this.mPbrFile.mAnrFileIds.get(Integer.valueOf(i2))).size();
-        ArrayList arrayList = new ArrayList();
-        int initIndexBy = getInitIndexBy(i2);
-        if (hasRecordIn(this.mAnrFileRecord, i2)) {
-            log("parseType1AnrFile: pbrIndex is: " + i2 + ", numRecs is: " + i + ", numAnrFiles " + size);
-            for (int i3 = 0; i3 < i; i3++) {
-                arrayList.clear();
-                int i4 = 0;
-                for (int i5 = 0; i5 < size; i5++) {
-                    String readAnrRecord = readAnrRecord(i3, i2, i5 * i);
-                    arrayList.add(readAnrRecord);
-                    if (!TextUtils.isEmpty(readAnrRecord)) {
-                        int i6 = i4 + 1;
-                        ((ArrayList) this.mAnrFlags.get(Integer.valueOf(i2))).set((i5 * i) + i3, Integer.valueOf(1));
-                        i4 = i6;
-                    }
-                }
-                if (i4 != 0) {
-                    AdnRecord adnRecord = (AdnRecord) this.mPhoneBookRecords.get(i3 + initIndexBy);
-                    if (adnRecord != null) {
-                        String[] strArr = new String[arrayList.size()];
-                        System.arraycopy(arrayList.toArray(), 0, strArr, 0, arrayList.size());
-                        adnRecord.setAdditionalNumbers(strArr);
-                        this.mPhoneBookRecords.set(i3 + initIndexBy, adnRecord);
-                    }
-                }
-            }
-        }
-    }
-
-    /* Access modifiers changed, original: 0000 */
-    public void parseType1EmailFile(int i, int i2) {
-        int size = ((ArrayList) this.mPbrFile.mEmailFileIds.get(Integer.valueOf(i2))).size();
-        ArrayList arrayList = new ArrayList();
-        int initIndexBy = getInitIndexBy(i2);
-        if (hasRecordIn(this.mEmailFileRecord, i2)) {
-            log("parseType1EmailFile: pbrIndex is: " + i2 + ", numRecs is: " + i);
-            for (int i3 = 0; i3 < i; i3++) {
-                arrayList.clear();
-                int i4 = 0;
-                for (int i5 = 0; i5 < size; i5++) {
-                    String readEmailRecord = readEmailRecord(i3, i2, i5 * i);
-                    arrayList.add(readEmailRecord);
-                    if (!TextUtils.isEmpty(readEmailRecord)) {
-                        int i6 = i4 + 1;
-                        ((ArrayList) this.mEmailFlags.get(Integer.valueOf(i2))).set((i5 * i) + i3, Integer.valueOf(1));
-                        i4 = i6;
-                    }
-                }
-                if (i4 != 0) {
-                    AdnRecord adnRecord = (AdnRecord) this.mPhoneBookRecords.get(i3 + initIndexBy);
-                    if (adnRecord != null) {
-                        String[] strArr = new String[arrayList.size()];
-                        System.arraycopy(arrayList.toArray(), 0, strArr, 0, arrayList.size());
-                        adnRecord.setEmails(strArr);
-                        this.mPhoneBookRecords.set(i3 + initIndexBy, adnRecord);
-                    }
-                }
-            }
-        }
+    public UsimPhoneBookManager(IccFileHandler fh, AdnRecordCache cache) {
+        this.mAdnLengthList = null;
+        this.mFh = fh;
+        this.mAdnLengthList = new ArrayList<>();
+        this.mAdnCache = cache;
     }
 
     public void reset() {
@@ -1727,75 +105,192 @@ public class UsimPhoneBookManager extends Handler implements IccConstants {
         this.mRecordNums.clear();
         this.mPbrFile = null;
         this.mAdnLengthList.clear();
-        this.mIsPbrPresent = Boolean.valueOf(true);
+        this.mIsPbrPresent = true;
         this.mRefreshCache = false;
     }
 
-    public boolean updateAnrFile(int i, String str, String str2, int i2) {
-        int pbrIndexBy = getPbrIndexBy(i - 1);
-        int efidByTag = getEfidByTag(pbrIndexBy, 196, i2);
-        if (str == null) {
-            str = "";
-        }
-        if (str2 == null) {
-            str2 = "";
-        }
-        String str3 = str + "," + str2;
-        this.mSuccess = false;
-        log("updateAnrFile oldAnr : " + str + ", newAnr:" + str2 + " anrs:" + str3 + ", efid" + efidByTag + ", adnRecNum: " + i);
-        if (efidByTag == -1) {
-            return this.mSuccess;
-        }
-        if (!this.mAnrPresentInIap || !TextUtils.isEmpty(str) || TextUtils.isEmpty(str2)) {
-            this.mSuccess = true;
-        } else if (getEmptyAnrNum_Pbrindex(pbrIndexBy) == 0) {
-            log("updateAnrFile getEmptyAnrNum_Pbrindex=0, pbrIndex is " + pbrIndexBy);
-            this.mSuccess = true;
-            return this.mSuccess;
-        } else {
-            this.mSuccess = updateIapFile(i, str, str2, 196);
-        }
+    public ArrayList<AdnRecord> loadEfFilesFromUsim() {
         synchronized (this.mLock) {
-            this.mFh.getEFLinearRecordSize(efidByTag, getPBPath(efidByTag), obtainMessage(7, i, efidByTag, str3));
-            try {
-                this.mLock.wait();
-            } catch (InterruptedException e) {
-                Rlog.e(LOG_TAG, "interrupted while trying to update by search");
+            if (!this.mPhoneBookRecords.isEmpty()) {
+                if (this.mRefreshCache) {
+                    this.mRefreshCache = false;
+                    refreshCache();
+                }
+                return this.mPhoneBookRecords;
+            } else if (!this.mIsPbrPresent.booleanValue()) {
+                return null;
+            } else {
+                if (this.mPbrFile == null) {
+                    readPbrFileAndWait();
+                }
+                if (this.mPbrFile == null) {
+                    return null;
+                }
+                int numRecs = this.mPbrFile.mFileIds.size();
+                if (this.mAnrFlagsRecord == null && this.mEmailFlagsRecord == null) {
+                    this.mAnrFlagsRecord = new ArrayList[numRecs];
+                    this.mEmailFlagsRecord = new ArrayList[numRecs];
+                    for (int i = 0; i < numRecs; i++) {
+                        this.mAnrFlagsRecord[i] = new ArrayList<>();
+                        this.mEmailFlagsRecord[i] = new ArrayList<>();
+                    }
+                }
+                for (int i2 = 0; i2 < numRecs; i2++) {
+                    readAdnFileAndWait(i2);
+                    readEmailFileAndWait(i2);
+                    readAnrFileAndWait(i2);
+                }
+                return this.mPhoneBookRecords;
             }
         }
-        if (this.mAnrPresentInIap && this.mSuccess && !TextUtils.isEmpty(str) && TextUtils.isEmpty(str2)) {
-            this.mSuccess = updateIapFile(i, str, str2, 196);
-        }
-        return this.mSuccess;
     }
 
-    public boolean updateEmailFile(int i, String str, String str2, int i2) {
-        int pbrIndexBy = getPbrIndexBy(i - 1);
-        int efidByTag = getEfidByTag(pbrIndexBy, USIM_EFEMAIL_TAG, i2);
-        if (str == null) {
-            str = "";
+    private void refreshCache() {
+        if (this.mPbrFile != null) {
+            this.mPhoneBookRecords.clear();
+            int numRecs = this.mPbrFile.mFileIds.size();
+            for (int i = 0; i < numRecs; i++) {
+                readAdnFileAndWait(i);
+            }
         }
-        if (str2 == null) {
-            str2 = "";
+    }
+
+    public void invalidateCache() {
+        this.mRefreshCache = true;
+    }
+
+    private void readPbrFileAndWait() {
+        this.mFh.loadEFLinearFixedAll(IccConstants.EF_PBR, obtainMessage(1));
+        try {
+            this.mLock.wait();
+        } catch (InterruptedException e) {
+            Rlog.e(LOG_TAG, "Interrupted Exception in readAdnFileAndWait");
         }
-        String str3 = str + "," + str2;
+    }
+
+    private void readEmailFileAndWait(int recNum) {
+        Map<Integer, Integer> fileIds = this.mPbrFile.mFileIds.get(Integer.valueOf(recNum));
+        if (fileIds != null && fileIds.containsKey(Integer.valueOf((int) USIM_EFEMAIL_TAG))) {
+            if (this.mEmailPresentInIap) {
+                readIapFileAndWait(fileIds.get(193).intValue(), recNum);
+                if (!hasRecordIn(this.mIapFileRecord, recNum)) {
+                    Rlog.e(LOG_TAG, "Error: IAP file is empty");
+                    return;
+                }
+                this.mFh.loadEFLinearFixedAll(fileIds.get(Integer.valueOf((int) USIM_EFEMAIL_TAG)).intValue(), getPBPath(fileIds.get(Integer.valueOf((int) USIM_EFEMAIL_TAG)).intValue()), obtainMessage(4, Integer.valueOf(recNum)));
+                log("readEmailFileAndWait email efid is : " + fileIds.get(Integer.valueOf((int) USIM_EFEMAIL_TAG)));
+                try {
+                    this.mLock.wait();
+                } catch (InterruptedException e) {
+                    Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
+                }
+            } else {
+                Iterator i$ = this.mPbrFile.mEmailFileIds.get(Integer.valueOf(recNum)).iterator();
+                while (i$.hasNext()) {
+                    int efid = i$.next().intValue();
+                    this.mFh.loadEFLinearFixedPart(efid, getPBPath(efid), getValidRecordNums(recNum), obtainMessage(4, Integer.valueOf(recNum)));
+                    log("readEmailFileAndWait email efid is : " + efid + " recNum:" + recNum);
+                    try {
+                        this.mLock.wait();
+                    } catch (InterruptedException e2) {
+                        Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
+                    }
+                }
+            }
+            if (!hasRecordIn(this.mEmailFileRecord, recNum)) {
+                Rlog.e(LOG_TAG, "Error: Email file is empty");
+                return;
+            }
+            for (int m = 0; m < this.mEmailFileRecord.get(Integer.valueOf(recNum)).size(); m++) {
+                this.mEmailFlagsRecord[recNum].add(0);
+            }
+            this.mEmailFlags.put(Integer.valueOf(recNum), this.mEmailFlagsRecord[recNum]);
+            updatePhoneAdnRecordWithEmail(recNum);
+        }
+    }
+
+    private void readAnrFileAndWait(int recNum) {
+        if (this.mPbrFile == null) {
+            Rlog.e(LOG_TAG, "mPbrFile is NULL, exiting from readAnrFileAndWait");
+            return;
+        }
+        Map<Integer, Integer> fileIds = this.mPbrFile.mFileIds.get(Integer.valueOf(recNum));
+        if (!(fileIds == null || fileIds.isEmpty() || !fileIds.containsKey(196))) {
+            if (this.mAnrPresentInIap) {
+                readIapFileAndWait(fileIds.get(193).intValue(), recNum);
+                if (!hasRecordIn(this.mIapFileRecord, recNum)) {
+                    Rlog.e(LOG_TAG, "Error: IAP file is empty");
+                    return;
+                }
+                this.mFh.loadEFLinearFixedAll(fileIds.get(196).intValue(), getPBPath(fileIds.get(196).intValue()), obtainMessage(5, Integer.valueOf(recNum)));
+                log("readAnrFileAndWait anr efid is : " + fileIds.get(196));
+                try {
+                    this.mLock.wait();
+                } catch (InterruptedException e) {
+                    Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
+                }
+            } else {
+                Iterator i$ = this.mPbrFile.mAnrFileIds.get(Integer.valueOf(recNum)).iterator();
+                while (i$.hasNext()) {
+                    int efid = i$.next().intValue();
+                    this.mFh.loadEFLinearFixedPart(efid, getPBPath(efid), getValidRecordNums(recNum), obtainMessage(5, Integer.valueOf(recNum)));
+                    log("readAnrFileAndWait anr efid is : " + efid + " recNum:" + recNum);
+                    try {
+                        this.mLock.wait();
+                    } catch (InterruptedException e2) {
+                        Rlog.e(LOG_TAG, "Interrupted Exception in readEmailFileAndWait");
+                    }
+                }
+            }
+            if (!hasRecordIn(this.mAnrFileRecord, recNum)) {
+                Rlog.e(LOG_TAG, "Error: Anr file is empty");
+                return;
+            }
+            for (int m = 0; m < this.mAnrFileRecord.get(Integer.valueOf(recNum)).size(); m++) {
+                this.mAnrFlagsRecord[recNum].add(0);
+            }
+            this.mAnrFlags.put(Integer.valueOf(recNum), this.mAnrFlagsRecord[recNum]);
+            updatePhoneAdnRecordWithAnr(recNum);
+        }
+    }
+
+    private void readIapFileAndWait(int efid, int recNum) {
+        log("pbrIndex is " + recNum + ",iap efid is : " + efid);
+        this.mFh.loadEFLinearFixedPart(efid, getPBPath(efid), getValidRecordNums(recNum), obtainMessage(3, Integer.valueOf(recNum)));
+        try {
+            this.mLock.wait();
+        } catch (InterruptedException e) {
+            Rlog.e(LOG_TAG, "Interrupted Exception in readIapFileAndWait");
+        }
+    }
+
+    public boolean updateEmailFile(int adnRecNum, String oldEmail, String newEmail, int efidIndex) {
+        int pbrIndex = getPbrIndexBy(adnRecNum - 1);
+        int efid = getEfidByTag(pbrIndex, USIM_EFEMAIL_TAG, efidIndex);
+        if (oldEmail == null) {
+            oldEmail = "";
+        }
+        if (newEmail == null) {
+            newEmail = "";
+        }
+        String emails = oldEmail + "," + newEmail;
         this.mSuccess = false;
-        log("updateEmailFile oldEmail : " + str + " newEmail:" + str2 + " emails:" + str3 + " efid" + efidByTag + " adnRecNum: " + i);
-        if (efidByTag == -1) {
+        log("updateEmailFile oldEmail : " + oldEmail + " newEmail:" + newEmail + " emails:" + emails + " efid" + efid + " adnRecNum: " + adnRecNum);
+        if (efid == -1) {
             return this.mSuccess;
         }
-        if (!this.mEmailPresentInIap || !TextUtils.isEmpty(str) || TextUtils.isEmpty(str2)) {
+        if (!this.mEmailPresentInIap || !TextUtils.isEmpty(oldEmail) || TextUtils.isEmpty(newEmail)) {
             this.mSuccess = true;
-        } else if (getEmptyEmailNum_Pbrindex(pbrIndexBy) == 0) {
-            log("updateEmailFile getEmptyEmailNum_Pbrindex=0, pbrIndex is " + pbrIndexBy);
+        } else if (getEmptyEmailNum_Pbrindex(pbrIndex) == 0) {
+            log("updateEmailFile getEmptyEmailNum_Pbrindex=0, pbrIndex is " + pbrIndex);
             this.mSuccess = true;
             return this.mSuccess;
         } else {
-            this.mSuccess = updateIapFile(i, str, str2, USIM_EFEMAIL_TAG);
+            this.mSuccess = updateIapFile(adnRecNum, oldEmail, newEmail, USIM_EFEMAIL_TAG);
         }
         if (this.mSuccess) {
             synchronized (this.mLock) {
-                this.mFh.getEFLinearRecordSize(efidByTag, getPBPath(efidByTag), obtainMessage(6, i, efidByTag, str3));
+                this.mFh.getEFLinearRecordSize(efid, getPBPath(efid), obtainMessage(6, adnRecNum, efid, emails));
                 try {
                     this.mLock.wait();
                 } catch (InterruptedException e) {
@@ -1803,9 +298,966 @@ public class UsimPhoneBookManager extends Handler implements IccConstants {
                 }
             }
         }
-        if (this.mEmailPresentInIap && this.mSuccess && !TextUtils.isEmpty(str) && TextUtils.isEmpty(str2)) {
-            this.mSuccess = updateIapFile(i, str, str2, USIM_EFEMAIL_TAG);
+        if (this.mEmailPresentInIap && this.mSuccess && !TextUtils.isEmpty(oldEmail) && TextUtils.isEmpty(newEmail)) {
+            this.mSuccess = updateIapFile(adnRecNum, oldEmail, newEmail, USIM_EFEMAIL_TAG);
         }
         return this.mSuccess;
+    }
+
+    public boolean updateAnrFile(int adnRecNum, String oldAnr, String newAnr, int efidIndex) {
+        int pbrIndex = getPbrIndexBy(adnRecNum - 1);
+        int efid = getEfidByTag(pbrIndex, 196, efidIndex);
+        if (oldAnr == null) {
+            oldAnr = "";
+        }
+        if (newAnr == null) {
+            newAnr = "";
+        }
+        String anrs = oldAnr + "," + newAnr;
+        this.mSuccess = false;
+        log("updateAnrFile oldAnr : " + oldAnr + ", newAnr:" + newAnr + " anrs:" + anrs + ", efid" + efid + ", adnRecNum: " + adnRecNum);
+        if (efid == -1) {
+            return this.mSuccess;
+        }
+        if (!this.mAnrPresentInIap || !TextUtils.isEmpty(oldAnr) || TextUtils.isEmpty(newAnr)) {
+            this.mSuccess = true;
+        } else if (getEmptyAnrNum_Pbrindex(pbrIndex) == 0) {
+            log("updateAnrFile getEmptyAnrNum_Pbrindex=0, pbrIndex is " + pbrIndex);
+            this.mSuccess = true;
+            return this.mSuccess;
+        } else {
+            this.mSuccess = updateIapFile(adnRecNum, oldAnr, newAnr, 196);
+        }
+        synchronized (this.mLock) {
+            this.mFh.getEFLinearRecordSize(efid, getPBPath(efid), obtainMessage(7, adnRecNum, efid, anrs));
+            try {
+                this.mLock.wait();
+            } catch (InterruptedException e) {
+                Rlog.e(LOG_TAG, "interrupted while trying to update by search");
+            }
+        }
+        if (this.mAnrPresentInIap && this.mSuccess && !TextUtils.isEmpty(oldAnr) && TextUtils.isEmpty(newAnr)) {
+            this.mSuccess = updateIapFile(adnRecNum, oldAnr, newAnr, 196);
+        }
+        return this.mSuccess;
+    }
+
+    private boolean updateIapFile(int adnRecNum, String oldValue, String newValue, int tag) {
+        int efid = getEfidByTag(getPbrIndexBy(adnRecNum - 1), 193, 0);
+        this.mSuccess = false;
+        int recordNumber = -1;
+        if (efid == -1) {
+            return this.mSuccess;
+        }
+        switch (tag) {
+            case 196:
+                recordNumber = getAnrRecNumber(adnRecNum - 1, this.mPhoneBookRecords.size(), oldValue);
+                break;
+            case USIM_EFEMAIL_TAG /* 202 */:
+                recordNumber = getEmailRecNumber(adnRecNum - 1, this.mPhoneBookRecords.size(), oldValue);
+                break;
+        }
+        if (TextUtils.isEmpty(newValue)) {
+            recordNumber = -1;
+        }
+        log("updateIapFile  efid=" + efid + ", recordNumber= " + recordNumber + ", adnRecNum=" + adnRecNum);
+        synchronized (this.mLock) {
+            this.mFh.getEFLinearRecordSize(efid, getPBPath(efid), obtainMessage(10, adnRecNum, recordNumber, Integer.valueOf(tag)));
+            try {
+                this.mLock.wait();
+            } catch (InterruptedException e) {
+                Rlog.e(LOG_TAG, "interrupted while trying to update by search");
+            }
+        }
+        return this.mSuccess;
+    }
+
+    private int getEfidByTag(int recNum, int tag, int efidIndex) {
+        int efid;
+        this.mPbrFile.mFileIds.size();
+        Map<Integer, Integer> fileIds = this.mPbrFile.mFileIds.get(Integer.valueOf(recNum));
+        if (fileIds == null || !fileIds.containsKey(Integer.valueOf(tag))) {
+            return -1;
+        }
+        if (!this.mEmailPresentInIap && USIM_EFEMAIL_TAG == tag) {
+            efid = this.mPbrFile.mEmailFileIds.get(Integer.valueOf(recNum)).get(efidIndex).intValue();
+        } else if (this.mAnrPresentInIap || 196 != tag) {
+            efid = fileIds.get(Integer.valueOf(tag)).intValue();
+        } else {
+            efid = this.mPbrFile.mAnrFileIds.get(Integer.valueOf(recNum)).get(efidIndex).intValue();
+        }
+        return efid;
+    }
+
+    public int getPbrIndexBy(int adnIndex) {
+        int len = this.mAdnLengthList.size();
+        int size = 0;
+        for (int i = 0; i < len; i++) {
+            size += this.mAdnLengthList.get(i).intValue();
+            if (adnIndex < size) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private int getInitIndexBy(int pbrIndex) {
+        int index = 0;
+        while (pbrIndex > 0) {
+            index += this.mAdnLengthList.get(pbrIndex - 1).intValue();
+            pbrIndex--;
+        }
+        return index;
+    }
+
+    private boolean hasRecordIn(Map<Integer, ArrayList<byte[]>> record, int pbrIndex) {
+        if (record != null && !record.isEmpty() && record.get(Integer.valueOf(pbrIndex)) != null) {
+            return true;
+        }
+        Rlog.e(LOG_TAG, "record [" + record + "] is empty in pbrIndex" + pbrIndex);
+        return false;
+    }
+
+    private void updatePhoneAdnRecordWithEmail(int pbrIndex) {
+        if (hasRecordIn(this.mEmailFileRecord, pbrIndex)) {
+            int numAdnRecs = this.mAdnLengthList.get(pbrIndex).intValue();
+            if (!this.mEmailPresentInIap || !hasRecordIn(this.mIapFileRecord, pbrIndex)) {
+                int len = this.mAdnLengthList.get(pbrIndex).intValue();
+                if (!this.mEmailPresentInIap) {
+                    parseType1EmailFile(len, pbrIndex);
+                    return;
+                }
+                return;
+            }
+            for (int i = 0; i < numAdnRecs; i++) {
+                try {
+                    byte b = this.mIapFileRecord.get(Integer.valueOf(pbrIndex)).get(i)[this.mEmailTagNumberInIap];
+                    if (b > 0) {
+                        String[] emails = {readEmailRecord(b - 1, pbrIndex, 0)};
+                        int adnRecIndex = i + getInitIndexBy(pbrIndex);
+                        AdnRecord rec = this.mPhoneBookRecords.get(adnRecIndex);
+                        if (rec != null && !TextUtils.isEmpty(emails[0])) {
+                            rec.setEmails(emails);
+                            this.mPhoneBookRecords.set(adnRecIndex, rec);
+                            this.mEmailFlags.get(Integer.valueOf(pbrIndex)).set(b - 1, 1);
+                        }
+                    }
+                } catch (IndexOutOfBoundsException e) {
+                    Rlog.e(LOG_TAG, "Error: Improper ICC card: No IAP record for ADN, continuing");
+                }
+            }
+            log("updatePhoneAdnRecordWithEmail: no need to parse type1 EMAIL file");
+        }
+    }
+
+    private void updatePhoneAdnRecordWithAnr(int pbrIndex) {
+        if (hasRecordIn(this.mAnrFileRecord, pbrIndex)) {
+            int numAdnRecs = this.mAdnLengthList.get(pbrIndex).intValue();
+            if (this.mAnrPresentInIap && hasRecordIn(this.mIapFileRecord, pbrIndex)) {
+                for (int i = 0; i < numAdnRecs; i++) {
+                    try {
+                        byte b = this.mIapFileRecord.get(Integer.valueOf(pbrIndex)).get(i)[this.mAnrTagNumberInIap];
+                        if (b > 0) {
+                            String[] anrs = {readAnrRecord(b - 1, pbrIndex, 0)};
+                            int adnRecIndex = i + getInitIndexBy(pbrIndex);
+                            AdnRecord rec = this.mPhoneBookRecords.get(adnRecIndex);
+                            if (rec != null && !TextUtils.isEmpty(anrs[0])) {
+                                rec.setAdditionalNumbers(anrs);
+                                this.mPhoneBookRecords.set(adnRecIndex, rec);
+                                this.mAnrFlags.get(Integer.valueOf(pbrIndex)).set(b - 1, 1);
+                            }
+                        }
+                    } catch (IndexOutOfBoundsException e) {
+                        Rlog.e(LOG_TAG, "Error: Improper ICC card: No IAP record for ADN, continuing");
+                    }
+                }
+                log("updatePhoneAdnRecordWithAnr: no need to parse type1 ANR file");
+            } else if (!this.mAnrPresentInIap) {
+                parseType1AnrFile(numAdnRecs, pbrIndex);
+            }
+        }
+    }
+
+    void parseType1EmailFile(int numRecs, int pbrIndex) {
+        AdnRecord rec;
+        int numEmailFiles = this.mPbrFile.mEmailFileIds.get(Integer.valueOf(pbrIndex)).size();
+        ArrayList<String> emailList = new ArrayList<>();
+        int adnInitIndex = getInitIndexBy(pbrIndex);
+        if (hasRecordIn(this.mEmailFileRecord, pbrIndex)) {
+            log("parseType1EmailFile: pbrIndex is: " + pbrIndex + ", numRecs is: " + numRecs);
+            for (int i = 0; i < numRecs; i++) {
+                int count = 0;
+                emailList.clear();
+                for (int j = 0; j < numEmailFiles; j++) {
+                    String email = readEmailRecord(i, pbrIndex, j * numRecs);
+                    emailList.add(email);
+                    if (!TextUtils.isEmpty(email)) {
+                        count++;
+                        this.mEmailFlags.get(Integer.valueOf(pbrIndex)).set((j * numRecs) + i, 1);
+                    }
+                }
+                if (!(count == 0 || (rec = this.mPhoneBookRecords.get(i + adnInitIndex)) == null)) {
+                    String[] emails = new String[emailList.size()];
+                    System.arraycopy(emailList.toArray(), 0, emails, 0, emailList.size());
+                    rec.setEmails(emails);
+                    this.mPhoneBookRecords.set(i + adnInitIndex, rec);
+                }
+            }
+        }
+    }
+
+    void parseType1AnrFile(int numRecs, int pbrIndex) {
+        AdnRecord rec;
+        int numAnrFiles = this.mPbrFile.mAnrFileIds.get(Integer.valueOf(pbrIndex)).size();
+        ArrayList<String> anrList = new ArrayList<>();
+        int adnInitIndex = getInitIndexBy(pbrIndex);
+        if (hasRecordIn(this.mAnrFileRecord, pbrIndex)) {
+            log("parseType1AnrFile: pbrIndex is: " + pbrIndex + ", numRecs is: " + numRecs + ", numAnrFiles " + numAnrFiles);
+            for (int i = 0; i < numRecs; i++) {
+                int count = 0;
+                anrList.clear();
+                for (int j = 0; j < numAnrFiles; j++) {
+                    String anr = readAnrRecord(i, pbrIndex, j * numRecs);
+                    anrList.add(anr);
+                    if (!TextUtils.isEmpty(anr)) {
+                        count++;
+                        this.mAnrFlags.get(Integer.valueOf(pbrIndex)).set((j * numRecs) + i, 1);
+                    }
+                }
+                if (!(count == 0 || (rec = this.mPhoneBookRecords.get(i + adnInitIndex)) == null)) {
+                    String[] anrs = new String[anrList.size()];
+                    System.arraycopy(anrList.toArray(), 0, anrs, 0, anrList.size());
+                    rec.setAdditionalNumbers(anrs);
+                    this.mPhoneBookRecords.set(i + adnInitIndex, rec);
+                }
+            }
+        }
+    }
+
+    private String readEmailRecord(int recNum, int pbrIndex, int offSet) {
+        if (!hasRecordIn(this.mEmailFileRecord, pbrIndex)) {
+            return null;
+        }
+        try {
+            byte[] emailRec = this.mEmailFileRecord.get(Integer.valueOf(pbrIndex)).get(recNum + offSet);
+            if (this.mEmailPresentInIap) {
+                return IccUtils.adnStringFieldToString(emailRec, 0, emailRec.length - 2);
+            }
+            return IccUtils.adnStringFieldToString(emailRec, 0, emailRec.length);
+        } catch (IndexOutOfBoundsException e) {
+            return null;
+        }
+    }
+
+    private String readAnrRecord(int recNum, int pbrIndex, int offSet) {
+        if (!hasRecordIn(this.mAnrFileRecord, pbrIndex)) {
+            return null;
+        }
+        try {
+            byte[] anrRec = this.mAnrFileRecord.get(Integer.valueOf(pbrIndex)).get(recNum + offSet);
+            int numberLength = anrRec[1] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT;
+            if (numberLength > 11) {
+                return "";
+            }
+            return PhoneNumberUtils.calledPartyBCDToString(anrRec, 2, numberLength);
+        } catch (IndexOutOfBoundsException e) {
+            Rlog.e(LOG_TAG, "Error: Improper ICC card: No anr record for ADN, continuing");
+            return null;
+        }
+    }
+
+    private void readAdnFileAndWait(int recNum) {
+        Map<Integer, Integer> fileIds = this.mPbrFile.mFileIds.get(Integer.valueOf(recNum));
+        if (fileIds != null && !fileIds.isEmpty()) {
+            int extEf = 0;
+            if (fileIds.containsKey(194)) {
+                extEf = fileIds.get(194).intValue();
+            }
+            log("readAdnFileAndWait adn efid is : " + fileIds.get(192));
+            this.mAdnCache.requestLoadAllAdnLike(fileIds.get(192).intValue(), extEf, getPBPath(fileIds.get(192).intValue()), obtainMessage(2, Integer.valueOf(recNum)));
+            try {
+                this.mLock.wait();
+            } catch (InterruptedException e) {
+                Rlog.e(LOG_TAG, "Interrupted Exception in readAdnFileAndWait");
+            }
+        }
+    }
+
+    private int getEmailRecNumber(int adnRecIndex, int numRecs, String oldEmail) {
+        int pbrIndex = getPbrIndexBy(adnRecIndex);
+        int recordIndex = adnRecIndex - getInitIndexBy(pbrIndex);
+        log("getEmailRecNumber adnRecIndex is: " + adnRecIndex + ", recordIndex is :" + recordIndex);
+        if (!hasRecordIn(this.mEmailFileRecord, pbrIndex)) {
+            log("getEmailRecNumber recordNumber is: -1");
+            return -1;
+        } else if (!this.mEmailPresentInIap || !hasRecordIn(this.mIapFileRecord, pbrIndex)) {
+            return recordIndex + 1;
+        } else {
+            byte[] record = null;
+            try {
+                record = this.mIapFileRecord.get(Integer.valueOf(pbrIndex)).get(recordIndex);
+            } catch (IndexOutOfBoundsException e) {
+                Rlog.e(LOG_TAG, "IndexOutOfBoundsException in getEmailRecNumber");
+            }
+            if (record == null || record[this.mEmailTagNumberInIap] <= 0) {
+                int recsSize = this.mEmailFileRecord.get(Integer.valueOf(pbrIndex)).size();
+                log("getEmailRecNumber recsSize is: " + recsSize);
+                if (TextUtils.isEmpty(oldEmail)) {
+                    for (int i = 0; i < recsSize; i++) {
+                        if (TextUtils.isEmpty(readEmailRecord(i, pbrIndex, 0))) {
+                            log("getEmailRecNumber: Got empty record.Email record num is :" + (i + 1));
+                            return i + 1;
+                        }
+                    }
+                }
+                log("getEmailRecNumber: no email record index found");
+                return -1;
+            }
+            byte b = record[this.mEmailTagNumberInIap];
+            log(" getEmailRecNumber: record is " + IccUtils.bytesToHexString(record) + ", the email recordNumber is :" + ((int) b));
+            return b;
+        }
+    }
+
+    private int getAnrRecNumber(int adnRecIndex, int numRecs, String oldAnr) {
+        int pbrIndex = getPbrIndexBy(adnRecIndex);
+        int recordIndex = adnRecIndex - getInitIndexBy(pbrIndex);
+        if (!hasRecordIn(this.mAnrFileRecord, pbrIndex)) {
+            return -1;
+        }
+        if (!this.mAnrPresentInIap || !hasRecordIn(this.mIapFileRecord, pbrIndex)) {
+            return recordIndex + 1;
+        }
+        byte[] record = null;
+        try {
+            record = this.mIapFileRecord.get(Integer.valueOf(pbrIndex)).get(recordIndex);
+        } catch (IndexOutOfBoundsException e) {
+            Rlog.e(LOG_TAG, "IndexOutOfBoundsException in getAnrRecNumber");
+        }
+        if (record == null || record[this.mAnrTagNumberInIap] <= 0) {
+            int recsSize = this.mAnrFileRecord.get(Integer.valueOf(pbrIndex)).size();
+            log("getAnrRecNumber: anr record size is :" + recsSize);
+            if (TextUtils.isEmpty(oldAnr)) {
+                for (int i = 0; i < recsSize; i++) {
+                    if (TextUtils.isEmpty(readAnrRecord(i, pbrIndex, 0))) {
+                        log("getAnrRecNumber: Empty anr record. Anr record num is :" + (i + 1));
+                        return i + 1;
+                    }
+                }
+            }
+            log("getAnrRecNumber: no anr record index found");
+            return -1;
+        }
+        byte b = record[this.mAnrTagNumberInIap];
+        log("getAnrRecNumber: recnum from iap is :" + ((int) b));
+        return b;
+    }
+
+    private byte[] buildEmailData(int length, int adnRecIndex, String email) {
+        byte[] data = new byte[length];
+        for (int i = 0; i < length; i++) {
+            data[i] = -1;
+        }
+        if (TextUtils.isEmpty(email)) {
+            log("[buildEmailData] Empty email record");
+            return data;
+        }
+        byte[] byteEmail = GsmAlphabet.stringToGsm8BitPacked(email);
+        if (byteEmail.length > (this.mEmailPresentInIap ? length - 2 : length)) {
+            log("[buildEmailData] wrong email length");
+            return null;
+        }
+        System.arraycopy(byteEmail, 0, data, 0, byteEmail.length);
+        if (this.mEmailPresentInIap) {
+            data[length - 1] = (byte) ((adnRecIndex - getInitIndexBy(getPbrIndexBy(adnRecIndex))) + 1);
+        }
+        log("buildEmailData: data is" + IccUtils.bytesToHexString(data));
+        return data;
+    }
+
+    private byte[] buildAnrData(int length, int adnRecIndex, String anr) {
+        byte[] data = new byte[length];
+        for (int i = 0; i < length; i++) {
+            data[i] = -1;
+        }
+        if (TextUtils.isEmpty(anr)) {
+            log("[buildAnrData] Empty anr record");
+            return data;
+        }
+        data[0] = 0;
+        byte[] byteAnr = PhoneNumberUtils.numberToCalledPartyBCD(anr);
+        if (byteAnr == null) {
+            return null;
+        }
+        if (byteAnr.length > 11) {
+            log("[buildAnrData] wrong ANR length");
+            return null;
+        }
+        System.arraycopy(byteAnr, 0, data, 2, byteAnr.length);
+        data[1] = (byte) byteAnr.length;
+        data[13] = -1;
+        data[14] = -1;
+        if (length == 17) {
+            data[16] = (byte) ((adnRecIndex - getInitIndexBy(getPbrIndexBy(adnRecIndex))) + 1);
+        }
+        log("buildAnrData: data is" + IccUtils.bytesToHexString(data));
+        return data;
+    }
+
+    private void createPbrFile(ArrayList<byte[]> records) {
+        if (records == null) {
+            this.mPbrFile = null;
+            this.mIsPbrPresent = false;
+            return;
+        }
+        this.mPbrFile = new PbrFile(records);
+    }
+
+    private void putValidRecNums(int pbrIndex) {
+        ArrayList<Integer> recordNums = new ArrayList<>();
+        log("pbr index is " + pbrIndex + ", initAdnIndex is " + getInitIndexBy(pbrIndex));
+        for (int i = 0; i < this.mAdnLengthList.get(pbrIndex).intValue(); i++) {
+            recordNums.add(Integer.valueOf(i + 1));
+        }
+        if (recordNums.size() == 0) {
+            recordNums.add(1);
+        }
+        this.mRecordNums.put(Integer.valueOf(pbrIndex), recordNums);
+    }
+
+    private ArrayList<Integer> getValidRecordNums(int pbrIndex) {
+        return this.mRecordNums.get(Integer.valueOf(pbrIndex));
+    }
+
+    private boolean hasValidRecords(int pbrIndex) {
+        return this.mRecordNums.get(Integer.valueOf(pbrIndex)).size() > 0;
+    }
+
+    @Override // android.os.Handler
+    public void handleMessage(Message msg) {
+        String oldAnr = null;
+        String newAnr = null;
+        String oldEmail = null;
+        String newEmail = null;
+        switch (msg.what) {
+            case 1:
+                log("Loading PBR done");
+                AsyncResult ar = (AsyncResult) msg.obj;
+                if (ar.exception == null) {
+                    createPbrFile((ArrayList) ar.result);
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 2:
+                log("Loading USIM ADN records done");
+                AsyncResult ar2 = (AsyncResult) msg.obj;
+                int pbrIndex = ((Integer) ar2.userObj).intValue();
+                if (ar2.exception == null) {
+                    this.mPhoneBookRecords.addAll((ArrayList) ar2.result);
+                    this.mAdnLengthList.add(pbrIndex, Integer.valueOf(((ArrayList) ar2.result).size()));
+                    putValidRecNums(pbrIndex);
+                } else {
+                    log("can't load USIM ADN records");
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 3:
+                log("Loading USIM IAP records done");
+                AsyncResult ar3 = (AsyncResult) msg.obj;
+                int pbrIndex2 = ((Integer) ar3.userObj).intValue();
+                if (ar3.exception == null) {
+                    this.mIapFileRecord.put(Integer.valueOf(pbrIndex2), (ArrayList) ar3.result);
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 4:
+                log("Loading USIM Email records done");
+                AsyncResult ar4 = (AsyncResult) msg.obj;
+                int pbrIndex3 = ((Integer) ar4.userObj).intValue();
+                if (ar4.exception == null && this.mPbrFile != null) {
+                    ArrayList<byte[]> tmpList = this.mEmailFileRecord.get(Integer.valueOf(pbrIndex3));
+                    if (tmpList == null) {
+                        this.mEmailFileRecord.put(Integer.valueOf(pbrIndex3), (ArrayList) ar4.result);
+                    } else {
+                        tmpList.addAll((ArrayList) ar4.result);
+                        this.mEmailFileRecord.put(Integer.valueOf(pbrIndex3), tmpList);
+                    }
+                    log("handlemessage EVENT_EMAIL_LOAD_DONE size is: " + this.mEmailFileRecord.get(Integer.valueOf(pbrIndex3)).size());
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 5:
+                log("Loading USIM Anr records done");
+                AsyncResult ar5 = (AsyncResult) msg.obj;
+                int pbrIndex4 = ((Integer) ar5.userObj).intValue();
+                if (ar5.exception == null && this.mPbrFile != null) {
+                    ArrayList<byte[]> tmp = this.mAnrFileRecord.get(Integer.valueOf(pbrIndex4));
+                    if (tmp == null) {
+                        this.mAnrFileRecord.put(Integer.valueOf(pbrIndex4), (ArrayList) ar5.result);
+                    } else {
+                        tmp.addAll((ArrayList) ar5.result);
+                        this.mAnrFileRecord.put(Integer.valueOf(pbrIndex4), tmp);
+                    }
+                    log("handlemessage EVENT_ANR_LOAD_DONE size is: " + this.mAnrFileRecord.get(Integer.valueOf(pbrIndex4)).size());
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 6:
+                log("Loading EF_EMAIL_RECORD_SIZE_DONE");
+                AsyncResult ar6 = (AsyncResult) msg.obj;
+                String emails = (String) ar6.userObj;
+                int adnRecIndex = msg.arg1 - 1;
+                int efid = msg.arg2;
+                String[] email = emails.split(",");
+                if (email.length == 1) {
+                    oldEmail = email[0];
+                    newEmail = "";
+                } else if (email.length > 1) {
+                    oldEmail = email[0];
+                    newEmail = email[1];
+                }
+                if (ar6.exception != null) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                int[] recordSize = (int[]) ar6.result;
+                int recordNumber = getEmailRecNumber(adnRecIndex, this.mPhoneBookRecords.size(), oldEmail);
+                if (recordSize.length != 3 || recordNumber > recordSize[2] || recordNumber <= 0) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                byte[] data = buildEmailData(recordSize[0], adnRecIndex, newEmail);
+                if (data == null) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                int actualRecNumber = recordNumber;
+                if (!this.mEmailPresentInIap) {
+                    int efidIndex = this.mPbrFile.mEmailFileIds.get(Integer.valueOf(getPbrIndexBy(adnRecIndex))).indexOf(Integer.valueOf(efid));
+                    if (efidIndex == -1) {
+                        log("wrong efid index:" + efid);
+                        return;
+                    } else {
+                        actualRecNumber = recordNumber + (this.mAdnLengthList.get(getPbrIndexBy(adnRecIndex)).intValue() * efidIndex);
+                        log("EMAIL index:" + efidIndex + " efid:" + efid + " actual RecNumber:" + actualRecNumber);
+                    }
+                }
+                this.mFh.updateEFLinearFixed(efid, getPBPath(efid), recordNumber, data, null, obtainMessage(8, actualRecNumber, adnRecIndex, data));
+                this.mPendingExtLoads = 1;
+                return;
+            case 7:
+                log("Loading EF_ANR_RECORD_SIZE_DONE");
+                AsyncResult ar7 = (AsyncResult) msg.obj;
+                String anrs = (String) ar7.userObj;
+                int adnRecIndex2 = msg.arg1 - 1;
+                int efid2 = msg.arg2;
+                String[] anr = anrs.split(",");
+                if (anr.length == 1) {
+                    oldAnr = anr[0];
+                    newAnr = "";
+                } else if (anr.length > 1) {
+                    oldAnr = anr[0];
+                    newAnr = anr[1];
+                }
+                if (ar7.exception != null) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                int[] recordSize2 = (int[]) ar7.result;
+                int recordNumber2 = getAnrRecNumber(adnRecIndex2, this.mPhoneBookRecords.size(), oldAnr);
+                if (recordSize2.length != 3 || recordNumber2 > recordSize2[2] || recordNumber2 <= 0) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                byte[] data2 = buildAnrData(recordSize2[0], adnRecIndex2, newAnr);
+                if (data2 == null) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                int actualRecNumber2 = recordNumber2;
+                if (!this.mAnrPresentInIap) {
+                    int efidIndex2 = this.mPbrFile.mAnrFileIds.get(Integer.valueOf(getPbrIndexBy(adnRecIndex2))).indexOf(Integer.valueOf(efid2));
+                    if (efidIndex2 == -1) {
+                        log("wrong efid index:" + efid2);
+                        return;
+                    } else {
+                        actualRecNumber2 = recordNumber2 + (this.mAdnLengthList.get(getPbrIndexBy(adnRecIndex2)).intValue() * efidIndex2);
+                        log("ANR index:" + efidIndex2 + " efid:" + efid2 + " actual RecNumber:" + actualRecNumber2);
+                    }
+                }
+                this.mFh.updateEFLinearFixed(efid2, getPBPath(efid2), recordNumber2, data2, null, obtainMessage(9, actualRecNumber2, adnRecIndex2, data2));
+                this.mPendingExtLoads = 1;
+                return;
+            case 8:
+                log("Loading UPDATE_EMAIL_RECORD_DONE");
+                AsyncResult ar8 = (AsyncResult) msg.obj;
+                if (ar8.exception != null) {
+                    this.mSuccess = false;
+                }
+                byte[] data3 = (byte[]) ar8.userObj;
+                int recordNumber3 = msg.arg1;
+                int pbrIndex5 = getPbrIndexBy(msg.arg2);
+                log("EVENT_UPDATE_EMAIL_RECORD_DONE");
+                this.mPendingExtLoads = 0;
+                this.mSuccess = true;
+                this.mEmailFileRecord.get(Integer.valueOf(pbrIndex5)).set(recordNumber3 - 1, data3);
+                int i = 0;
+                while (true) {
+                    if (i < data3.length) {
+                        log("EVENT_UPDATE_EMAIL_RECORD_DONE data = " + ((int) data3[i]) + ",i is " + i);
+                        if (data3[i] != -1) {
+                            log("EVENT_UPDATE_EMAIL_RECORD_DONE data !=0xff");
+                            this.mEmailFlags.get(Integer.valueOf(pbrIndex5)).set(recordNumber3 - 1, 1);
+                        } else {
+                            this.mEmailFlags.get(Integer.valueOf(pbrIndex5)).set(recordNumber3 - 1, 0);
+                            i++;
+                        }
+                    }
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 9:
+                log("Loading UPDATE_ANR_RECORD_DONE");
+                AsyncResult ar9 = (AsyncResult) msg.obj;
+                byte[] data4 = (byte[]) ar9.userObj;
+                int recordNumber4 = msg.arg1;
+                int pbrIndex6 = getPbrIndexBy(msg.arg2);
+                if (ar9.exception != null) {
+                    this.mSuccess = false;
+                }
+                log("EVENT_UPDATE_ANR_RECORD_DONE");
+                this.mPendingExtLoads = 0;
+                this.mSuccess = true;
+                this.mAnrFileRecord.get(Integer.valueOf(pbrIndex6)).set(recordNumber4 - 1, data4);
+                int i2 = 0;
+                while (true) {
+                    if (i2 < data4.length) {
+                        if (data4[i2] != -1) {
+                            this.mAnrFlags.get(Integer.valueOf(pbrIndex6)).set(recordNumber4 - 1, 1);
+                        } else {
+                            this.mAnrFlags.get(Integer.valueOf(pbrIndex6)).set(recordNumber4 - 1, 0);
+                            i2++;
+                        }
+                    }
+                }
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            case 10:
+                log("EVENT_EF_IAP_RECORD_SIZE_DONE");
+                AsyncResult ar10 = (AsyncResult) msg.obj;
+                int recordNumber5 = msg.arg2;
+                int adnRecIndex3 = msg.arg1 - 1;
+                getEfidByTag(getPbrIndexBy(adnRecIndex3), 193, 0);
+                int tag = ((Integer) ar10.userObj).intValue();
+                if (ar10.exception != null) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                }
+                int pbrIndex7 = getPbrIndexBy(adnRecIndex3);
+                int efid3 = getEfidByTag(pbrIndex7, 193, 0);
+                int[] recordSize3 = (int[]) ar10.result;
+                int recordIndex = adnRecIndex3 - getInitIndexBy(pbrIndex7);
+                log("handleIAP_RECORD_SIZE_DONE adnRecIndex is: " + adnRecIndex3 + ", recordNumber is: " + recordNumber5 + ", recordIndex is: " + recordIndex);
+                if (recordSize3.length != 3 || recordIndex + 1 > recordSize3[2] || recordNumber5 == 0) {
+                    this.mSuccess = false;
+                    synchronized (this.mLock) {
+                        this.mLock.notify();
+                    }
+                    return;
+                } else if (hasRecordIn(this.mIapFileRecord, pbrIndex7)) {
+                    byte[] data5 = this.mIapFileRecord.get(Integer.valueOf(pbrIndex7)).get(recordIndex);
+                    byte[] record_data = new byte[data5.length];
+                    System.arraycopy(data5, 0, record_data, 0, record_data.length);
+                    switch (tag) {
+                        case 196:
+                            record_data[this.mAnrTagNumberInIap] = (byte) recordNumber5;
+                            break;
+                        case USIM_EFEMAIL_TAG /* 202 */:
+                            record_data[this.mEmailTagNumberInIap] = (byte) recordNumber5;
+                            break;
+                    }
+                    this.mPendingExtLoads = 1;
+                    log(" IAP  efid= " + efid3 + ", update IAP index= " + recordIndex + " with value= " + IccUtils.bytesToHexString(record_data));
+                    this.mFh.updateEFLinearFixed(efid3, getPBPath(efid3), recordIndex + 1, record_data, null, obtainMessage(11, adnRecIndex3, recordNumber5, record_data));
+                    return;
+                } else {
+                    return;
+                }
+            case 11:
+                log("EVENT_UPDATE_IAP_RECORD_DONE");
+                AsyncResult ar11 = (AsyncResult) msg.obj;
+                if (ar11.exception != null) {
+                    this.mSuccess = false;
+                }
+                byte[] data6 = (byte[]) ar11.userObj;
+                int adnRecIndex4 = msg.arg1;
+                int pbrIndex8 = getPbrIndexBy(adnRecIndex4);
+                int recordIndex2 = adnRecIndex4 - getInitIndexBy(pbrIndex8);
+                log("handleMessage EVENT_UPDATE_IAP_RECORD_DONE recordIndex is: " + recordIndex2 + ", adnRecIndex is: " + adnRecIndex4);
+                this.mPendingExtLoads = 0;
+                this.mSuccess = true;
+                this.mIapFileRecord.get(Integer.valueOf(pbrIndex8)).set(recordIndex2, data6);
+                log("the iap email recordNumber is :" + ((int) data6[this.mEmailTagNumberInIap]));
+                synchronized (this.mLock) {
+                    this.mLock.notify();
+                }
+                return;
+            default:
+                return;
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* loaded from: C:\Users\SampP\Desktop\oat2dex-python\boot.oat.0x1348340.odex */
+    public class PbrFile {
+        HashMap<Integer, Map<Integer, Integer>> mFileIds = new HashMap<>();
+        HashMap<Integer, ArrayList<Integer>> mAnrFileIds = new HashMap<>();
+        HashMap<Integer, ArrayList<Integer>> mEmailFileIds = new HashMap<>();
+
+        PbrFile(ArrayList<byte[]> records) {
+            int recNum = 0;
+            Iterator i$ = records.iterator();
+            while (i$.hasNext()) {
+                byte[] record = i$.next();
+                parseTag(new SimTlv(record, 0, record.length), recNum);
+                recNum++;
+            }
+        }
+
+        void parseTag(SimTlv tlv, int recNum) {
+            Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseTag: recNum=" + recNum);
+            Map<Integer, Integer> val = new HashMap<>();
+            ArrayList<Integer> anrList = new ArrayList<>();
+            ArrayList<Integer> emailList = new ArrayList<>();
+            do {
+                int tag = tlv.getTag();
+                switch (tag) {
+                    case 168:
+                    case 169:
+                    case 170:
+                        byte[] data = tlv.getData();
+                        parseEf(new SimTlv(data, 0, data.length), val, tag, anrList, emailList);
+                        break;
+                }
+            } while (tlv.nextObject());
+            if (anrList.size() != 0) {
+                this.mAnrFileIds.put(Integer.valueOf(recNum), anrList);
+                Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseTag: recNum=" + recNum + " ANR file list:" + anrList);
+            }
+            if (emailList.size() != 0) {
+                Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseTag: recNum=" + recNum + " EMAIL file list:" + emailList);
+                this.mEmailFileIds.put(Integer.valueOf(recNum), emailList);
+            }
+            this.mFileIds.put(Integer.valueOf(recNum), val);
+        }
+
+        void parseEf(SimTlv tlv, Map<Integer, Integer> val, int parentTag, ArrayList<Integer> anrList, ArrayList<Integer> emailList) {
+            int tagNumberWithinParentTag = 0;
+            do {
+                int tag = tlv.getTag();
+                if (parentTag == 168 && tag == 193) {
+                    UsimPhoneBookManager.this.mIapPresent = true;
+                }
+                if (parentTag == 169 && UsimPhoneBookManager.this.mIapPresent && tag == UsimPhoneBookManager.USIM_EFEMAIL_TAG) {
+                    UsimPhoneBookManager.this.mEmailPresentInIap = true;
+                    UsimPhoneBookManager.this.mEmailTagNumberInIap = tagNumberWithinParentTag;
+                    UsimPhoneBookManager.this.log("parseEf: EmailPresentInIap tag = " + UsimPhoneBookManager.this.mEmailTagNumberInIap);
+                }
+                if (parentTag == 169 && UsimPhoneBookManager.this.mIapPresent && tag == 196) {
+                    UsimPhoneBookManager.this.mAnrPresentInIap = true;
+                    UsimPhoneBookManager.this.mAnrTagNumberInIap = tagNumberWithinParentTag;
+                    UsimPhoneBookManager.this.log("parseEf: AnrPresentInIap tag = " + UsimPhoneBookManager.this.mAnrTagNumberInIap);
+                }
+                switch (tag) {
+                    case 192:
+                    case 193:
+                    case 194:
+                    case 195:
+                    case 196:
+                    case 197:
+                    case UsimPhoneBookManager.USIM_EFGRP_TAG /* 198 */:
+                    case UsimPhoneBookManager.USIM_EFAAS_TAG /* 199 */:
+                    case 200:
+                    case UsimPhoneBookManager.USIM_EFUID_TAG /* 201 */:
+                    case UsimPhoneBookManager.USIM_EFEMAIL_TAG /* 202 */:
+                    case UsimPhoneBookManager.USIM_EFCCP1_TAG /* 203 */:
+                        byte[] data = tlv.getData();
+                        int efid = ((data[0] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT) << 8) | (data[1] & OemCdmaTelephonyManager.OEM_RIL_CDMA_RESET_TO_FACTORY.RESET_DEFAULT);
+                        val.put(Integer.valueOf(tag), Integer.valueOf(efid));
+                        if (parentTag == 168) {
+                            if (tag == 196) {
+                                anrList.add(Integer.valueOf(efid));
+                            } else if (tag == UsimPhoneBookManager.USIM_EFEMAIL_TAG) {
+                                emailList.add(Integer.valueOf(efid));
+                            }
+                        }
+                        Rlog.d(UsimPhoneBookManager.LOG_TAG, "parseEf.put(" + tag + "," + efid + ") parent tag:" + parentTag);
+                        break;
+                }
+                tagNumberWithinParentTag++;
+            } while (tlv.nextObject());
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public void log(String msg) {
+        Rlog.d(LOG_TAG, msg);
+    }
+
+    public int getAnrCount() {
+        int count = 0;
+        int pbrIndex = this.mAnrFlags.size();
+        for (int j = 0; j < pbrIndex; j++) {
+            count += this.mAnrFlags.get(Integer.valueOf(j)).size();
+        }
+        log("getAnrCount count is: " + count);
+        return count;
+    }
+
+    public int getEmailCount() {
+        int count = 0;
+        int pbrIndex = this.mEmailFlags.size();
+        for (int j = 0; j < pbrIndex; j++) {
+            count += this.mEmailFlags.get(Integer.valueOf(j)).size();
+        }
+        log("getEmailCount count is: " + count);
+        return count;
+    }
+
+    public int getSpareAnrCount() {
+        int count = 0;
+        int pbrIndex = this.mAnrFlags.size();
+        for (int j = 0; j < pbrIndex; j++) {
+            for (int i = 0; i < this.mAnrFlags.get(Integer.valueOf(j)).size(); i++) {
+                if (this.mAnrFlags.get(Integer.valueOf(j)).get(i).intValue() == 0) {
+                    count++;
+                }
+            }
+        }
+        log("getSpareAnrCount count is" + count);
+        return count;
+    }
+
+    public int getSpareEmailCount() {
+        int count = 0;
+        int pbrIndex = this.mEmailFlags.size();
+        for (int j = 0; j < pbrIndex; j++) {
+            for (int i = 0; i < this.mEmailFlags.get(Integer.valueOf(j)).size(); i++) {
+                if (this.mEmailFlags.get(Integer.valueOf(j)).get(i).intValue() == 0) {
+                    count++;
+                }
+            }
+        }
+        log("getSpareEmailCount count is: " + count);
+        return count;
+    }
+
+    public int getUsimAdnCount() {
+        if (this.mPhoneBookRecords == null || this.mPhoneBookRecords.isEmpty()) {
+            return 0;
+        }
+        log("getUsimAdnCount count is" + this.mPhoneBookRecords.size());
+        return this.mPhoneBookRecords.size();
+    }
+
+    public int getEmptyEmailNum_Pbrindex(int pbrindex) {
+        int count = 0;
+        if (!this.mEmailPresentInIap) {
+            return 1;
+        }
+        if (this.mEmailFlags.containsKey(Integer.valueOf(pbrindex))) {
+            int size = this.mEmailFlags.get(Integer.valueOf(pbrindex)).size();
+            for (int i = 0; i < size; i++) {
+                if (this.mEmailFlags.get(Integer.valueOf(pbrindex)).get(i).intValue() == 0) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    public int getEmptyAnrNum_Pbrindex(int pbrindex) {
+        int count = 0;
+        if (!this.mAnrPresentInIap) {
+            return 1;
+        }
+        if (this.mAnrFlags.containsKey(Integer.valueOf(pbrindex))) {
+            int size = this.mAnrFlags.get(Integer.valueOf(pbrindex)).size();
+            for (int i = 0; i < size; i++) {
+                if (this.mAnrFlags.get(Integer.valueOf(pbrindex)).get(i).intValue() == 0) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    public int getEmailFilesCountEachAdn() {
+        if (this.mPbrFile == null) {
+            Rlog.e(LOG_TAG, "mPbrFile is NULL, exiting from getEmailFilesCountEachAdn");
+            return 0;
+        }
+        Map<Integer, Integer> fileIds = this.mPbrFile.mFileIds.get(0);
+        if (fileIds == null || !fileIds.containsKey(Integer.valueOf((int) USIM_EFEMAIL_TAG))) {
+            return 0;
+        }
+        if (!this.mEmailPresentInIap) {
+            return this.mPbrFile.mEmailFileIds.get(0).size();
+        }
+        return 1;
+    }
+
+    public int getAnrFilesCountEachAdn() {
+        if (this.mPbrFile == null) {
+            Rlog.e(LOG_TAG, "mPbrFile is NULL, exiting from getAnrFilesCountEachAdn");
+            return 0;
+        }
+        Map<Integer, Integer> fileIds = this.mPbrFile.mFileIds.get(0);
+        if (fileIds == null || !fileIds.containsKey(196)) {
+            return 0;
+        }
+        if (!this.mAnrPresentInIap) {
+            return this.mPbrFile.mAnrFileIds.get(0).size();
+        }
+        return 1;
+    }
+
+    public String getPBPath(int efid) {
+        return "3F007F105F3A";
     }
 }
